@@ -1,0 +1,26 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Archivos privados
+backend/uploads/
+*.pem
+*.key
+
+# Archivos de sistema y editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Compilación y cobertura
+dist/
+build/
+coverage/
