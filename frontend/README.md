@@ -1,5 +1,44 @@
 # SkillSwap AI — frontend
 
+## Recomendaciones y perfil del mentor
+
+Se reutilizan `RecommendationsPage.tsx` y `MentorProfilePage.tsx` de Figma Make:
+
+- **Para ti** muestra como máximo tres recomendaciones según las preferencias
+  del perfil. Mantiene el motor y los pesos 45/20/25/10, sin cambios.
+- **Explorar** permite buscar por habilidad, nombre y biografía, y combinar categoría,
+  habilidad, nivel y día. **Limpiar filtros** restablece todos los campos. Se corrigió
+  la correspondencia entre los nombres de categorías del catálogo público y su mapa
+  de habilidades; la búsqueda admite mayúsculas y texto sin tildes.
+- **Ver perfil** funciona desde el panel, ambas vistas, el asistente y la exploración
+  pública. El perfil incluye biografía, habilidad aprobada, temas, compatibilidad,
+  disponibilidad, duraciones, créditos y reseñas. **Volver** conserva los filtros,
+  restaura la posición y devuelve el foco a la tarjeta o al asistente de origen.
+- Los filtros se conservan durante la navegación en memoria. Recargar mantiene el
+  comportamiento por estado `page` del proyecto: vuelve al panel o al perfil inicial.
+- **Reservar sesión** abre un aviso de funcionalidad pendiente: no crea reservas,
+  descuenta créditos ni envía solicitudes.
+
+`StudentService.getMentorProfile(id)` devuelve `MentorProfileDetails | null`. Un ID
+inexistente o un mentor no elegible muestra **Perfil no encontrado**, sin sustituirlo
+por otro mentor. Un error de carga permite reintentar; una respuesta tardía no cambia
+la pantalla después de volver atrás. `ReviewRecord` y `MentorProfileDetails` están
+tipados en `data/student.ts`. Los fixtures están en `dev/mentorFixtures.ts`; Carlos
+tiene dos reseñas de prueba (media 4.5), mientras Andrea y Luis conservan el estado
+sin valoraciones. El panel, las recomendaciones y el perfil usan el mismo resumen.
+La interfaz no muestra etiquetas de demostración ni mensajes técnicos.
+
+Para revisar: habilita `VITE_ENABLE_FRONTEND_PREVIEW=true`, inicia `npm run dev`,
+completa el perfil si hace falta y abre **Para ti** o **Explorar** en el menú del panel.
+Usa Python para obtener resultados con el catálogo actual. En Explorar, combina
+Programación + Python + Avanzado + Martes para encontrar a Carlos, abre su perfil y
+vuelve para comprobar que los filtros siguen seleccionados.
+
+`npm test` incluye las regresiones del motor y las nuevas comprobaciones de filtros,
+categorías y estados vacíos. Las pruebas temporales de Chrome cubren nueve tamaños,
+teclado, todos los orígenes de navegación, reseñas vacías y con datos, perfil inexistente,
+error con reintento y respuestas tardías. No se añadieron dependencias.
+
 ## Panel estudiantil
 
 El panel reutiliza `StudentDashboardPage.tsx`, `StudentShell` de `AppShell.tsx`,
@@ -20,8 +59,8 @@ Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y `npm run dev`:
   Permite habilidad, nivel, horario, revisión y hasta tres resultados; contempla errores
   de entrada y búsquedas sin coincidencias. Es el motor local del prototipo, sin un
   proveedor externo de IA.
-- Explorar privado, Para ti, sesiones, créditos, solicitudes de mentor, perfiles de
-  mentor y logout conservan destinos pendientes identificados al pulsarlos.
+- Explorar, Para ti y los perfiles de mentor están disponibles. Sesiones, créditos,
+  solicitudes de mentor, reservas y logout conservan destinos pendientes al pulsarlos.
 
 `src/services/student.ts` define `StudentService`; `src/dev/studentMock.ts` y
 `src/dev/mentorFixtures.ts` proporcionan los datos de prueba. La composición recibe

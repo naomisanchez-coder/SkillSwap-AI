@@ -222,7 +222,7 @@ export function RecommendationAssistant({
                         </div>
                         <ul className="mt-3 space-y-1">{compatibility.reasons.slice(0, 2).map(reason => <li key={reason} className="text-xs leading-5 text-[#60716C] flex gap-2"><Icons.Check s={12} c="mt-1 text-[#34877A]" />{reason}</li>)}</ul>
                         <p className="mt-3 text-xs font-semibold text-[#52645F]"><Icons.Clock s={12} /> {mentor.availability}</p>
-                        <Button full className="mt-3" onClick={() => { setOpen(false); onViewMentor(mentor.id); }}>Ver perfil</Button>
+                        <Button full className="mt-3" data-mentor-id={mentor.id} onClick={() => { setOpen(false); onViewMentor(mentor.id); }}>Ver perfil</Button>
                       </article>
                     ))}
                   </div>

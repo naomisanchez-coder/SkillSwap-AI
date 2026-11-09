@@ -1,5 +1,6 @@
 // Primitivas reutilizadas del archivo ui.tsx original de Figma Make.
 export { Button } from './Button';
+export { Input } from './Input';
 
 type Status = 'online' | 'offline' | 'busy' | 'away';
 

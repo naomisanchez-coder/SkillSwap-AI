@@ -20,6 +20,11 @@ export type StudentDashboardData = {
   mentorRatings: Record<string, { average: number; count: number }>;
 };
 export type StudentDashboardSnapshot = { state: StudentDashboardData; mentors: Mentor[] };
+export type ReviewRecord = {
+  id: string; sessionId: string; studentId: string; mentorId: string;
+  skill?: string; topic?: string; rating: number; comment: string; createdAt: string;
+};
+export type MentorProfileDetails = { mentor: Mentor; rating: { average: number; count: number }; reviews: ReviewRecord[] };
 
 export function hasCompletePreferences(profile: OnboardingPreferences): boolean {
   return [1, 2, 3, 4].every(step => validateProfileStep(profile, step) === null);

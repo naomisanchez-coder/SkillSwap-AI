@@ -99,7 +99,7 @@ export function MentorCard({
           <p className="mt-2 text-xs text-[#788983]">Mentor nuevo, todavía sin valoraciones.</p>
         )}
         {showReasons && compatibility && <div className="mt-4"><RecommendationReasons compatibility={compatibility} /></div>}
-        <Button full className="mt-5" onClick={onView}>Ver perfil</Button>
+        <Button full className="mt-5" data-mentor-id={mentor.id} onClick={onView}>Ver perfil</Button>
       </div>
     </article>
   );

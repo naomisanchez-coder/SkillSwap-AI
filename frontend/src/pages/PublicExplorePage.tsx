@@ -14,6 +14,8 @@ export default function PublicExplorePage({
   onLogout,
   onPrivateExplore,
   onMentor,
+  searchQuery,
+  onSearchChange,
 }: {
   mentors: PublicMentor[];
   userName?: string;
@@ -24,8 +26,12 @@ export default function PublicExplorePage({
   onLogout: () => void;
   onPrivateExplore: () => void;
   onMentor: (id: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }) {
-  const [query, setQuery] = useState('');
+  const [localQuery, setLocalQuery] = useState('');
+  const query = searchQuery ?? localQuery;
+  const setQuery = onSearchChange ?? setLocalQuery;
   const visibleMentors = useMemo(() => {
     const value = query.trim().toLowerCase();
     return mentors
@@ -99,7 +105,7 @@ export default function PublicExplorePage({
                     <p className="mt-3 text-xl font-bold">{mentor.name}</p>
                     <p className="mt-1 text-sm text-[#60716C]">{mentor.skill} · Nivel {mentor.level.toLowerCase()}</p>
                     <p className="mt-3 text-sm text-[#60716C] inline-flex items-center gap-2"><Icons.Calendar s={14} /> Disponibilidad general: {mentor.availability}</p>
-                    <button type="button" onClick={() => userName ? onMentor(mentor.id) : onLogin()} className="mt-5 w-full min-h-11 rounded-xl border border-[#B8D4CA] text-sm font-bold text-[#176B5B] hover:bg-[#FAFBF8]">
+                    <button type="button" data-mentor-id={mentor.id} onClick={() => userName ? onMentor(mentor.id) : onLogin()} className="mt-5 w-full min-h-11 rounded-xl border border-[#B8D4CA] text-sm font-bold text-[#176B5B] hover:bg-[#FAFBF8]">
                       {userName ? 'Ver perfil y disponibilidad' : 'Iniciar sesión para continuar'}
                     </button>
                   </div>

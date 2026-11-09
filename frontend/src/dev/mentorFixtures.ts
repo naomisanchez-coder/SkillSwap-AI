@@ -3,8 +3,14 @@ import { demoMentorPhotos } from '../data/publicContent';
 import { findSkillByName } from '../data/skillCatalog';
 
 import type { Mentor, MentorOffer } from '../data/mentors';
+import type { ReviewRecord } from '../data/student';
 export const DEMO_MENTOR_ID = 'carlos';
 export const DEMO_MENTOR_EMAIL = 'mentor@demo.pe';
+// Reseñas de prueba de sesiones completadas, sin vincularlas a una cuenta real.
+export const reviewFixtures: ReviewRecord[] = [
+  { id: 'review-carlos-1', sessionId: 'completed-fixture-1', studentId: 'fixture-learner-1', mentorId: 'carlos', skill: 'Python', topic: 'Fundamentos de Python', rating: 5, comment: 'Explicaciones claras y ejercicios que me ayudaron a comprender el tema.', createdAt: '2026-10-12T20:00:00-05:00' },
+  { id: 'review-carlos-2', sessionId: 'completed-fixture-2', studentId: 'fixture-learner-2', mentorId: 'carlos', skill: 'Python', topic: 'Automatización', rating: 4, comment: 'Resolvimos mis dudas paso a paso y pude continuar mi proyecto.', createdAt: '2026-10-19T20:00:00-05:00' },
+];
 export const studentMentorId = (userId: string) => `student-mentor-${userId}`;
 const offer = (
   skill: string,

@@ -8,6 +8,9 @@ import type { Mentor } from '../src/data/mentors';
 import { mentors } from '../src/dev/mentorFixtures';
 import { studentFixture } from '../src/dev/studentMock';
 import StudentDashboardPage from '../src/pages/StudentDashboardPage';
+import { emptyDiscoveryFilters, filterMentors } from '../src/data/discovery';
+import { publicSkillCategories } from '../src/data/publicContent';
+import RecommendationsPage from '../src/pages/RecommendationsPage';
 
 const preferences = { skill: 'Python', level: 'Intermedio', availability: 'Martes · 7:00 PM – 8:00 PM', goals: 'Desarrollar un proyecto' };
 const mentor = (slots: Record<string, string[]>): Mentor => ({ ...mentors[0], slots });
@@ -75,4 +78,38 @@ test('el resumen usa únicamente sesiones y solicitudes del estudiante actual', 
   const html = renderToStaticMarkup(createElement(StudentDashboardPage, { state, mentors: [], onExplore() {}, onDiscover() {}, onSessions() {}, onWallet() {}, onMentorRequest() {}, onMentor() {}, onEditPreferences() {} }));
   assert.match(html, /Python con Carlos/);
   assert.doesNotMatch(html, /Privado|Oculto/);
+});
+
+test('exploración combina búsqueda, habilidad, nivel y día sin modificar el catálogo', () => {
+  const base = emptyDiscoveryFilters();
+  assert.equal(filterMentors(mentors, base, 'current').length, 3);
+  assert.deepEqual(filterMentors(mentors, { ...base, query: 'AUTOMATIZACION', category: 'Programación', skill: 'Python', level: 'Avanzado', day: 'Martes' }, 'current').map(item => item.id), ['carlos']);
+  assert.deepEqual(filterMentors(mentors, { ...base, query: 'luis garcia' }, 'current').map(item => item.id), ['luis']);
+  assert.deepEqual(filterMentors(mentors, { ...base, level: 'Intermedio' }, 'current').map(item => item.id), ['luis']);
+  assert.deepEqual(filterMentors(mentors, { ...base, day: 'Miércoles' }, 'current').map(item => item.id), ['andrea']);
+  assert.deepEqual(filterMentors(mentors, { ...base, skill: 'React' }, 'current'), []);
+  assert.equal(mentors.length, 3);
+});
+
+test('regresión: todas las categorías visibles corresponden a habilidades del catálogo', () => {
+  const skills = [
+    ['Python', 'python'], ['SQL', 'sql'], ['Matemáticas', 'matematicas'], ['Electrónica', 'electronica'],
+    ['Redes', 'redes'], ['Power BI', 'power-bi'], ['Inglés', 'ingles'], ['Investigación', 'investigacion'],
+  ];
+  publicSkillCategories.forEach((category, index) => {
+    const [skill, skillId] = skills[index];
+    const offer = { ...mentors[0], skill, offer: { ...mentors[0].offer, skillId } };
+    assert.equal(filterMentors([offer], { ...emptyDiscoveryFilters(), category: category.name }, 'current').length, 1, category.name);
+  });
+  assert.deepEqual(filterMentors(mentors, { ...emptyDiscoveryFilters(), category: 'Categoría inexistente' }, 'current'), []);
+});
+
+test('recomendaciones conserva límite, estado vacío y distinción de preferencias incompletas', () => {
+  const profile = { ...studentFixture.profile, interests: ['Python'], level: 'Intermedio', availability: preferences.availability, goals: 'Desarrollar un proyecto' };
+  const props = { mentors, profile, ratings: {}, filters: emptyDiscoveryFilters(), onFiltersChange() {}, onViewMentor() {}, onEditPreferences() {} };
+  const html = renderToStaticMarkup(createElement(RecommendationsPage, props));
+  assert.equal((html.match(/data-mentor-id=/g) ?? []).length, 3);
+  assert.match(renderToStaticMarkup(createElement(RecommendationsPage, { ...props, profile: studentFixture.profile })), /Completa tus preferencias para recibir recomendaciones/);
+  assert.match(renderToStaticMarkup(createElement(RecommendationsPage, { ...props, profile: { ...profile, interests: ['React'] } })), /Todavía no hay una coincidencia para tus preferencias/);
+  assert.match(renderToStaticMarkup(createElement(RecommendationsPage, { ...props, recommended: false, filters: { ...emptyDiscoveryFilters(), query: 'no existe' } })), /No hay mentores para estos filtros/);
 });
