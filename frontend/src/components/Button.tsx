@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ComponentPropsWithRef, ReactNode } from 'react';
 
 // Variantes del Button original de Figma; admite atributos nativos y ARIA.
 const variants = {
@@ -8,7 +8,7 @@ const variants = {
   ghost: 'text-[#60716C] hover:bg-[#F0F3ED] hover:text-[#182B2A]',
 };
 
-export function Button({ variant = 'primary', className = '', type = 'button', ...props }:
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof variants }) {
-  return <button type={type} {...props} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${variants[variant]} ${className}`} />;
+export function Button({ variant = 'primary', size = 'md', full, icon, children, className = '', type = 'button', ...props }:
+  ComponentPropsWithRef<'button'> & { variant?: keyof typeof variants; size?: 'sm' | 'md' | 'lg'; full?: boolean; icon?: ReactNode }) {
+  return <button type={type} {...props} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${variants[variant]} ${size === 'lg' ? 'px-5' : ''} ${full ? 'w-full' : ''} ${className}`}>{icon && <span aria-hidden="true" className="shrink-0">{icon}</span>}{children}</button>;
 }

@@ -17,7 +17,7 @@ const descriptions = [
 const choiceStyle = (selected: boolean) => `relative cursor-pointer rounded-xl border px-4 py-3 text-sm font-medium text-[#334A46] ${selected ? 'border-[#C9D8CC] bg-[#DCEBDD] ring-2 ring-[#635BFF]' : 'border-[#CBD8CE] bg-white hover:border-[#34877A]'} has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-4 has-[:focus-visible]:outline-[#24685F]`;
 
 // Adaptación de ProfileSetupPage.tsx de Figma: mismos pasos y opciones.
-export default function ProfileSetupPage({ service, onBack }: { service: ProfileService; onBack: () => void }) {
+export default function ProfileSetupPage({ service, onBack, onComplete, onReset, startEditing = false }: { service: ProfileService; onBack: () => void; onComplete?: (preferences: OnboardingPreferences) => void; onReset?: () => void; startEditing?: boolean }) {
   const [loaded, setLoaded] = useState<{ preferences: OnboardingPreferences | null } | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -36,6 +36,7 @@ export default function ProfileSetupPage({ service, onBack }: { service: Profile
     setResetting(true);
     try {
       await service.resetPreferences();
+      onReset?.();
       setLoaded({ preferences: null });
       setLoadError(false);
       setAttempt(current => current + 1);
@@ -65,7 +66,7 @@ export default function ProfileSetupPage({ service, onBack }: { service: Profile
           <p className="my-4">Comprueba que tu navegador permita almacenamiento local. Si los datos están dañados, puedes reiniciarlos.</p>
           <Button onClick={() => { setLoadError(false); setLoaded(null); setAttempt(current => current + 1); }}>Reintentar</Button>
         </section> : !loaded ? <p role="status">Cargando preferencias…</p> :
-          <ProfileWizard key={attempt} initial={loaded.preferences} service={service} />}
+          <ProfileWizard key={attempt} initial={loaded.preferences} service={service} onComplete={onComplete} startEditing={startEditing} />}
       </div>
       {resetOpen && <Modal labelledBy="reset-profile-title" onClose={() => { if (!resetting) setResetOpen(false); }}>
         <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -81,10 +82,10 @@ export default function ProfileSetupPage({ service, onBack }: { service: Profile
   );
 }
 
-function ProfileWizard({ initial, service }: { initial: OnboardingPreferences | null; service: ProfileService }) {
+function ProfileWizard({ initial, service, onComplete, startEditing }: { initial: OnboardingPreferences | null; service: ProfileService; onComplete?: (preferences: OnboardingPreferences) => void; startEditing: boolean }) {
   const [preferences, setPreferences] = useState<OnboardingPreferences>(() => initial ?? emptyPreferences());
   const [step, setStep] = useState(1);
-  const [saved, setSaved] = useState(Boolean(initial));
+  const [saved, setSaved] = useState(Boolean(initial) && !startEditing);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
@@ -114,7 +115,7 @@ function ProfileWizard({ initial, service }: { initial: OnboardingPreferences | 
     setError(null);
     try {
       const result = await service.savePreferences(preferences);
-      if (mounted.current) { setPreferences(result); setSaved(true); }
+      if (mounted.current) { setPreferences(result); setSaved(true); onComplete?.(result); }
     } catch {
       if (mounted.current) setError('No pudimos guardar tus preferencias. Comprueba el almacenamiento del navegador y vuelve a intentarlo. Tus selecciones se conservan.');
     } finally {
@@ -131,6 +132,7 @@ function ProfileWizard({ initial, service }: { initial: OnboardingPreferences | 
     </dl>
     <p className="my-6 rounded-xl bg-[#DCEBDD] p-4 text-sm text-[#1D5149]">Tus preferencias nos ayudarán a personalizar tu experiencia de aprendizaje.</p>
     <Button onClick={() => { setSaved(false); setStep(1); }}>Editar preferencias</Button>
+    {onComplete && <Button className="ml-3" onClick={() => onComplete(preferences)}>Ir a mi panel</Button>}
   </section>;
 
   return <>

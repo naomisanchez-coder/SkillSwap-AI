@@ -1,12 +1,59 @@
 # SkillSwap AI — frontend
 
+## Panel estudiantil
+
+El panel reutiliza `StudentDashboardPage.tsx`, `StudentShell` de `AppShell.tsx`,
+`StudentUI.tsx` y `RecommendationAssistant.tsx` del proyecto original de Figma Make.
+Conserva el menú lateral, resumen académico, fotografía, tarjetas de mentores,
+próxima sesión y asistente. No muestra carteles técnicos en la interfaz.
+
+Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y `npm run dev`:
+
+- Sin preferencias guardadas abre la configuración inicial. Solo después de guardar
+  correctamente pasa al panel. Con preferencias completas abre el panel al recargar.
+- **Mi perfil** en el menú o el avatar permiten editar las selecciones existentes.
+  Guardar vuelve al panel y actualiza las recomendaciones. Reiniciar elimina las
+  preferencias y exige volver a completar el perfil.
+- La campana abre las notificaciones; abrir una marca su lectura y navega al destino.
+  La lectura se conserva al recargar. Si falla el guardado, sigue sin leer.
+- **Encontrar con IA**, las sugerencias y el botón flotante abren el asistente original.
+  Permite habilidad, nivel, horario, revisión y hasta tres resultados; contempla errores
+  de entrada y búsquedas sin coincidencias. Es el motor local del prototipo, sin un
+  proveedor externo de IA.
+- Explorar privado, Para ti, sesiones, créditos, solicitudes de mentor, perfiles de
+  mentor y logout conservan destinos pendientes identificados al pulsarlos.
+
+`src/services/student.ts` define `StudentService`; `src/dev/studentMock.ts` y
+`src/dev/mentorFixtures.ts` proporcionan los datos de prueba. La composición recibe
+`StudentService` y `ProfileService` por propiedades para conectar la API después.
+Los datos del panel se tipan en `src/data/student.ts`, sin importar el estado global,
+migraciones locales ni toda la economía del prototipo. La lectura de notificaciones
+usa `skillswap:frontend-demo:student:v1`; las preferencias mantienen su clave anterior.
+No se guardan cookies, contraseñas ni tokens, ni se conceden créditos a cuentas reales.
+
+El motor conserva los pesos 45/20/25/10 y el máximo de tres resultados. Como en el
+original, parte de la primera habilidad del perfil; el objetivo no añade otro peso.
+Solo considera mentores activos, validados, con habilidad activa y horarios, excluyendo
+la oferta propia. Mantiene la calidad neutral para mentores sin valoraciones.
+Los bloques del catálogo duran una hora. `scheduling.ts` compara intervalos
+`[inicio, fin)`: 19:00–20:00 y 20:00–21:00 no se solapan. Se mantiene el puntaje parcial
+original por coincidir solo en el día, sin conceder la coincidencia horaria completa.
+El panel diferencia preferencias incompletas de una habilidad sin mentores elegibles.
+
+Comprobaciones automatizadas: `npm test` ejecuta las regresiones del motor, horarios
+límite, elegibilidad, orden, máximo de resultados y estados vacíos. Requiere Node con
+`module.registerHooks` (probado con Node 24); utiliza TypeScript ya instalado, sin
+dependencias nuevas. Ejecutar también `npm run build`, `npm run lint` y
+`git diff --check`. Las pruebas de Chrome de este incremento se ejecutan con herramientas
+temporales fuera del repositorio, en los nueve tamaños indicados abajo.
+
 ## Perfil inicial con datos simulados (solo desarrollo)
 
 Este incremento sigue `ProfileSetupPage.tsx` de Figma Make: habilidades del catálogo
 activo, nivel, un horario semanal y objetivo académico. Conserva las selecciones al
-retroceder. Todos los pasos son obligatorios; al terminar muestra un resumen y permite
-editar. La disponibilidad incluye el inicio y el final del horario. Las recomendaciones
-y el panel privado siguen pendientes.
+retroceder. Todos los pasos son obligatorios; al terminar guarda y abre el panel.
+La disponibilidad incluye el inicio y el final del horario. Se puede volver a editar
+desde el panel; las pantallas privadas restantes continúan pendientes.
 
 Para probar sin backend:
 
@@ -14,10 +61,10 @@ Para probar sin backend:
    cualquier configuración existente. No subas ese archivo a Git.
 2. Desde `frontend/`, ejecuta `npm run dev` y abre la dirección que muestra Vite.
    Reinicia Vite después de cambiar variables de entorno.
-3. Se abre directamente la configuración del perfil, con la interfaz de producto
-   sin carteles técnicos. Completa los cuatro pasos.
-4. Pulsa **Guardar preferencias**. Recarga y vuelve a abrir el perfil para comprobar
-   la persistencia. **Editar preferencias** conserva los valores guardados.
+3. Sin preferencias se abre la configuración del perfil; si ya están completas se
+   abre el panel. La interfaz no muestra carteles técnicos.
+4. Pulsa **Guardar preferencias**. Recarga para comprobar la persistencia en el
+   panel. **Mi perfil** conserva los valores guardados al editarlos.
 5. **Reiniciar preferencias** solicita confirmación y borra únicamente las
    preferencias de prueba. También permite recuperar datos locales dañados.
 

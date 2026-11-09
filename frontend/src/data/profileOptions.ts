@@ -1,5 +1,7 @@
+import { ACTIVE_SKILLS } from './skillCatalog';
+
 // Opciones referenciales de ProfileSetupPage.tsx / skillCatalog.ts de Figma Make.
-export const profileSkills = ['Python', 'Java', 'React', 'SQL', 'Matemáticas', 'Electrónica', 'Automatización', 'Redes', 'Excel', 'Power BI', 'Inglés', 'Presentaciones', 'Investigación', 'Figma', 'UX/UI', 'Canva'];
+export const profileSkills = ACTIVE_SKILLS.map(skill => skill.name);
 export const profileLevels = [
   ['Principiante', 'Estoy empezando desde cero.'],
   ['Intermedio', 'Tengo conocimientos básicos y quiero mejorar.'],
