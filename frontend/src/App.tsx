@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import LandingPage from './pages/LandingPage'
 import PublicExplorePage from './pages/PublicExplorePage'
 import HowItWorksPage from './pages/HowItWorksPage'
@@ -9,8 +9,20 @@ import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
 import { useAuthSession } from './hooks/useAuthSession'
 
+const DevelopmentPreview = import.meta.env.DEV ? lazy(() => import('./dev/FrontendPreview')) : null
+const previewEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_FRONTEND_PREVIEW === 'true'
+
 export default function App() {
-  const [page, setPage] = useState<PublicDestination | 'register' | 'login'>('landing')
+  const [preview, setPreview] = useState(previewEnabled)
+  const [realPage, setRealPage] = useState<'login' | 'register'>('login')
+  if (preview && DevelopmentPreview) return <Suspense fallback={<p role="status">Cargando…</p>}>
+    <DevelopmentPreview onRealAccess={next => { setRealPage(next); setPreview(false) }} />
+  </Suspense>
+  return <RealApp initialPage={previewEnabled ? realPage : 'landing'} />
+}
+
+function RealApp({ initialPage }: { initialPage: PublicDestination | 'register' | 'login' }) {
+  const [page, setPage] = useState<PublicDestination | 'register' | 'login'>(initialPage)
   const [pendingDestination, setPendingDestination] = useState<string | null>(null)
   const { state: auth, recoverSession, acceptSession } = useAuthSession()
   const session = auth.status === 'authenticated' ? auth.session : null

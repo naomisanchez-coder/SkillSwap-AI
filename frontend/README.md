@@ -1,5 +1,48 @@
 # SkillSwap AI — frontend
 
+## Perfil inicial con datos simulados (solo desarrollo)
+
+Este incremento sigue `ProfileSetupPage.tsx` de Figma Make: habilidades del catálogo
+activo, nivel, un horario semanal y objetivo académico. Conserva las selecciones al
+retroceder. Todos los pasos son obligatorios; al terminar muestra un resumen y permite
+editar. La disponibilidad incluye el inicio y el final del horario. Las recomendaciones
+y el panel privado siguen pendientes.
+
+Para probar sin backend:
+
+1. En `frontend/.env.local` añade `VITE_ENABLE_FRONTEND_PREVIEW=true`, conservando
+   cualquier configuración existente. No subas ese archivo a Git.
+2. Desde `frontend/`, ejecuta `npm run dev` y abre la dirección que muestra Vite.
+   Reinicia Vite después de cambiar variables de entorno.
+3. Se abre directamente la configuración del perfil, con la interfaz de producto
+   sin carteles técnicos. Completa los cuatro pasos.
+4. Pulsa **Guardar preferencias**. Recarga y vuelve a abrir el perfil para comprobar
+   la persistencia. **Editar preferencias** conserva los valores guardados.
+5. **Reiniciar preferencias** solicita confirmación y borra únicamente las
+   preferencias de prueba. También permite recuperar datos locales dañados.
+
+La vista simulada no inicia `/auth/me`, no crea sesiones ni toca las cookies de una
+cuenta real. Usa exclusivamente la clave local
+`skillswap:frontend-demo:profile:v1`; no guarda credenciales ni tokens. El navegador
+debe permitir almacenamiento local. Si falla el guardado, se conservan las selecciones
+y se muestra un error sin confirmar éxito.
+
+`src/services/profile.ts` define la interfaz asíncrona para leer, guardar y reiniciar;
+`src/dev/profileMock.ts` implementa la simulación y contiene al estudiante ficticio.
+La pantalla recibe el servicio por propiedades para sustituirlo después por una API.
+Las opciones referenciales están en `src/data/profileOptions.ts`.
+
+El registro y login existentes conservan la API y sus controles. No hay credenciales
+ficticias aceptadas por el login real. Para abrir la navegación pública y autenticación
+habituales desactiva la vista con `VITE_ENABLE_FRONTEND_PREVIEW=false` o elimina
+la variable. En producción se ignora incluso si vale `true`: la vista y el servicio
+simulado no se incluyen en los módulos JavaScript compilados.
+
+Revisar con teclado las casillas (Espacio), opciones únicas (flechas), botones (Tab,
+Shift+Tab, Enter) y diálogo de reinicio (Escape). Los pasos enfocan el título; las
+validaciones enfocan la primera opción y anuncian el error. La cuadrícula de horarios
+se reorganiza para celulares, tablets y escritorio sin exigir desplazamiento horizontal.
+
 ## Revisión responsive en cada etapa
 
 Antes de dar por terminada una etapa, comprobar las pantallas modificadas en celular,
@@ -20,8 +63,9 @@ en la entrega y esperar la confirmación del equipo antes de la siguiente etapa.
 Están disponibles la portada y la navegación pública: Explorar habilidades, Cómo
 funciona y Compartir mis habilidades. La navegación usa estado `page`, como el prototipo,
 sin rutas URL: al recargar se vuelve al inicio. El registro está conectado a la API;
-login y recuperación de sesión están conectados a la API; logout y funciones privadas
-siguen pendientes y muestran un aviso. El catálogo público usa perfiles de demostración
+login y recuperación de sesión están conectados a la API; logout real y conexión de
+funciones privadas siguen pendientes y muestran un aviso. El perfil inicial solo está
+disponible en la vista de desarrollo descrita arriba. El catálogo público usa perfiles de demostración
 del código original; la búsqueda consulta nombre, habilidad y biografía, y las categorías
 rellenan ese mismo buscador. Actualmente los tres mentores de demostración enseñan Python.
 Para abrirla: ejecutar `npm run dev` en esta carpeta y visitar la URL que indica Vite.
