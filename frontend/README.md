@@ -1,5 +1,115 @@
 # SkillSwap AI — frontend
 
+## Perfil personal y solicitudes para enseñar
+
+Se reutilizan `ProfilePage`, `MentorApplicationPage` y `SkillsPage` del archivo
+`AccountMentorPages.tsx` original de Figma Make, con `Card`, `Avatar`, `Badge`, los
+campos accesibles y el diálogo compartido existentes. Se conserva la estructura de
+tarjetas y el diseño responsive. No se modifican registro, login ni backend.
+
+Mapa de navegación actualizado:
+
+- Menú o avatar → **Mi perfil**: consulta de información institucional, nombre,
+  biografía y foto; nombre y biografía editables. Correo, carrera, ciclo e institución
+  conservan las restricciones del prototipo.
+- Mi perfil / Mis habilidades → **Editar preferencias**: reutiliza los cuatro pasos
+  y `ProfileService` existentes, con selecciones conservadas y retorno al origen.
+  Así se mantiene el formato de preferencias ya guardado, sin reemplazar rangos
+  horarios por una hora suelta ni introducir valores incompatibles con el onboarding.
+- Menú, panel o página pública de compartir → **Quiero ser mentor** / formulario
+  de solicitud. Requiere haber completado el perfil inicial de aprendizaje.
+- Solicitud enviada → **Mis habilidades**: estado, documento, fecha, experiencia,
+  temas, observación e historial. Menú y notificación también abren esta pantalla.
+- **En observación** o **Rechazada** → corregir y reenviar con el mismo ID.
+  Se conservan las observaciones anteriores en el historial; vuelve a **Pendiente**.
+- Paneles del mentor, aprobación administrativa y logout siguen fuera de este
+  incremento. Ninguna solicitud habilita por sí misma una oferta de mentoría.
+
+`AccountService` separa los componentes de `dev/accountMock.ts` y
+`dev/accountStore.ts`. Los cambios personales y solicitudes se guardan en
+`skillswap:frontend-demo:account:v1`; preferencias, reservas, créditos y lectura de
+notificaciones mantienen sus claves y datos previos. El nombre/foto actualizan el
+encabezado y el panel sin cambiar los comprobantes históricos de reservas.
+Las reservas nuevas toman el nombre guardado; reintentar una reserva anterior conserva
+el nombre que tenía su comprobante.
+
+La foto admite JPG, PNG y WebP de hasta **2 MB**, con comprobación de tipo, tamaño,
+archivo vacío y decodificación real de imagen. Muestra vista previa y confirmación.
+`profilePhotoStorage.ts` conserva la base original `skillswap_prototype_files`,
+versión 3, almacén `profile_photos`. Se eliminó del migrador la instrucción original
+que borraba `payment_receipts`: los almacenes anteriores se conservan. Cada nueva
+foto recibe un ID propio para no sobrescribir la anterior si falla el guardado de
+metadatos. Las URLs `blob:` se crean solo en memoria y se liberan al dejar de usarlas.
+
+La solicitud exige habilidad vigente del catálogo, nivel Intermedio/Avanzado,
+experiencia, temas y evidencia PDF; el portafolio es opcional y debe usar HTTPS.
+El servicio vuelve a validar todo, evita otra solicitud activa de la misma habilidad
+y solo crea estados pendientes. Nombre: 120 caracteres; biografía: 1000;
+experiencia/temas: 2000 cada uno; portafolio: 2048. El formulario impide doble envío;
+IDs de envío estables y una firma del contenido permiten reintentos sin duplicar
+solicitudes, documentos ni notificaciones. Web Locks coordina las pestañas compatibles;
+la cola alternativa solo coordina una instancia.
+
+`evidenceStorage.ts` reutiliza la base original `skillswap_mentor_evidence`, versión 1,
+almacén `pdf_documents`. Admite extensión `.pdf`, tipo PDF/vacío/octet-stream,
+contenido no vacío, tamaño **hasta 5 MB inclusive** y firma `%PDF-1.x` o `%PDF-2.x`.
+Conserva el Blob completo, no solo el nombre; **Abrir PDF** recupera el contenido y
+lo abre en otra pestaña sin acceso a la ventana de origen. Al recuperarlo se comprueba
+que el Blob siga disponible y tenga tamaño/firma válidos. Es validación básica del
+formato del prototipo: el visor puede detectar otros daños estructurales; no equivale
+a una validación documental administrativa ni a un análisis antimalware.
+
+**Las fotos y los PDF se guardan en este navegador y origen.** No se comparten entre
+dispositivos ni entre puertos/orígenes. Pueden perderse si se borran los datos del sitio,
+se agota la cuota o el navegador retira almacenamiento. El nombre del documento sigue
+visible si falta el contenido; la pantalla informa el problema y permite reintentar
+la recuperación. Una solicitud observada/rechazada puede corregirse adjuntando otro PDF.
+No se presenta un nombre guardado como evidencia recuperada.
+
+El éxito se muestra después del guardado confirmado. Si falla IndexedDB, no se enlaza
+el archivo. Si se guarda el archivo pero falla el metadato, se intenta eliminar solo
+ese archivo nuevo; se conservan las referencias y archivos anteriores. Si esa limpieza
+también falla, puede quedar un Blob sin enlazar, sin crear una solicitud ni informar
+éxito. No hay una transacción común entre localStorage e IndexedDB; la API deberá
+implementar la atomicidad e idempotencia definitivas. Los errores de recuperación de
+metadatos no reinician datos ni ofrecen borrar preferencias ajenas al fallo.
+
+Para revisar: inicia Vite con `VITE_ENABLE_FRONTEND_PREVIEW=true`, abre **Mi perfil**,
+edita y guarda, cambia la foto y recarga. Abre **Quiero ser mentor**, completa el
+formulario y adjunta un PDF. Desde **Mis habilidades**, abre el archivo y recarga.
+La revisión de solicitudes se prueba mediante un fixture separado, sin controles
+administrativos para el estudiante:
+
+```js
+const { mockAccountService, reviewApplicationFixture } = await import('/src/dev/accountMock.ts');
+const account = await mockAccountService.getAccount();
+await reviewApplicationFixture(account.requests[0].id, 'observation', 'Detalla los temas y adjunta evidencia.');
+location.reload();
+```
+
+Los otros estados del fixture son `rejected` y `approved`; solo revisa solicitudes
+pendientes. Es exclusivo de desarrollo y no forma parte de `AccountService`. La API
+deberá verificar roles y permisos, gestionar los archivos compartidos y dar validez a
+las revisiones; los datos locales no otorgan permisos reales.
+
+Comprobaciones de este incremento: build, lint sin advertencias y `git diff --check`
+correctos; **38 pruebas automatizadas** de perfil, archivos, duplicados, fallos,
+reservas, sesiones y recomendaciones. En Chrome se revisó el recorrido en 320×740,
+360×800, 390×844, 640×800, 768×1024, 844×390, 1024×768, 1280×900 y 1440×900.
+Se verificaron teclado, foco del modal, menú móvil, edición, preferencias conservadas,
+recarga, JPG/PNG/WebP decodificables, archivos inválidos, PDF íntegro en IndexedDB y
+apertura en otra pestaña. Se corrigió el menú que permanecía abierto al seleccionar
+**Quiero ser mentor**.
+
+Los contextos de prueba comprobaron solicitud pendiente/observada/rechazada/aprobada,
+historial tras reenviar, dos pestañas con un único documento y solicitud, metadatos
+no recuperables, PDF/foto dañados o ausentes, IndexedDB inaccesible, transacción abortada,
+compensación del archivo nuevo y conservación de un almacén anterior en una migración.
+Sin errores JavaScript ni llamadas a la API. Los scripts temporales y capturas están
+fuera del repositorio. Pendientes: dispositivos físicos, otros navegadores, lector de
+pantalla y conexión a la API/almacenamiento compartido. La captura de Figma Make no
+está disponible mediante el conector; se reutilizó su código original.
+
 ## Mis sesiones y billetera
 
 Se trasladan las vistas estudiantiles de `SessionsHubPage.tsx` y `CreditsHubPage.tsx`
@@ -16,8 +126,8 @@ Mapa de navegación actualizado:
 - Menú, accesos del panel y notificaciones → Mis sesiones / Mis créditos.
 - Mis sesiones → detalle, cancelación, validación, reporte o valoración según estado.
 - Mis sesiones / Mis créditos → asistente → perfil del mentor → volver al origen.
-- Mi perfil → editar preferencias → panel. Las solicitudes para enseñar y logout
-  siguen mostrando un aviso de destino pendiente al seleccionarlos.
+- Mi perfil → editar preferencias → perfil; Mis habilidades → solicitudes para enseñar.
+  Logout sigue mostrando un aviso de destino pendiente al seleccionarlo.
 
 Sesiones y billetera se restauran al recargar mediante `sessionStorage`; las reservas,
 confirmaciones, incidencias, reseñas y movimientos permanecen en `localStorage`.
@@ -207,8 +317,8 @@ Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y `npm run dev`:
 
 - Sin preferencias guardadas abre la configuración inicial. Solo después de guardar
   correctamente pasa al panel. Con preferencias completas abre el panel al recargar.
-- **Mi perfil** en el menú o el avatar permiten editar las selecciones existentes.
-  Guardar vuelve al panel y actualiza las recomendaciones. Reiniciar elimina las
+- **Mi perfil** en el menú o el avatar abren la información personal y la edición
+  de preferencias existentes. Guardar actualiza el panel y las recomendaciones. Reiniciar elimina las
   preferencias y exige volver a completar el perfil.
 - La campana abre las notificaciones; abrir una marca su lectura y navega al destino.
   La lectura se conserva al recargar. Si falla el guardado, sigue sin leer.
@@ -216,8 +326,8 @@ Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y `npm run dev`:
   Permite habilidad, nivel, horario, revisión y hasta tres resultados; contempla errores
   de entrada y búsquedas sin coincidencias. Es el motor local del prototipo, sin un
   proveedor externo de IA.
-- Explorar, Para ti, perfiles de mentor, reservas, sesiones y créditos están disponibles.
-  Solicitudes de mentor y logout conservan destinos pendientes al pulsarlos.
+- Explorar, Para ti, perfiles de mentor, reservas, sesiones, créditos, perfil personal
+  y solicitudes para enseñar están disponibles. Logout conserva un destino pendiente.
 
 `src/services/student.ts` define `StudentService`; `src/dev/studentMock.ts` y
 `src/dev/mentorFixtures.ts` proporcionan los datos de prueba. La composición recibe

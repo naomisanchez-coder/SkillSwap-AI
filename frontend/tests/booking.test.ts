@@ -145,3 +145,11 @@ test('los datos corruptos no reinician el saldo y el borrador conserva un ID est
   await assert.rejects(service.confirmBooking(command), isCode('storage_invalid'));
   assert.equal(storage.getItem(bookingStorageKey), '{broken');
 });
+
+test('el nombre actualizado se usa en nuevas reservas y conserva el comprobante histórico al reintentar', async () => {
+  const { service, command } = fixture();
+  const first = await service.confirmBooking(command, 'Ana Díaz');
+  assert.equal(first.session.learnerName, 'Ana Díaz');
+  assert.equal((await service.getBookingContext('carlos', 'Ana Actualizada'))?.userName, 'Ana Actualizada');
+  assert.equal((await service.confirmBooking(command, 'Ana Actualizada')).session.learnerName, 'Ana Díaz');
+});

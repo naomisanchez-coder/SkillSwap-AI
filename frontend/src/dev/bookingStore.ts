@@ -30,7 +30,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     const session = ledger.sessions.find(item => item.id === id)!;
     return structuredClone({ session, wallet: ledger.wallet, notifications: ledger.notifications.filter(item => item.id === `NOT-${id}-booked-student`), ledger });
   };
-  const commit = (command: BookingCommand): BookingResult => {
+  const commit = (command: BookingCommand, learnerName: string): BookingResult => {
     const ledger = read();
     if (!/^[a-zA-Z0-9-]{1,100}$/.test(command.id) || ![30, 60, 90].includes(command.duration)) throw new BookingError('invalid_request', 'La reserva no es válida. Revisa la selección.');
     const existing = ledger.sessions.find(item => item.id === command.id);
@@ -51,7 +51,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     if (ledger.wallet.available < credits) throw new BookingError('insufficient_balance', 'No tienes suficientes créditos para esta sesión.');
     const createdAt = now().toISOString();
     const session = {
-      id: command.id, studentId: identity.id, learnerName: identity.name, mentorId: mentor.id, mentorName: mentor.name,
+      id: command.id, studentId: identity.id, learnerName, mentorId: mentor.id, mentorName: mentor.name,
       skill: mentor.skill, topic: mentor.offer.topic, date: command.date, time, duration: command.duration, credits,
       status: 'upcoming' as const, meetingPlatform: null, meetingUrl: null, createdAt,
       reservedSlotKeys: intervalSlotKeys(mentor.id, command.date, time, command.duration),
@@ -94,14 +94,14 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     // Solo fixtures del frontend: no se expone en el contrato StudentService ni en la interfaz estudiantil.
     async applyMentorFixture(action: MentorFixtureAction) { return apply(action); },
     async getLedger() { return structuredClone(read()); },
-    async getBookingContext(mentorId: string) {
+    async getBookingContext(mentorId: string, userName = identity.name) {
       const mentor = getMentors().find(item => item.id === mentorId);
       if (!mentor || !isEligibleMentor(mentor, identity.id)) return null;
       const ledger = read();
-      return structuredClone({ mentor, studentId: identity.id, userName: identity.name, wallet: ledger.wallet, sessions: ledger.sessions, reservedSlots: ledger.sessions.filter(item => item.status !== 'cancelled').flatMap(item => item.reservedSlotKeys) });
+      return structuredClone({ mentor, studentId: identity.id, userName, wallet: ledger.wallet, sessions: ledger.sessions, reservedSlots: ledger.sessions.filter(item => item.status !== 'cancelled').flatMap(item => item.reservedSlotKeys) });
     },
-    async confirmBooking(command: BookingCommand) {
-      return serialized(() => commit(command));
+    async confirmBooking(command: BookingCommand, learnerName = identity.name) {
+      return serialized(() => commit(command, learnerName));
     },
     async getBooking(id: string) { return structuredClone(read().sessions.find(item => item.id === id) ?? null); },
     async getBookingDraft() {

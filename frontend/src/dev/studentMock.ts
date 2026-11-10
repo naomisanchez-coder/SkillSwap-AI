@@ -7,6 +7,7 @@ import { mentors, reviewFixtures } from './mentorFixtures';
 import { isEligibleMentor } from '../data/recommendations';
 import { ACADEMIC_CREDIT_CONFIG } from '../data/creditConfig';
 import { createLocalBookingStore } from './bookingStore';
+import { mockAccountService } from './accountMock';
 
 export const studentActivityStorageKey = 'skillswap:frontend-demo:student:v1';
 // Fixtures referenciales del prototipo. No otorgan créditos ni modifican cuentas reales.
@@ -36,8 +37,8 @@ function readNotificationIds(): string[] {
 }
 export const mockStudentService: StudentService = {
   async updateSession(action) { assertDevelopment(); return bookings.updateSession(action); },
-  async getBookingContext(id) { assertDevelopment(); return bookings.getBookingContext(id); },
-  async confirmBooking(command) { assertDevelopment(); return bookings.confirmBooking(command); },
+  async getBookingContext(id) { assertDevelopment(); const account = await mockAccountService.getAccount(); return bookings.getBookingContext(id, account.profile.name ?? studentFixture.profile.name); },
+  async confirmBooking(command) { assertDevelopment(); const account = await mockAccountService.getAccount(); return bookings.confirmBooking(command, account.profile.name ?? studentFixture.profile.name); },
   async getBooking(id) { assertDevelopment(); return bookings.getBooking(id); },
   async getBookingDraft() { assertDevelopment(); return bookings.getBookingDraft(); },
   async saveBookingDraft(draft) { assertDevelopment(); return bookings.saveBookingDraft(draft); },
@@ -55,21 +56,25 @@ export const mockStudentService: StudentService = {
     const preferences = await mockProfileService.getPreferences();
     const readIds = readNotificationIds();
     const state = structuredClone(studentFixture);
+    const account = await mockAccountService.getAccount();
+    state.account = account;
+    state.skillRequests = [...account.requests, ...state.skillRequests];
     const ledger = await bookings.getLedger();
     state.activity = ledger;
     state.reviews = [...ledger.reviews, ...reviewFixtures];
     state.mentorRatings = Object.fromEntries(mentors.map(mentor => [mentor.id, summarizeMentorReviews(state.reviews!, mentor.id)]));
     state.wallet = ledger.wallet;
     state.sessions = [...ledger.sessions, ...state.sessions];
-    state.notifications = [...ledger.notifications, ...state.notifications];
-    state.profile = { ...state.profile, ...(preferences ?? emptyPreferences()) };
+    state.notifications = [...account.notifications, ...ledger.notifications, ...state.notifications];
+    state.profile = { ...state.profile, ...account.profile, ...(preferences ?? emptyPreferences()) };
     state.notifications = state.notifications.map(item => ({ ...item, read: readIds.includes(item.id) }));
     return { state, mentors: structuredClone(mentors) };
   },
   async markNotificationRead(id) {
     assertDevelopment();
     const ledger = await bookings.getLedger();
-    if (![...studentFixture.notifications, ...ledger.notifications].some(item => item.id === id && item.userId === studentFixture.profile.id)) throw new Error('Notificación no disponible.');
+    const account = await mockAccountService.getAccount();
+    if (![...studentFixture.notifications, ...ledger.notifications, ...account.notifications].some(item => item.id === id && item.userId === studentFixture.profile.id)) throw new Error('Notificación no disponible.');
     localStorage.setItem(studentActivityStorageKey, JSON.stringify([...new Set([...readNotificationIds(), id])]));
   },
 };

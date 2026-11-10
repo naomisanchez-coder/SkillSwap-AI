@@ -1,11 +1,12 @@
 import { validateProfileStep, type OnboardingPreferences } from './profileOptions';
 import type { Mentor } from './mentors';
 import type { BookingLedger } from './booking';
+import type { AccountData } from './account';
 
 // Subconjunto del modelo original necesario para el panel, sin migradores ni economía global.
 export type UserProfile = OnboardingPreferences & {
   id: string; name: string; email: string; institution: string;
-  career: string; cycle: number; bio: string; photo?: string;
+  career: string; cycle: number; bio: string; photo?: string; photoStorageId?: string;
 };
 export type WalletBalance = { available: number; held: number; used: number; earned: number };
 export type SessionRecord = {
@@ -21,6 +22,7 @@ export type StudentDashboardData = {
   mentorRatings: Record<string, { average: number; count: number }>;
   activity?: BookingLedger;
   reviews?: ReviewRecord[];
+  account?: AccountData;
 };
 export type StudentDashboardSnapshot = { state: StudentDashboardData; mentors: Mentor[] };
 export type ReviewRecord = {

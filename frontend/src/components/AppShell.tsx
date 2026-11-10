@@ -113,8 +113,8 @@ export function StudentShell({
           ))}
         </nav>
         <div className="mt-auto pt-5 border-t border-white/10 space-y-2">
-          <Button variant="secondary" full onClick={teachingAction.onClick} icon={<Icons.Repeat s={16} />}>{teachingAction.label}</Button>
-          <Button variant="ghost" full onClick={onPublicHome} icon={<Icons.Compass s={16} />} className="justify-start !text-[#CFDAD5] hover:!bg-white/10 hover:!text-white">Ir al Home</Button>
+          <Button variant="secondary" full onClick={() => { setMobileOpen(false); teachingAction.onClick(); }} icon={<Icons.Repeat s={16} />}>{teachingAction.label}</Button>
+          <Button variant="ghost" full onClick={() => { setMobileOpen(false); onPublicHome(); }} icon={<Icons.Compass s={16} />} className="justify-start !text-[#CFDAD5] hover:!bg-white/10 hover:!text-white">Ir al Home</Button>
           <div className="flex items-center gap-3 py-3">
             <Avatar name={userName} src={userPhoto} size="lg" status="online" />
             <div className="min-w-0">
@@ -122,7 +122,7 @@ export function StudentShell({
               <p className="text-xs text-[#94A3B8]">Estudiante</p>
             </div>
           </div>
-          <Button variant="ghost" full onClick={onLogout} icon={<Icons.LogOut s={16} />} className="justify-start !text-[#CFDAD5] hover:!bg-white/10 hover:!text-white">Cerrar sesión</Button>
+          <Button variant="ghost" full onClick={() => { setMobileOpen(false); onLogout(); }} icon={<Icons.LogOut s={16} />} className="justify-start !text-[#CFDAD5] hover:!bg-white/10 hover:!text-white">Cerrar sesión</Button>
         </div>
   </>;
 

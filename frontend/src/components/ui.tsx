@@ -2,6 +2,11 @@
 export { Button } from './Button';
 export { Input } from './Input';
 
+// Card original de Figma Make.
+export function Card({ children, className = '', hover }: { children: React.ReactNode; className?: string; hover?: boolean }) {
+  return <div className={`bg-white border border-[#E2E8E0] rounded-[18px] ${hover ? 'hover:shadow-md hover:-translate-y-0.5 transition-all duration-200' : 'shadow-sm'} ${className}`}>{children}</div>;
+}
+
 type Status = 'online' | 'offline' | 'busy' | 'away';
 
 const dotColor: Record<Status, string> = {

@@ -17,7 +17,7 @@ const descriptions = [
 const choiceStyle = (selected: boolean) => `relative cursor-pointer rounded-xl border px-4 py-3 text-sm font-medium text-[#334A46] ${selected ? 'border-[#C9D8CC] bg-[#DCEBDD] ring-2 ring-[#635BFF]' : 'border-[#CBD8CE] bg-white hover:border-[#34877A]'} has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-4 has-[:focus-visible]:outline-[#24685F]`;
 
 // Adaptación de ProfileSetupPage.tsx de Figma: mismos pasos y opciones.
-export default function ProfileSetupPage({ service, onBack, onComplete, onReset, startEditing = false }: { service: ProfileService; onBack: () => void; onComplete?: (preferences: OnboardingPreferences) => void; onReset?: () => void; startEditing?: boolean }) {
+export default function ProfileSetupPage({ service, onBack, onComplete, onReset, startEditing = false, backLabel = 'Volver al inicio' }: { service: ProfileService; onBack: () => void; onComplete?: (preferences: OnboardingPreferences) => void; onReset?: () => void; startEditing?: boolean; backLabel?: string }) {
   const [loaded, setLoaded] = useState<{ preferences: OnboardingPreferences | null } | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -53,12 +53,12 @@ export default function ProfileSetupPage({ service, onBack, onComplete, onReset,
   return (
     <main className="public-page min-h-screen bg-[#F8FAFC] text-[#111827]">
       <header className="flex flex-wrap items-center gap-3 border-b border-[#E2E8F0] bg-white px-4 py-3 md:px-10">
-        <button type="button" onClick={onBack} aria-label="Ir al inicio"><PublicLogo /></button>
+        <button type="button" onClick={onBack} aria-label={backLabel}><PublicLogo /></button>
         <span className="ml-auto text-sm text-[#64748B]">Perfil de aprendizaje</span>
       </header>
       <div className="mx-auto max-w-[900px] px-4 py-8 md:py-12">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <Button variant="ghost" onClick={onBack}>Volver al inicio</Button>
+          <Button variant="ghost" onClick={onBack}>{backLabel}</Button>
           <Button variant="outline" onClick={() => setResetOpen(true)}>Reiniciar preferencias</Button>
         </div>
         {loadError ? <section role="alert" className="rounded-2xl border border-[#E8C2C2] bg-white p-6">
