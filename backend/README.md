@@ -6,16 +6,16 @@ SkillSwap AI es una plataforma académica para el intercambio de habilidades ent
 
 La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. El incremento 1.1 añadió documentación. El incremento 1.2 incorpora el esquema relacional, un ejecutor seguro y pruebas reales. La migración fue validada en `skillswap_ai_test_auth` y aplicada con autorización explícita a la base principal de desarrollo `skillswap_ai`.
 
-**La autenticación está planificada, no implementada.** Registro, correo real, sesiones de usuario y concesión de créditos todavía no están disponibles. Las ocho tablas ya existen en ambas bases; disponer de tablas no implementa los casos de uso de autenticación. Los contratos propuestos están en [docs/auth-api.md](docs/auth-api.md).
+**El registro institucional está implementado en 1.3B.** Correo real, verificación, login, sesiones y concesión de créditos siguen pendientes. Las ocho tablas ya existen en ambas bases; disponer de tablas no implementa los casos de uso de autenticación. Los contratos y su estado están en [docs/auth-api.md](docs/auth-api.md).
 
 ## Arquitectura
 
 - Presentación: frontend React separado, comunicado mediante API REST JSON.
 - Servidor: Node.js con JavaScript ES Modules y Express.
 - Persistencia: MySQL 8.4 mediante `mysql2/promise`.
-- Organización prevista: monolito modular con rutas, controladores, servicios y repositorios. Las capas de negocio aún no existen.
+- Monolito modular por capas: ruta → controlador → servicio → repositorio → MySQL. El módulo auth implementa registro; se conserva la infraestructura existente.
 
-`src/app.js` crea la aplicación sin abrir puertos. `src/server.js` administra el servidor HTTP y el cierre del pool. La configuración se concentra en `src/config/`. El pool expone comprobación de disponibilidad, cierre, ejecución parametrizada y transacciones sobre una misma conexión. Las capas de negocio y repositorios de autenticación se incorporarán en el siguiente incremento.
+`src/app.js` crea la aplicación sin abrir puertos. `src/server.js` administra el servidor HTTP y el cierre del pool. La configuración se concentra en `src/config/`. El pool expone comprobación de disponibilidad, cierre, ejecución parametrizada y transacciones sobre una misma conexión. El módulo src/modules/auth separa HTTP, validación, negocio, hash y persistencia.
 
 ## Tecnologías y versiones
 
@@ -43,11 +43,18 @@ backend/
 ├── package-lock.json
 ├── database/
 │   ├── .gitkeep
+│   ├── academic-catalog.js
+│   ├── catalogs/academic-1.0.0.json
 │   ├── migrate.js
 │   └── migrations/
 │       └── 001_auth_foundation.sql # Aplicada y validada localmente
 ├── docs/
+│   ├── academic-catalog.md
+│   ├── legal/                 # Textos propios 1.0.0
 │   └── auth-api.md
+├── scripts/
+│   ├── academic-catalog.js
+│   └── verify-local.js
 ├── src/
 │   ├── .gitkeep
 │   ├── app.js
@@ -57,6 +64,16 @@ backend/
 │   │   └── env.js
 │   ├── errors/
 │   │   └── PublicError.js
+│   ├── modules/
+│   │   └── auth/
+│   │       ├── auth.routes.js
+│   │       ├── auth.controller.js
+│   │       ├── auth.service.js
+│   │       ├── registration.policy.js
+│   │       ├── registration.limiter.js
+│   │       ├── auth.repository.js
+│   │       ├── auth.validation.js
+│   │       └── password.service.js
 │   ├── middleware/
 │   │   └── errorHandler.js
 │   └── routes/
@@ -66,7 +83,11 @@ backend/
 │   ├── database.test.js
 │   ├── errors.test.js
 │   ├── health.test.js
-│   └── migrations.test.js
+│   ├── migrations.test.js
+│   ├── catalog.test.js
+│   ├── registration-http.test.js
+│   ├── registration.test.js
+│   └── registration.integration.test.js
 └── uploads/              # Local, ignorado; sin funcionalidad de carga
 ```
 
@@ -292,7 +313,7 @@ Con estas variables cargadas de forma local, ejecutar `node --test tests/databas
 
 ## Próximos incrementos
 
-Pendientes de aprobación o implementación: decisiones del contrato, catálogo académico oficial, hash de contraseñas, registro institucional, envío real de correo, concesión inicial atómica y sesiones seguras. Este documento no autoriza ejecutar esos incrementos ni implementar recuperación de contraseña, reservas o funcionalidades de mentoría.
+Pendientes: SMTP, verificación de correo, concesión inicial atómica de créditos, login y sesiones seguras. El catálogo seleccionado y los documentos legales iniciales ya están versionados. Este documento no autoriza ejecutar esos incrementos ni implementar recuperación de contraseña, reservas o funcionalidades de mentoría.
 
 
 ### Resultado de validación de 1.3A
@@ -300,3 +321,32 @@ Pendientes de aprobación o implementación: decisiones del contrato, catálogo 
 Suite ejecutada con mapeo de entorno únicamente en memoria: 36 pruebas aprobadas y ninguna fallida. La integración real de persistencia pasó con skillswap_test_app@127.0.0.1 en skillswap_ai_test_auth, sin DDL ni datos sintéticos persistidos. Se verificaron COMMIT de solo lectura, rollback por error de negocio y rollback por error SQL, reutilización de conexiones, parámetros y fechas UTC.
 
 La integración de migraciones quedó omitida deliberadamente en esta ejecución para no utilizar la cuenta de migraciones; su validación de 1.2 permanece documentada. La suite HTTP conserva los cuerpos de salud y actualiza las expectativas del nuevo contrato del middleware. La validación 1.3A no requiere ni realiza escrituras en skillswap_ai.
+
+
+## Incremento 1.3B: registro institucional
+
+`POST /api/auth/register` recibe exactamente nueve campos: firstName, lastName, email, career, cycle, password, termsAccepted, termsVersion y privacyVersion. Exige JSON, consentimiento true y versiones vigentes 1.0.0 configuradas en registration.policy.js. La fecha de aceptación es del servidor UTC. React debe mostrar los textos versionados antes de aceptar; no preseleccionar la casilla ni enviar campos internos.
+
+El correo se recorta y convierte a minúsculas; la gramática inicial exige dos segmentos alfabéticos ASCII separados por un punto y dominio exacto tecsup.edu.pe. Se rechazan alias, números, guiones, segmentos adicionales, espacios internos, dominios alternativos y subdominios. Cualquier ampliación futura requiere acuerdo del contrato. Contraseña de 8–128 puntos de código Unicode, sin recortar/normalizar, máximo 512 bytes y Unicode bien formado.
+
+El hash usa scrypt asíncrono nativo, N=131072, r=8, p=1, salt aleatorio de 16 bytes y salida de 32 bytes. Conserva parámetros/salt para futura comprobación y no añade dependencias. Máximo dos derivaciones simultáneas por proceso; exceso responde 503 sin cola ilimitada. No se implementó login. Referencias: [Node crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html) y [OWASP Password Storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
+
+El servicio valida y calcula hash antes de abrir la transacción. El repositorio bloquea catálogo carrera/ciclo y crea usuario STUDENT/PENDING_VERIFICATION junto con perfil onboarding=false en una sola conexión. Acepta únicamente carrera activa y no ambigua, con ciclo existente. La restricción UNIQUE del correo resuelve solicitudes concurrentes; tras rollback se confirma el duplicado y se devuelve 409 EMAIL_ALREADY_REGISTERED. No se actualiza la cuenta existente. Un fallo de perfil revierte el usuario. No se crean verificaciones, sesiones ni créditos.
+
+El controlador devuelve 201 con `{user:{email,role:"student",emailVerified:false,onboardingComplete:false}}`, sin cookie, contraseña, hash ni ID interno. Los errores mantienen el contrato centralizado. Las rutas de salud y su 404 no cambian.
+
+Protecciones técnicas iniciales: JSON de hasta 100kb, origen de navegador en CORS_ORIGIN, límite por proceso de 10 intentos/IP y 5/correo por 60 segundos (todas las solicitudes admitidas por el middleware cuentan), máximo 2000 claves hash en memoria; 429 incluye Retry-After. Un origen ausente permite clientes API no navegador; un origen presente no autorizado recibe 403. No se confía en X-Forwarded-For: cualquier proxy debe configurarse expresamente y revisar los límites antes de despliegue. Los límites en memoria no se comparten entre procesos. Registro no usa sesiones/cookies: las protecciones CSRF autenticadas corresponden al próximo incremento de sesiones, no están implementadas aquí.
+
+Ver [catálogo y carga DML versionada](docs/academic-catalog.md), [términos](docs/legal/terms-1.0.0.md) y [privacidad](docs/legal/privacy-1.0.0.md). No se modifica la migración 001. La carga del catálogo principal requiere autorización del destino; sin catálogo cargado no se admite ninguna carrera ausente. Los textos tienen identificación del responsable, contacto, conservación y revisión jurídica pendientes antes de operación pública. Este registro funcional del prototipo no certifica preparación legal para un servicio público.
+
+### Pruebas de registro
+
+```sh
+cd backend
+npm test
+node scripts/verify-local.js
+```
+
+El lanzador mapea el archivo privado .env.test.local en memoria y solo acepta skillswap_test_app en 127.0.0.1:3306/skillswap_ai_test_auth. No cambia la configuración del runtime ni archivos privados. Incluye pruebas unitarias, HTTP y persistencia real: consentimiento, hash real, duplicados concurrentes, catálogo inactivo/ambiguo, ciclo inválido, rollback del perfil y ausencia de sesiones/créditos. Los datos sintéticos y su limpieza se limitan a registros propios del esquema aislado. La prueba del catálogo carga/repite dentro de una transacción que termina en rollback. No habilita credenciales MIGRATION_TEST_* ni repite DDL.
+
+No se han implementado SMTP, verificación de correo, login, /me, logout ni perfil editable. No avanzar automáticamente a esos incrementos.

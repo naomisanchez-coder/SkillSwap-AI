@@ -1,12 +1,12 @@
 # Contratos de autenticación — SkillSwap AI
 
-**Estado de todos los endpoints de este documento: PROPUESTO, NO IMPLEMENTADO.** El incremento 1.1 documentó contratos; el 1.2 implementó y validó únicamente persistencia; los casos de uso de autenticación siguen pendientes. Los únicos endpoints actuales son los de salud descritos en [../README.md](../README.md).
+**POST /api/auth/register implementado en 1.3B. Los demás endpoints de autenticación y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos.
 
 ## Fuentes y precedencia
 
 Se aplican las decisiones definitivas del contexto maestro, las correcciones posteriores de Figma, las capturas confirmadas y, finalmente, la documentación académica contextual. Las auditorías históricas y simulaciones no prueban el comportamiento actual de Express.
 
-La corrección final de Figma exige `nombre.apellido@tecsup.edu.pe`, normalización y rechazo de usuarios sin punto y alias con `+`. Reemplaza la antigua configuración sin dominio y la interpretación de que el punto era opcional. La gramática completa sigue pendiente.
+La corrección final de Figma exige `nombre.apellido@tecsup.edu.pe`, normalización y rechazo de usuarios sin punto y alias con `+`. Reemplaza la antigua configuración sin dominio y la interpretación de que el punto era opcional. La gramática inicial implementada exige dos segmentos alfabéticos ASCII; ampliar números, guiones o segmentos requiere aprobación.
 
 ## Reglas definidas
 
@@ -44,14 +44,14 @@ Los mensajes y códigos de aplicación son públicos; no incluir SQL, trazas, ru
 }
 ```
 
-`fields` es opcional y solo contiene campos públicos de validación; nunca reproduce valores sensibles. La infraestructura 1.3A implementa este esquema mediante PublicError con códigos y mensajes curados; los endpoints de autenticación siguen propuestos. Los errores genéricos del driver nunca se serializan. El 404 y las respuestas de salud conservan su formato anterior. Códigos específicos como EMAIL_ALREADY_REGISTERED se incorporarán con su caso de uso aprobado; no están implementados por este cambio.
+`fields` es opcional y solo contiene campos públicos de validación; nunca reproduce valores sensibles. La infraestructura 1.3A implementa este esquema mediante PublicError con códigos y mensajes curados; el registro utiliza este contrato y los demás endpoints siguen propuestos. Los errores genéricos del driver nunca se serializan. El 404 y las respuestas de salud conservan su formato anterior. EMAIL_ALREADY_REGISTERED está implementado y aprobado para registro (409).
 
 | HTTP | Uso propuesto |
 | --- | --- |
 | 400 | JSON malformado |
 | 401 | Credenciales inválidas o sesión ausente/vencida |
 | 403 | Cuenta no habilitada, origen rechazado o CSRF inválido |
-| 409 | Correo duplicado; decisión pendiente de ratificación |
+| 409 | Correo duplicado en registro (aprobado) |
 | 413 | Cuerpo excesivo |
 | 415 | Tipo de contenido no admitido |
 | 422 | Validación de campos o desafío inválido |
@@ -73,7 +73,7 @@ Para login público: exigir JSON y el encabezado `X-CSRF-Protection: 1` que ya e
 
 ## 1. Registro de estudiante
 
-**Estado: PROPUESTO, NO IMPLEMENTADO.**
+**Estado: IMPLEMENTADO en 1.3B.**
 
 **Método y ruta:** `POST /api/auth/register`.
 
@@ -95,19 +95,19 @@ Para login público: exigir JSON y el encabezado `X-CSRF-Protection: 1` que ya e
 }
 ```
 
-| Campo | Tipo y validación propuesta |
+| Campo | Tipo y validación del registro |
 | --- | --- |
 | `firstName`, `lastName` | Cadenas de 2–100 caracteres tras recortar espacios exteriores; conservar nombres legítimos y caracteres españoles |
-| `email` | Cadena normalizada, máximo 254 caracteres; aplicar reglas institucionales definidas y gramática por aprobar |
+| `email` | Cadena normalizada, máximo 254 caracteres; dos segmentos alfabéticos ASCII con dominio exacto |
 | `career` | Cadena que identifique una carrera activa del catálogo aprobado; no inventar denominaciones oficiales |
-| `cycle` | Entero admitido por la carrera; el rango 1–6 del prototipo sigue siendo referencial |
-| `password` | Cadena; 8–128 es la propuesta compatible con React, pendiente de política definitiva; no recortar, normalizar ni truncar |
+| `cycle` | Entero admitido por la carrera; configuración inicial 1–6 del prototipo, sin afirmar duración oficial |
+| `password` | Cadena Unicode bien formada de 8–128 puntos de código, máximo 512 bytes; no recortar, normalizar ni truncar |
 | `termsAccepted` | Booleano `true`, expresa aceptación conjunta de términos y privacidad en la pantalla actual |
 | `termsVersion`, `privacyVersion` | Cadenas que coincidan con versiones vigentes controladas por servidor |
 
 La confirmación de contraseña es un control obligatorio del formulario y React compara su igualdad. El cliente actual no la transmite; no añadir un requisito JSON incompatible sin aprobación. Nunca persistir confirmación. La institución no se recibe: el servidor asigna TECSUP. Rechazar campos adicionales, especialmente `role`, `credits`, `emailVerified` y estados internos.
 
-### Respuesta propuesta: 201
+### Respuesta implementada: 201
 
 ```json
 {
@@ -124,7 +124,7 @@ No establece cookie de sesión. La decisión de disparar el primer envío de cor
 
 **Autorización y seguridad:** público; asignación de rol en servidor, hash seguro de contraseña, unicidad en MySQL y creación consistente de usuario/perfil. Limitar solicitudes por IP y correo, trabajo concurrente de hash y tamaño de entrada. Nunca actualizar contraseña o datos de una cuenta existente mediante registro repetido.
 
-**Errores:** `422 VALIDATION_ERROR`, `409 EMAIL_ALREADY_REGISTERED` como propuesta compatible con React, `429`, `503` y errores comunes. `409` revela existencia de cuenta; no considerarlo un acuerdo definitivo sin revisar ese riesgo. Una alternativa uniforme requeriría acordar el cambio con frontend.
+**Errores:** `422 VALIDATION_ERROR`, `409 EMAIL_ALREADY_REGISTERED` aprobado, `429`, `503` y errores comunes. `409` revela existencia de cuenta; se conserva por decisión expresa y se limita la frecuencia de solicitudes.
 
 **React:** pantalla de registro; servicio envía `credentials: 'omit'`, espera `201` y correo normalizado idéntico al enviado. No redirigir a funciones protegidas tras crear la cuenta.
 
@@ -352,11 +352,11 @@ Los valores de estado y saldo son ilustrativos: se consultan de la fuente de ver
 | Decisión | Estado y dependencia |
 | --- | --- |
 | Gramática completa del correo | Definir segmentos adicionales, números, guiones y nombres compuestos; no relajar los rechazos ya confirmados |
-| Política definitiva de contraseñas | Ratificar 8–128 compatible con referencia o acordar cambio; precisar conteo Unicode y límites sin truncamiento |
-| Catálogo de carreras y ciclos | Obtener denominaciones y rangos aprobados; el catálogo del prototipo no es oficial |
-| Términos y privacidad | Aprobar textos, versiones y evidencia de aceptación; los valores de prototipo no son definitivos |
+| Contraseñas | Aprobado: 8–128 puntos de código, Unicode bien formado, sin truncar, hasta 512 bytes |
+| Catálogo | Aprobado: selección de 14 carreras, claves estables versionadas y ciclos 1–6 como configuración inicial; ver academic-catalog.md |
+| Términos y privacidad | Iniciales 1.0.0 aprobados para prototipo; completar responsable/contacto y revisión jurídica antes del servicio público |
 | Expiración y Recordarme | Definir inactividad, máximo absoluto, persistencia y revocación de sesiones |
-| Correos duplicados | Ratificar `201/409` o acordar alternativa uniforme y adaptación del cliente |
+| Correos duplicados | Aprobado: 409 EMAIL_ALREADY_REGISTERED; unicidad y concurrencia verificadas en MySQL |
 | SMTP y remitente | Seleccionar proveedor y remitente autorizado, configurar autenticación de dominio y probar recepción institucional real |
 | Envío inicial y navegación | Acordar envío automático/solicitado, recuperación ante respuesta perdida y destino tras verificar |
 | Código temporal | Aprobar longitud, vencimiento, intentos, límites agregados y política de reenvío/entrega |
@@ -382,7 +382,7 @@ Migración: `001_auth_foundation.sql`, validada en `skillswap_ai_test_auth` y ap
 | Tabla | Correspondencia y garantías preparadas |
 | --- | --- |
 | `users` | UUID textual, nombres, correo ASCII normalizado/único, hash con formato codificado, roles `STUDENT`/`ADMIN`, estados, verificación, aceptación y versiones legales, fechas UTC |
-| `careers` | Catálogo vacío, código único y estado activo; sin denominaciones oficiales inventadas |
+| `careers` | Código único y estado activo; catálogo inicial aprobado con carga DML independiente |
 | `career_cycles` | Pares carrera/ciclo autorizados, PK compuesta; permite rangos no contiguos sin duplicar atributos del catálogo |
 | `student_profiles` | Un perfil por usuario, FK compuesta que exige `STUDENT`, carrera/ciclo existentes y onboarding booleano; sin cuenta de mentor |
 | `email_verifications` | UUID de desafío, propietario, HMAC de 32 bytes y versión de clave, intentos configurables, estados y fechas coherentes |
@@ -390,7 +390,7 @@ Migración: `001_auth_foundation.sql`, validada en `skillswap_ai_test_auth` y ap
 | `credit_transactions` | Importe entero no nulo/cero, motivo, referencia única, vínculo opcional a desafío del mismo usuario y concesión inicial única de exactamente 20 |
 | `schema_migrations` | Versión única, SHA-256 y fecha UTC, insertados solo al terminar la secuencia sin errores |
 
-Los IDs deben generarse en servidor. TECSUP sigue siendo una institución fija de dominio, no un valor editable por React. La gramática pendiente no se inventa en SQL: la restricción estudiantil impone dominio exacto, punto interior, ausencia de puntos consecutivos y de `+`; el servicio posterior completará la validación aprobada. El hash codificado requiere prefijo `$` y longitud mínima, pero SQL no prueba que sea un hash criptográfico válido; esa responsabilidad corresponde al servicio de contraseñas.
+Los IDs deben generarse en servidor. TECSUP sigue siendo una institución fija de dominio, no un valor editable por React. La gramática pendiente no se inventa en SQL: la restricción estudiantil impone dominio exacto, punto interior, ausencia de puntos consecutivos y de `+`; el servicio de registro implementa la validación más estricta aprobada. El hash codificado requiere prefijo `$` y longitud mínima, pero SQL no prueba que sea un hash criptográfico válido; esa responsabilidad corresponde al servicio de contraseñas.
 
 Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y todas las conexiones escritoras deberán usar UTC. No se fijan duraciones de sesión, vigencia de código ni máximo de intentos por defecto: siguen pendientes de aprobación.
 
@@ -400,4 +400,19 @@ La columna generada `initial_grant_user_id` y su índice UNIQUE impiden dos movi
 
 `auth_sessions` es un esquema propio, **no una afirmación de compatibilidad con express-session o un store concreto**. La biblioteca y el adaptador deberán revisarse antes de implementar sesiones. El HMAC CSRF no permite recuperar su texto original desde MySQL: definir derivación segura o rotación al recuperar sesión y su política de múltiples pestañas antes de integrar React. No almacenar cookies ni tokens de acceso en claro para forzar compatibilidad.
 
-El ejecutor autorizado `database/migrate.js` solo admite `skillswap_ai` y el esquema aislado exacto `skillswap_ai_test_auth`. Inspecciona sin DDL por defecto, exige credenciales separadas y consulta `partial_revokes` antes de comprobar concesiones directas; rechaza privilegios globales operativos, comodines, ALL PRIVILEGES y permisos excesivos. Los escapes de guiones bajos se aceptan con partial_revokes OFF; con ON se exige el nombre literal sin barras. Solo se acepta USAGE global. SELECT, INSERT, CREATE y REFERENCES son los mínimos; UPDATE se reserva al esquema de pruebas y es obligatorio en su suite; las pruebas aisladas reutilizan su lógica. No se configura automáticamente desde las credenciales de la aplicación. El historial no se considera aplicado por existir el archivo ni por pasar pruebas estáticas. No se han insertado usuarios, carreras, administradores o créditos en el esquema aplicativo.
+El ejecutor autorizado `database/migrate.js` solo admite `skillswap_ai` y el esquema aislado exacto `skillswap_ai_test_auth`. Inspecciona sin DDL por defecto, exige credenciales separadas y consulta `partial_revokes` antes de comprobar concesiones directas; rechaza privilegios globales operativos, comodines, ALL PRIVILEGES y permisos excesivos. Los escapes de guiones bajos se aceptan con partial_revokes OFF; con ON se exige el nombre literal sin barras. Solo se acepta USAGE global. SELECT, INSERT, CREATE y REFERENCES son los mínimos; UPDATE se reserva al esquema de pruebas y es obligatorio en su suite; las pruebas aisladas reutilizan su lógica. No se configura automáticamente desde las credenciales de la aplicación. El historial no se considera aplicado por existir el archivo ni por pasar pruebas estáticas. No se insertan usuarios demo, administradores ni créditos en el esquema aplicativo. El catálogo aprobado se carga por separado mediante DML autorizado.
+
+
+## Decisiones aprobadas y alcance de 1.3B
+
+Se conservan exactamente los nueve campos del ejemplo de registro. termsAccepted debe ser booleano true y las dos versiones deben coincidir exactamente con registration.policy.js (1.0.0); el servicio persiste las versiones del servidor y fecha UTC, no versiones arbitrarias. Los textos propios e inmutables están en legal/terms-1.0.0.md y legal/privacy-1.0.0.md; no usar el texto histórico de Figma. Nunca preseleccionar consentimiento. La tabla conserva fecha y ambas versiones; no se añade IP ni seguimiento de dispositivo a esa evidencia.
+
+Password: 8–128 puntos de código Unicode bien formados, hasta 512 bytes, sin recorte ni normalización. Hash nativo scrypt N=131072,r=8,p=1, salt 16 bytes y clave 32 bytes, con máximo dos cálculos simultáneos por proceso. Valores extra como role/credits/emailVerified/confirmPassword se rechazan. La institución TECSUP es fija y no se recibe del cliente.
+
+career sigue siendo el nombre del catálogo en el contrato actual; se resuelve a un UUID persistido, rechazando nombres ambiguos/inactivos y ciclos ausentes. La carga conserva únicamente claves estables, nombres y ciclos en un manifiesto 1.0.0; no incluye áreas, departamentos ni facultades. No se cambia el JSON del formulario a IDs sin coordinar React. Los ciclos 1–6 no afirman duración oficial y la carrera no limita habilidades o mentorías.
+
+Solo se implementa el registro. El 201 no verifica correo, no confirma envío, no concede 20 créditos y no crea cookie. React debe seguir sin credenciales en este POST y mostrar el estado pendiente; no intentar consumir todavía login/verificación. Los futuros modales deben mostrar el texto de la versión aceptada; no se añadió endpoint legal ni se modificó frontend.
+
+Protecciones y respuestas implementadas: 400 JSON malformado, 413 cuerpo mayor de 100kb, 415 falta application/json, 422 validación con fields, 409 duplicado confirmado, 403 origen de navegador no autorizado, 429 con Retry-After y 503 por capacidad de hash/limitador. Un fallo interno conserva 500 genérico. Los límites iniciales por proceso son 10/IP y 5/correo cada 60 segundos, con 2000 claves hash en memoria. Los clientes sin Origin pueden usar la API; con Origin deben coincidir exactamente con CORS_ORIGIN. No hay confianza automática en cabeceras de proxy. Una implantación con múltiples procesos requiere revisar el limitador compartido y el proxy.
+
+Pruebas reales: node scripts/verify-local.js utiliza exclusivamente el esquema aislado y la cuenta DML autorizada. Comprueba HTTP 201, consentimiento persistido 1.0.0, hash, 409 y concurrencia, salud 200 y ausencia de sesiones/verificaciones/créditos. No aplica migraciones nuevas. Los endpoints restantes de este documento continúan siendo contratos de trabajo y sus decisiones pendientes no bloquean el registro actual del prototipo.
