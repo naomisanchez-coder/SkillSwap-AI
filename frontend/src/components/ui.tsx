@@ -1,6 +1,11 @@
 // Primitivas reutilizadas del archivo ui.tsx original de Figma Make.
+import { Icons } from './icons';
 export { Button } from './Button';
 export { Input } from './Input';
+
+export function Stars({ rating, max = 5 }: { rating: number; max?: number }) {
+  return <div role="img" aria-label={`${rating} de ${max} estrellas`} className="flex items-center gap-0.5 text-[#F59E0B]">{[...Array(max)].map((_, index) => <Icons.Star key={index} s={13} filled={index < rating} />)}</div>;
+}
 
 // Card original de Figma Make.
 export function Card({ children, className = '', hover }: { children: React.ReactNode; className?: string; hover?: boolean }) {

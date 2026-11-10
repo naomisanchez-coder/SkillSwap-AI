@@ -13,6 +13,7 @@ export type SessionRecord = {
   id: string; studentId: string; mentorId: string; mentorName: string;
   skill: string; date: string; time: string; duration: 30 | 60 | 90;
   status: 'upcoming' | 'active' | 'validation' | 'completed' | 'cancelled' | 'review';
+  mentorOwnerId?: string;
 };
 export type SkillRequest = { id: string; ownerUserId: string; status: 'pending' | 'observation' | 'approved' | 'rejected' };
 export type NotificationRecord = { id: string; userId: string; title: string; description: string; date: string; read: boolean; target: string };

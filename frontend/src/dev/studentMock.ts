@@ -6,7 +6,7 @@ import { mockProfileService } from './profileMock';
 import { mentors, reviewFixtures } from './mentorFixtures';
 import { isEligibleMentor } from '../data/recommendations';
 import { ACADEMIC_CREDIT_CONFIG } from '../data/creditConfig';
-import { createLocalBookingStore } from './bookingStore';
+import { localActivity } from './localActivity';
 import { mockAccountService } from './accountMock';
 
 export const studentActivityStorageKey = 'skillswap:frontend-demo:student:v1';
@@ -22,7 +22,7 @@ export const studentFixture: StudentDashboardData = {
   notifications: [{ id: 'profile-welcome', userId: 'frontend-demo-student', title: 'Tus preferencias de aprendizaje', description: 'Puedes actualizar tus intereses y horarios cuando lo necesites.', date: 'Hoy', read: false, target: 'profile' }],
 };
 
-const bookings = createLocalBookingStore({ storage: () => localStorage, routeStorage: () => sessionStorage, getMentors: () => mentors, identity: studentFixture.profile, initialWallet: studentFixture.wallet });
+const bookings = localActivity;
 
 function assertDevelopment() {
   if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRONTEND_PREVIEW !== 'true') throw new Error('Servicio de prueba disponible solo en desarrollo.');
@@ -45,7 +45,7 @@ export const mockStudentService: StudentService = {
   async clearBookingDraft() { assertDevelopment(); return bookings.clearBookingDraft(); },
   async getMentorProfile(id) {
     assertDevelopment();
-    const mentor = mentors.find(item => item.id === id);
+    const mentor = (await bookings.getMentorCatalog()).find(item => item.id === id);
     if (!mentor || !isEligibleMentor(mentor, studentFixture.profile.id)) return null;
     const ledger = await bookings.getLedger();
     const reviews = [...ledger.reviews, ...reviewFixtures].filter(review => review.mentorId === id);
@@ -62,13 +62,14 @@ export const mockStudentService: StudentService = {
     const ledger = await bookings.getLedger();
     state.activity = ledger;
     state.reviews = [...ledger.reviews, ...reviewFixtures];
-    state.mentorRatings = Object.fromEntries(mentors.map(mentor => [mentor.id, summarizeMentorReviews(state.reviews!, mentor.id)]));
+    const catalog = await bookings.getMentorCatalog();
+    state.mentorRatings = Object.fromEntries(catalog.map(mentor => [mentor.id, summarizeMentorReviews(state.reviews!, mentor.id)]));
     state.wallet = ledger.wallet;
-    state.sessions = [...ledger.sessions, ...state.sessions];
+    state.sessions = [...ledger.sessions.filter(item => item.studentId === state.profile.id), ...state.sessions];
     state.notifications = [...account.notifications, ...ledger.notifications, ...state.notifications];
     state.profile = { ...state.profile, ...account.profile, ...(preferences ?? emptyPreferences()) };
     state.notifications = state.notifications.map(item => ({ ...item, read: readIds.includes(item.id) }));
-    return { state, mentors: structuredClone(mentors) };
+    return { state, mentors: structuredClone(catalog) };
   },
   async markNotificationRead(id) {
     assertDevelopment();

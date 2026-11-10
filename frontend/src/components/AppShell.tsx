@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Avatar, Button } from './ui';
+import { Avatar, Badge, Button } from './ui';
 import { Icons } from './icons';
 import type { NotificationRecord } from '../data/student';
 import { PublicLogo } from './PublicChrome';
@@ -23,6 +23,12 @@ const items: Array<[StudentDestination, string, typeof Icons.Compass]> = [
   ['skills', 'Mis habilidades', Icons.Award],
   ['profile', 'Mi perfil', Icons.Users],
 ];
+export type MentorDestination = 'mentor-dashboard' | 'sessions' | 'offers' | 'availability' | 'skills' | 'reviews' | 'earnings' | 'profile';
+const mentorItems: Array<[MentorDestination, string, typeof Icons.Compass]> = [
+  ['mentor-dashboard', 'Mi panel', Icons.Compass], ['sessions', 'Reservas recibidas', Icons.Calendar], ['offers', 'Mis ofertas', Icons.Zap],
+  ['availability', 'Disponibilidad', Icons.Clock], ['skills', 'Habilidades aprobadas', Icons.Award], ['reviews', 'Mis valoraciones', Icons.Star],
+  ['earnings', 'Mi participación', Icons.Coin], ['profile', 'Mi perfil', Icons.Users],
+];
 
 export function StudentShell({
   active,
@@ -36,6 +42,8 @@ export function StudentShell({
   teachingAction,
   onLogout,
   children,
+  mentorView,
+  onMentorSessions,
 }: {
   active: StudentDestination;
   userName: string;
@@ -48,6 +56,8 @@ export function StudentShell({
   teachingAction: { label: string; onClick: () => void };
   onLogout: () => void;
   children: React.ReactNode;
+  mentorView?: { active: MentorDestination; onNavigate: (page: MentorDestination) => void };
+  onMentorSessions?: () => void;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -95,18 +105,18 @@ export function StudentShell({
           <button type="button" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú" className="lg:hidden w-10 h-10 rounded-xl text-white flex items-center justify-center hover:bg-white/10"><Icons.X s={19} /></button>
         </div>
         <nav className="space-y-1" aria-label="Secciones del estudiante">
-          {items.map(([key, label, Icon]) => (
+          {(mentorView ? mentorItems : items).map(([key, label, Icon]) => (
             <Button
               key={key}
-              aria-current={active === key ? 'page' : undefined}
+              aria-current={(mentorView?.active ?? active) === key ? 'page' : undefined}
               variant="ghost"
               full
               icon={<Icon s={18} />}
               onClick={() => {
-                onNavigate(key);
+                if (mentorView) mentorView.onNavigate(key as MentorDestination); else onNavigate(key as StudentDestination);
                 setMobileOpen(false);
               }}
-              className={`justify-start !h-11 ${active === key ? '!bg-[#DCEBDD] !text-[#183F3A]' : '!text-[#CFDAD5] hover:!bg-white/10 hover:!text-white'}`}
+              className={`justify-start !h-11 ${(mentorView?.active ?? active) === key ? '!bg-[#DCEBDD] !text-[#183F3A]' : '!text-[#CFDAD5] hover:!bg-white/10 hover:!text-white'}`}
             >
               {label}
             </Button>
@@ -119,7 +129,7 @@ export function StudentShell({
             <Avatar name={userName} src={userPhoto} size="lg" status="online" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white truncate">{userName}</p>
-              <p className="text-xs text-[#94A3B8]">Estudiante</p>
+              <p className="text-xs text-[#94A3B8]">{mentorView ? 'Mentor habilitado' : 'Estudiante'}</p>
             </div>
           </div>
           <Button variant="ghost" full onClick={() => { setMobileOpen(false); onLogout(); }} icon={<Icons.LogOut s={16} />} className="justify-start !text-[#CFDAD5] hover:!bg-white/10 hover:!text-white">Cerrar sesión</Button>
@@ -128,21 +138,21 @@ export function StudentShell({
 
   return (
     <div className="public-page min-h-screen bg-[#F7F7F2] lg:pl-[272px]">
-      <aside aria-label="Navegación del estudiante" className="fixed inset-y-0 left-0 z-40 hidden w-[272px] flex-col overflow-y-auto bg-[#182B2A] p-5 lg:flex">{sidebar}</aside>
+      <aside aria-label={mentorView ? 'Navegación del mentor' : 'Navegación del estudiante'} className="fixed inset-y-0 left-0 z-40 hidden w-[272px] flex-col overflow-y-auto bg-[#182B2A] p-5 lg:flex">{sidebar}</aside>
       {mobileOpen && <Modal labelledBy="student-menu-title" onClose={() => setMobileOpen(false)}>
-        <aside id="student-mobile-navigation" aria-label="Navegación del estudiante" className="fixed inset-y-0 left-0 flex w-[min(272px,calc(100vw-24px))] flex-col overflow-y-auto bg-[#182B2A] p-5">
-          <h2 id="student-menu-title" className="sr-only">Menú del estudiante</h2>{sidebar}
+        <aside id="student-mobile-navigation" aria-label={mentorView ? 'Navegación del mentor' : 'Navegación del estudiante'} className="fixed inset-y-0 left-0 flex w-[min(272px,calc(100vw-24px))] flex-col overflow-y-auto bg-[#182B2A] p-5">
+          <h2 id="student-menu-title" className="sr-only">{mentorView ? 'Menú del mentor' : 'Menú del estudiante'}</h2>{sidebar}
         </aside>
       </Modal>}
 
       <header className="sticky top-0 z-20 min-h-[76px] bg-white/95 backdrop-blur border-b border-[#E2E8E0] px-4 md:px-8 py-3 flex items-center gap-3">
         <button type="button" className="lg:hidden h-11 w-11 shrink-0 rounded-xl flex items-center justify-center text-[#182B2A] hover:bg-[#F0F3ED]" onClick={() => setMobileOpen(true)} aria-label="Abrir menú" aria-expanded={mobileOpen} aria-controls="student-mobile-navigation"><Icons.Menu s={20} /></button>
-        <div className="min-w-0">
-          <p className="font-bold text-[#182B2A] truncate">{viewMeta[active][0]}</p>
-          <p className="hidden md:block text-xs text-[#60716C] mt-0.5 truncate">{viewMeta[active][1]}</p>
+        <div className={mentorView ? 'hidden md:block min-w-0' : 'min-w-0'}>
+          <p className="font-bold text-[#182B2A] truncate">{mentorView ? mentorItems.find(([key]) => key === mentorView.active)?.[1] : viewMeta[active][0]}</p>
+          <p className="hidden md:block text-xs text-[#60716C] mt-0.5 truncate">{mentorView ? 'Organiza tus mentorías y participación académica.' : viewMeta[active][1]}</p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-          <button type="button" onClick={() => onNavigate('wallet')} className="h-10 px-3 rounded-full bg-[#F2E8D7] text-[#493D29] text-sm font-bold inline-flex items-center gap-1.5 hover:bg-[#EADCC3]"><Icons.Coin s={14} /> {credits}<span className="hidden sm:inline"> créditos</span></button>
+          {mentorView ? <Badge variant="success"><span className="hidden sm:inline">Habilidad </span>aprobada</Badge> : <button type="button" onClick={() => onNavigate('wallet')} className="h-10 px-3 rounded-full bg-[#F2E8D7] text-[#493D29] text-sm font-bold inline-flex items-center gap-1.5 hover:bg-[#EADCC3]"><Icons.Coin s={14} /> {credits}<span className="hidden sm:inline"> créditos</span></button>}
         <div className="relative" ref={notificationRef}>
           <Button
             ref={notificationButton}
@@ -171,7 +181,9 @@ export function StudentShell({
                     onClick={() => {
                       onReadNotification(item.id);
                       const target = item.target as StudentDestination;
-                      onNavigate(safeDestinations.has(target) ? target : 'dashboard');
+                      if (mentorView) mentorView.onNavigate('sessions');
+                      else if (item.target === 'mentor-sessions' && onMentorSessions) onMentorSessions();
+                      else onNavigate(safeDestinations.has(target) ? target : 'dashboard');
                       setNotificationOpen(false);
                     }}
                     className={`w-full text-left p-4 border-b border-[#EEF1EC] hover:bg-[#F7F7F2] ${item.read ? '' : 'bg-[#EEF5EF]'}`}
@@ -185,11 +197,20 @@ export function StudentShell({
             </div>
           )}
         </div>
-          <button type="button" onClick={() => onNavigate('profile')} aria-label="Abrir mi perfil" className="rounded-full focus-visible:outline-[#24685F]"><Avatar name={userName} src={userPhoto} size="md" /></button>
+          <button type="button" onClick={() => mentorView ? mentorView.onNavigate('profile') : onNavigate('profile')} aria-label="Abrir mi perfil" className="rounded-full focus-visible:outline-[#24685F]"><Avatar name={userName} src={userPhoto} size="md" /></button>
         </div>
       </header>
 
       {children}
     </div>
   );
+}
+
+/** MentorShell de Figma sobre la navegación accesible compartida. */
+export function MentorShell({ active, userName, userPhoto, notifications, onReadNotification, onNavigate, onStudentMode, onLogout, children }: {
+  active: MentorDestination; userName: string; userPhoto?: string; notifications: NotificationRecord[]; onReadNotification: (id: string) => void;
+  onNavigate: (page: MentorDestination) => void; onStudentMode: () => void; onLogout: () => void; children: React.ReactNode;
+}) {
+  return <StudentShell active="dashboard" userName={userName} userPhoto={userPhoto} credits={0} notifications={notifications} onReadNotification={onReadNotification}
+    onNavigate={() => onStudentMode()} onPublicHome={onStudentMode} onLogout={onLogout} teachingAction={{ label: 'Volver a modo estudiante', onClick: onStudentMode }} mentorView={{ active, onNavigate }}>{children}</StudentShell>;
 }

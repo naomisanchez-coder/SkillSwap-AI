@@ -2,6 +2,7 @@ import type { Mentor } from './mentors';
 import type { NotificationRecord, ReviewRecord, SessionRecord, WalletBalance } from './student';
 import type { SessionDuration } from './creditConfig';
 import { intervalsOverlap, isSlotAvailable, parseTime } from './scheduling';
+import type { MentorSettings } from './mentor';
 
 export type BookingCommand = { id: string; mentorId: string; date: string; time: string; duration: SessionDuration };
 export type BookingDraft = BookingCommand & { step: 'schedule' | 'duration' | 'confirm' | 'success' };
@@ -11,6 +12,7 @@ export type ConfirmedBooking = SessionRecord & {
   performedAt?: string; validatedAt?: string; completedAt?: string; cancelledAt?: string;
   cancellationReason?: string; refundStatus?: string; rated?: boolean;
   rating?: number; reviewedAt?: string; history?: SessionEvent[];
+  mentorOwnerId?: string; offerRequestId?: string;
 };
 export type SessionEvent = { id: string; at: string; label: string; actor: 'student' | 'mentor' | 'system' };
 export type IncidentCategory = 'mentor_absent' | 'student_absent' | 'connection' | 'not_held' | 'completion_dispute' | 'other';
@@ -25,6 +27,8 @@ export type BookingLedger = {
   version: 1; studentId: string; wallet: WalletBalance; sessions: ConfirmedBooking[];
   movements: CreditMovement[]; notifications: NotificationRecord[];
   incidents: IncidentRecord[]; reviews: ReviewRecord[]; mentorBalances: Record<string, number>;
+  wallets?: Record<string, WalletBalance>;
+  mentorSettings?: Record<string, MentorSettings>;
 };
 
 export class BookingError extends Error {
@@ -35,5 +39,5 @@ export class BookingError extends Error {
 export function isBookingSlotAvailable(context: BookingContext, date: string, time: string, duration: number): boolean {
   if (!isSlotAvailable({ mentorId: context.mentor.id, date, time, duration, availability: context.mentor.slots, sessions: context.sessions, reservedSlots: context.reservedSlots })) return false;
   const start = parseTime(time);
-  return !context.sessions.some(session => session.studentId === context.studentId && session.status !== 'cancelled' && session.date === date && intervalsOverlap(start, start + duration, parseTime(session.time), parseTime(session.time) + session.duration));
+  return !context.sessions.some(session => (session.studentId === context.studentId || session.mentorOwnerId === context.studentId) && session.status !== 'cancelled' && session.date === date && intervalsOverlap(start, start + duration, parseTime(session.time), parseTime(session.time) + session.duration));
 }

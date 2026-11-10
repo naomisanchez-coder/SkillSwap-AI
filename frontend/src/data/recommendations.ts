@@ -220,7 +220,7 @@ export function estimateMentorCompatibility(
 
 export function isEligibleMentor(mentor: Mentor, currentUserId?: string): boolean {
   const hasSlots = Object.values(mentor.slots).some(slots => slots.length > 0);
-  const isOwnOffer = currentUserId ? mentor.id === `student-mentor-${currentUserId}` : false;
+  const isOwnOffer = currentUserId ? mentor.ownerUserId === currentUserId || mentor.id === `student-mentor-${currentUserId}` : false;
   const catalogSkill = SKILL_CATALOG.find(skill => skill.id === mentor.offer.skillId);
   return Boolean(
     mentor.skillValidated

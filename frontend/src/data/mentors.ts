@@ -12,6 +12,8 @@ export type MentorOffer = {
 
 export type Mentor = {
   id: string;
+  ownerUserId?: string;
+  requestId?: string;
   name: string;
   skill: string;
   level: string;

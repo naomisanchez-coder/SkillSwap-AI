@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { StudentShell, type StudentDestination } from '../components/AppShell';
+import { StudentShell, type StudentDestination, type MentorDestination } from '../components/AppShell';
+import { MentorArea } from '../components/MentorArea';
+import type { MentorService } from '../services/mentor';
 import type { PublicDestination } from '../components/PublicChrome';
 import type { StudentDashboardSnapshot } from '../data/student';
 import { hasCompletePreferences, summarizeMentorReviews } from '../data/student';
@@ -30,12 +32,16 @@ import { ProfilePage, SkillsPage, MentorApplicationPage } from '../pages/Account
 import { mockProfileService } from './profileMock';
 import { mockStudentService } from './studentMock';
 import { mockAccountService } from './accountMock';
+import { mockMentorService } from './mentorMock';
 
-type Page = PublicDestination | 'profile-setup' | 'dashboard' | 'discover' | 'explore' | 'mentor' | 'booking' | 'sessions' | 'wallet' | 'profile' | 'skills' | 'mentor-application' | 'loading';
+const mentorPages = { 'mentor-dashboard': 'mentor-dashboard', sessions: 'mentor-sessions', offers: 'mentor-offers', availability: 'mentor-availability', skills: 'mentor-skills', reviews: 'mentor-reviews', earnings: 'mentor-earnings', profile: 'mentor-account' } as const;
+type MentorPage = typeof mentorPages[MentorDestination];
+type Page = PublicDestination | 'profile-setup' | 'dashboard' | 'discover' | 'explore' | 'mentor' | 'booking' | 'sessions' | 'wallet' | 'profile' | 'skills' | 'mentor-application' | 'loading' | MentorPage;
+const isMentorPage = (value: string): value is MentorPage => Object.values(mentorPages).includes(value as MentorPage);
 type MentorOrigin = Exclude<Page, 'mentor' | 'booking' | 'loading'>;
 /** Composición local independiente del acceso real. Los fixtures viven en los servicios. */
-export default function FrontendPreview({ onRealAccess, studentService = mockStudentService, profileService = mockProfileService, accountService = mockAccountService }: {
-  onRealAccess: (page: 'login' | 'register') => void; studentService?: StudentService; profileService?: ProfileService; accountService?: AccountService;
+export default function FrontendPreview({ onRealAccess, studentService = mockStudentService, profileService = mockProfileService, accountService = mockAccountService, mentorService = mockMentorService }: {
+  onRealAccess: (page: 'login' | 'register') => void; studentService?: StudentService; profileService?: ProfileService; accountService?: AccountService; mentorService?: MentorService;
 }) {
   const [page, setPage] = useState<Page>('loading');
   const [snapshot, setSnapshot] = useState<StudentDashboardSnapshot | null>(null);
@@ -51,7 +57,7 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
   const [editingRequestId, setEditingRequestId] = useState<string | undefined>();
   const [applicationKey, setApplicationKey] = useState(0);
-  const [preferencesOrigin, setPreferencesOrigin] = useState<'dashboard' | 'profile' | 'skills'>('dashboard');
+  const [preferencesOrigin, setPreferencesOrigin] = useState<'dashboard' | 'profile' | 'skills' | 'mentor-account'>('dashboard');
   const photo = useStoredFile(snapshot?.state.profile.photoStorageId, accountService.getPhoto);
   const returnPosition = useRef<{ scrollY: number; mentorId: string; fromAssistant: boolean } | null>(null);
   const restoring = useRef(false);
@@ -64,7 +70,8 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
       if (hasCompletePreferences(next.state.profile) && draft) { setBookingDraft(draft); setMentorId(draft.mentorId); setPage('booking'); }
       else {
         let saved = ''; try { saved = sessionStorage.getItem('skillswap:frontend:page') ?? ''; } catch { /* Navegación en memoria. */ }
-        setPage(hasCompletePreferences(next.state.profile) ? (saved === 'sessions' || saved === 'wallet' || saved === 'profile' || saved === 'skills' ? saved : saved === 'mentor-application' ? 'skills' : 'dashboard') : 'profile-setup');
+        const mentorApproved = next.state.account?.requests.some(item => item.status === 'approved' && item.ownerUserId === next.state.profile.id);
+        setPage(hasCompletePreferences(next.state.profile) ? (isMentorPage(saved) ? (mentorApproved ? saved : 'skills') : saved === 'sessions' || saved === 'wallet' || saved === 'profile' || saved === 'skills' ? saved : saved === 'mentor-application' ? 'skills' : 'dashboard') : 'profile-setup');
       }
     }, error => { if (active) { setLoadErrorMessage(error instanceof AccountError ? error.message : 'No pudimos cargar tu panel. Comprueba que el navegador permita almacenamiento local y vuelve a intentarlo.'); setLoadError(true); setPage('profile-setup'); } });
     return () => { active = false; };
@@ -91,6 +98,12 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
   };
   const privateNavigate = (next: StudentDestination) => {
     navigate(next);
+  };
+  const mentorApproved = Boolean(snapshot?.state.account?.requests.some(item => item.status === 'approved' && item.ownerUserId === snapshot.state.profile.id));
+  const openMentorMode = (destination: MentorDestination = 'mentor-dashboard') => { if (mentorApproved) navigate(mentorPages[destination]); else navigate('skills'); };
+  const studentMode = async () => {
+    try { const next = await studentService.getDashboard(); setSnapshot(next); navigate(hasCompletePreferences(next.state.profile) ? 'dashboard' : 'profile-setup'); }
+    catch (error) { setLoadErrorMessage(error instanceof Error ? error.message : 'No pudimos recuperar tu espacio de estudiante.'); setLoadError(true); }
   };
   const editPreferences = (origin: typeof preferencesOrigin = 'dashboard') => { setPreferencesOrigin(origin); navigate('profile-setup'); };
   const openApplication = (id?: string) => {
@@ -133,7 +146,7 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
       const reviews = [...ledger.reviews, ...(current.state.reviews ?? []).filter(item => !previous.some(old => old.id === item.id))];
       for (const mentor of current.mentors) ratings[mentor.id] = summarizeMentorReviews(reviews, mentor.id);
       const read = new Set(current.state.notifications.filter(item => item.read).map(item => item.id));
-      return { ...current, state: { ...current.state, activity: ledger, wallet: ledger.wallet, sessions: ledger.sessions, mentorRatings: ratings, reviews,
+      return { ...current, state: { ...current.state, activity: ledger, wallet: ledger.wallet, sessions: ledger.sessions.filter(item => item.studentId === current.state.profile.id), mentorRatings: ratings, reviews,
         notifications: [...ledger.notifications.map(item => ({ ...item, read: read.has(item.id) })), ...current.state.notifications.filter(item => !ledger.notifications.some(next => next.id === item.id))] } };
     });
   };
@@ -157,7 +170,7 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
   return <>
     {page === 'loading' && <p role="status" className="p-6">Cargando tu espacio de aprendizaje…</p>}
     {loadError && <aside role="alert" className="border-b border-[#E8C2C2] bg-[#FFF3F0] p-4 text-[#B54747]">{loadErrorMessage} <Button variant="outline" onClick={() => { setLoadError(false); setPage('loading'); setAttempt(current => current + 1); }}>Reintentar</Button></aside>}
-    {page === 'profile-setup' && !loadError && <ProfileSetupPage service={profileService} startEditing backLabel={preferencesOrigin === 'profile' ? 'Volver al perfil' : preferencesOrigin === 'skills' ? 'Volver a mis habilidades' : 'Volver al inicio'} onReset={() => setSnapshot(current => current && ({ ...current, state: { ...current.state, profile: { ...current.state.profile, ...emptyPreferences() } } }))} onBack={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? preferencesOrigin : 'landing')} onComplete={preferences => {
+    {page === 'profile-setup' && !loadError && <ProfileSetupPage service={profileService} startEditing backLabel={preferencesOrigin === 'profile' || preferencesOrigin === 'mentor-account' ? 'Volver al perfil' : preferencesOrigin === 'skills' ? 'Volver a mis habilidades' : 'Volver al inicio'} onReset={() => setSnapshot(current => current && ({ ...current, state: { ...current.state, profile: { ...current.state.profile, ...emptyPreferences() } } }))} onBack={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? preferencesOrigin : 'landing')} onComplete={preferences => {
       // El callback solo se ejecuta después de que ProfileService confirme el guardado.
       setSnapshot(current => current ? { ...current, state: { ...current.state, profile: { ...current.state.profile, ...preferences } } } : null);
       if (snapshot) navigate(preferencesOrigin);
@@ -166,10 +179,11 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
     {(page === 'dashboard' || page === 'discover' || page === 'explore' || page === 'sessions' || page === 'wallet' || page === 'profile' || page === 'skills' || page === 'mentor-application') && snapshot && <StudentShell active={page === 'mentor-application' ? 'skills' : page} userName={snapshot.state.profile.name} userPhoto={photo.url || snapshot.state.profile.photo} credits={snapshot.state.wallet.available}
       notifications={snapshot.state.notifications.filter(item => item.userId === snapshot.state.profile.id)} onReadNotification={id => void markRead(id)}
       onNavigate={privateNavigate} onPublicHome={() => navigate('landing')} onLogout={() => setPending('Cerrar sesión')}
-      teachingAction={{ label: 'Quiero ser mentor', onClick: () => openApplication() }}>
+      onMentorSessions={() => openMentorMode('sessions')}
+      teachingAction={mentorApproved ? { label: 'Ir al panel de mentor', onClick: () => openMentorMode() } : { label: 'Quiero ser mentor', onClick: () => openApplication() }}>
       {page === 'dashboard' && <StudentDashboardPage state={snapshot.state} mentors={snapshot.mentors} onExplore={() => navigate('explore')}
         onDiscover={() => navigate('discover')} onSessions={() => navigate('sessions')} onWallet={() => navigate('wallet')}
-        onMentorRequest={() => openApplication()} onMentor={openMentor} onEditPreferences={() => editPreferences()} />}
+        onMentorRequest={() => openApplication()} onMentorMode={mentorApproved ? () => openMentorMode() : undefined} onMentor={openMentor} onEditPreferences={() => editPreferences()} />}
       {(page === 'discover' || page === 'explore') && <RecommendationsPage key={page} mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings}
         recommended={page === 'explore'} filters={filters} onFiltersChange={setFilters} onViewMentor={openMentor} onEditPreferences={() => editPreferences()} />}
       {page === 'sessions' && snapshot.state.activity && <SessionsHubPage ledger={snapshot.state.activity} service={studentService} onChanged={changedActivity} onExplore={() => navigate('discover')} />}
@@ -179,6 +193,9 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
       {page === 'mentor-application' && <MentorApplicationPage key={applicationKey} initialRequest={snapshot.state.account?.requests.find(item => item.id === editingRequestId)} existingRequests={snapshot.state.account?.requests ?? []} service={accountService} onChanged={changedAccount} onBack={() => navigate('skills')} />}
       {(page === 'sessions' || page === 'wallet') && <RecommendationAssistant mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings} onViewMentor={openMentor} />}
     </StudentShell>}
+    {isMentorPage(page) && snapshot && <MentorArea active={Object.entries(mentorPages).find(([, value]) => value === page)![0] as MentorDestination} service={mentorService} studentService={studentService} accountService={accountService}
+      profile={snapshot.state.profile} photo={photo} notifications={snapshot.state.notifications} onReadNotification={id => void markRead(id)} onNavigate={next => navigate(mentorPages[next])}
+      onStudentMode={() => void studentMode()} onLedger={changedActivity} onAccount={changedAccount} onEditPreferences={() => editPreferences('mentor-account')} onApplication={() => openApplication()} onLogout={() => setPending('Cerrar sesión')} />}
     {page === 'mentor' && snapshot && <MentorProfilePage key={mentorId} profile={snapshot.state.profile} mentorId={mentorId} service={studentService}
       onBack={() => { restoring.current = true; navigate(mentorOrigin); }} onBooking={() => void startBooking()} />}
     {page === 'booking' && snapshot && <BookingFlowPage key={mentorId} mentorId={mentorId} draft={bookingDraft} service={studentService} onConfirmed={confirmedBooking}

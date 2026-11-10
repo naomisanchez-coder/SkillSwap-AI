@@ -1,5 +1,115 @@
 # SkillSwap AI — frontend
 
+## Vista del mentor
+
+Se reutilizan las vistas originales de `AccountMentorPages.tsx` y la navegación de
+`MentorShell`: panel, disponibilidad, ofertas, habilidades aprobadas, sesiones,
+participación y valoraciones. `MentorArea` comparte el menú accesible y el perfil
+con la vista estudiantil. Los datos y acciones se separan mediante `MentorService`,
+`dev/mentorMock.ts` y `dev/localActivity.ts`; registro y login reales no cambian.
+
+Mapa de navegación vigente:
+
+- Estudiante con habilidad aprobada → **Ir al panel de mentor**.
+- Panel mentor → **Disponibilidad**, **Mis ofertas**, **Reservas recibidas**,
+  **Habilidades aprobadas**, **Mi participación**, **Mis valoraciones**, **Mi perfil**.
+- Mi perfil → editar preferencias → retorno al perfil de mentor.
+- Mentor → **Volver a modo estudiante** → panel estudiantil con la misma identidad,
+  fotografía, preferencias, reservas y billetera; la vista actual se restaura al recargar.
+- Notificación de reserva recibida → sesiones del mentor; notificación de una reserva
+  propia → sesiones del estudiante. Las pantallas separan las sesiones de cada rol.
+
+Solo las solicitudes aprobadas de la cuenta habilitan la vista y sus acciones. Cada
+habilidad aprobada tiene una oferta independiente, inicialmente pausada; publicar,
+pausar o editar conserva las reservas anteriores. No se permite reservar una oferta
+propia. Se conservan los costos de **5/10/15 créditos por 30/60/90 minutos**, las
+ponderaciones del motor y el máximo de tres recomendaciones.
+
+La disponibilidad semanal usa los siete días y los bloques originales de 5 a 8 PM,
+en America/Lima. Se protegen todos los bloques que cubren reservas vigentes, incluida
+la extensión de una sesión de 90 minutos. Los intervalos que solo se tocan en su
+límite no se solapan. Se detectan conflictos entre distintas ofertas del mismo
+mentor y entre sus actividades como estudiante y mentor. El guardado vuelve a leer
+y validar los datos; los fallos conservan el estado anterior y permiten reintentar.
+
+La confirmación del mentor registra `performedAt`; la del estudiante registra
+`validatedAt`. Solo ambas liberan los créditos retenidos, generan un único ingreso
+y actualizan la billetera del mismo usuario. Las incidencias mantienen los créditos
+retenidos. Las valoraciones recibidas provienen de sesiones completadas, una por
+sesión. La regla provisional de cancelación de 12 horas permanece sin cambios.
+
+Se conserva el ledger v1 y se añaden campos opcionales para configuración y billeteras
+de estudiantes de prueba, sin borrar reservas previas. Web Locks coordina las
+escrituras entre pestañas compatibles; la alternativa coordina una instancia.
+El backend deberá sustituir estos servicios con autorización, transacciones e
+idempotencia reales; el almacenamiento del navegador no concede permisos reales.
+
+Correcciones al trasladar el original: IDs distintos por oferta, con propietario
+compartido para evitar conflictos ocultos; bloqueo de disponibilidad solo para
+reservas cuyo final aún no pasó; confirmación de guardado después de persistir,
+con recuperación ante errores. El inicio manual de una sesión conserva la lógica
+original; una restricción temporal adicional requiere acordar su contrato.
+
+### Cómo revisar la vista de mentor
+
+Iniciar Vite con `VITE_ENABLE_FRONTEND_PREVIEW=true` (solo desarrollo), completar
+el perfil y enviar una solicitud desde **Quiero ser mentor**. La aprobación se prueba
+en la consola del navegador, sin añadir controles administrativos al estudiante:
+
+```js
+const { mockAccountService, reviewApplicationFixture } = await import('/src/dev/accountMock.ts');
+const account = await mockAccountService.getAccount();
+const pending = account.requests.find(item => item.status === 'pending');
+if (pending) await reviewApplicationFixture(pending.id, 'approved', 'Revisión de prueba');
+location.reload();
+```
+
+Abrir **Ir al panel de mentor**, guardar disponibilidad y publicar una oferta.
+Para generar una reserva recibida sin cambiar de cuenta, usar el fixture separado:
+
+```js
+const { mockMentorService, reserveMentorFixture } = await import('/src/dev/mentorMock.ts');
+const { getNextAvailableDates } = await import('/src/data/scheduling.ts');
+const workspace = await mockMentorService.getWorkspace();
+const request = workspace.approved.find(item => workspace.settings.offers[item.id]?.active);
+if (!request) throw new Error('Publica una oferta primero.');
+const date = getNextAvailableDates(workspace.settings.availability)[0];
+if (!date) throw new Error('Guarda disponibilidad primero.');
+// Elegir una hora guardada y libre; ajustar el valor si el ejemplo no está disponible.
+const received = await reserveMentorFixture({
+  id: crypto.randomUUID(), mentorId: `student-mentor-${workspace.profile.id}:${request.id}`,
+  date, time: '7:00 PM', duration: 30,
+});
+console.log(received.session.id);
+location.reload();
+```
+
+En **Reservas recibidas**, iniciar la sesión y marcarla realizada. El saldo ganado
+sigue igual hasta que el estudiante confirme. Para probar esa segunda confirmación:
+
+```js
+const { mockMentorService, confirmLearnerFixture } = await import('/src/dev/mentorMock.ts');
+const workspace = await mockMentorService.getWorkspace();
+const session = workspace.sessions.find(item => item.status === 'validation' && item.studentId === 'fixture-elena');
+if (!session) throw new Error('Marca una sesión de Elena como realizada primero.');
+await confirmLearnerFixture({ type: 'validate', sessionId: session.id });
+await confirmLearnerFixture({ type: 'rate', sessionId: session.id, rating: 5, comment: 'Explicación clara.' });
+location.reload();
+```
+
+Los fixtures usan a Elena y Diego con billeteras separadas; repetir una confirmación
+no transfiere otra vez. Las acciones externas por consola requieren recargar la vista.
+No se añadieron dependencias, controles administrativos ni llamadas al backend.
+Administración, conexión API y enlaces de videollamada siguen pendientes; estos
+últimos se muestran como **Enlace pendiente**, sin presentar una reunión inexistente.
+
+Validación: **47 pruebas automatizadas**, build, lint y revisión de diferencias.
+Chrome: recorrido de ambos roles, disponibilidad, ofertas, sesiones de 30/60/90,
+doble envío, confirmación independiente, ganancias, reseñas, recarga, menú y teclado
+en 320×740, 360×800, 390×844, 640×800, 768×1024, 844×390, 1024×768, 1280×900 y
+1440×900, sin desbordamiento horizontal global, errores JavaScript ni llamadas API.
+Pendientes: dispositivos físicos, otros navegadores y lector de pantalla.
+
 ## Perfil personal y solicitudes para enseñar
 
 Se reutilizan `ProfilePage`, `MentorApplicationPage` y `SkillsPage` del archivo
@@ -22,8 +132,8 @@ Mapa de navegación actualizado:
   temas, observación e historial. Menú y notificación también abren esta pantalla.
 - **En observación** o **Rechazada** → corregir y reenviar con el mismo ID.
   Se conservan las observaciones anteriores en el historial; vuelve a **Pendiente**.
-- Paneles del mentor, aprobación administrativa y logout siguen fuera de este
-  incremento. Ninguna solicitud habilita por sí misma una oferta de mentoría.
+- Una habilidad aprobada habilita la vista del mentor descrita arriba. La aprobación
+  administrativa y logout siguen pendientes; una solicitud pendiente no habilita ofertas.
 
 `AccountService` separa los componentes de `dev/accountMock.ts` y
 `dev/accountStore.ts`. Los cambios personales y solicitudes se guardan en
