@@ -148,7 +148,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
       });
     },
     async updateMentorSession(action: MentorSessionAction) {
-      if ('mentorId' in action || !['start', 'perform', 'report'].includes(action.type)) throw new BookingError('invalid_request', 'Esta acción no está disponible para el mentor.');
+      if ('mentorId' in action || !['start', 'perform', 'report', 'meeting'].includes(action.type)) throw new BookingError('invalid_request', 'Esta acción no está disponible para el mentor.');
       await requireApproval(); return apply(action, { role: 'mentor', id: identity.id });
     },
     async updateSession(action: SessionAction) {

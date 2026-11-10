@@ -4,12 +4,13 @@ import type { SessionDuration } from './creditConfig';
 import { intervalsOverlap, isSlotAvailable, parseTime } from './scheduling';
 import type { MentorSettings } from './mentor';
 import type { AdminAudit, IncidentResolution } from './admin';
+import type { MeetingPlatform } from './meeting';
 
 export type BookingCommand = { id: string; mentorId: string; date: string; time: string; duration: SessionDuration };
 export type BookingDraft = BookingCommand & { step: 'schedule' | 'duration' | 'confirm' | 'success' };
 export type ConfirmedBooking = SessionRecord & {
   learnerName: string; topic: string; credits: number; createdAt: string;
-  reservedSlotKeys: string[]; meetingPlatform: null; meetingUrl: null;
+  reservedSlotKeys: string[]; meetingPlatform: MeetingPlatform; meetingUrl: string | null; meetingAssignedAt?: string;
   performedAt?: string; validatedAt?: string; completedAt?: string; cancelledAt?: string;
   cancellationReason?: string; refundStatus?: string; rated?: boolean;
   rating?: number; reviewedAt?: string; history?: SessionEvent[];

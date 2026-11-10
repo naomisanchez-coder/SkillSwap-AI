@@ -3,6 +3,7 @@ import { dayNameFromISO, parseTime } from './scheduling';
 import { ACADEMIC_CREDIT_CONFIG } from './creditConfig';
 import { sessionMentorOwner, type MentorSessionAction } from './mentor';
 import { isOpenIncident } from './admin';
+import { assignMeetingToSession } from './meeting';
 
 // Regla referencial de Figma, pendiente de confirmación de producto.
 export const CANCELLATION_NOTICE_HOURS = 12;
@@ -18,7 +19,8 @@ export type SessionAction =
   | { type: 'validate'; sessionId: string }
   | { type: 'report'; sessionId: string; reason: string; category: IncidentCategory }
   | { type: 'rate'; sessionId: string; rating: number; comment: string };
-export type MentorFixtureAction = { type: 'start' | 'perform' | 'close-incident'; sessionId: string; mentorId: string };
+export type MentorFixtureAction = { type: 'start' | 'perform' | 'close-incident'; sessionId: string; mentorId: string }
+  | { type: 'meeting'; sessionId: string; mentorId: string; platform: Exclude<import('./meeting').MeetingPlatform, null>; url: string };
 const categories: IncidentCategory[] = ['mentor_absent', 'student_absent', 'connection', 'not_held', 'completion_dispute', 'other'];
 
 /** Adaptación de sessionLifecycle.ts de Make. El almacenamiento aplica la transición atómicamente. */
@@ -27,6 +29,10 @@ export function transitionSession(source: BookingLedger, action: SessionAction |
   const session = ledger.sessions.find(item => item.id === action.sessionId);
   const fail = (message: string): never => { throw new BookingError('invalid_transition', message); };
   if (!session || (actor.role === 'student' ? session.studentId !== actor.id : sessionMentorOwner(session) !== actor.id)) return fail('No encontramos esta sesión para tu cuenta.');
+  if (action.type === 'meeting') {
+    if (actor.role !== 'mentor' || ('mentorId' in action && action.mentorId !== session.mentorId)) return fail('Solo el mentor de la sesión puede asignar el enlace.');
+    return assignMeetingToSession(source, { sessionId: session.id, mentorId: session.mentorId, platform: action.platform, url: action.url, assignedAt: now.toISOString() });
+  }
   const studentWallet = session.studentId === ledger.studentId ? ledger.wallet : ledger.wallets?.[session.studentId];
   if (!studentWallet) return fail('No encontramos la billetera del estudiante.');
   const at = now.toISOString();

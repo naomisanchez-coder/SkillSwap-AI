@@ -135,3 +135,91 @@ test('lectura v1 conserva las reservas previas y detecta manipulación de gananc
     const broken = structuredClone(migrated); mutate(broken); f.storage.setItem(bookingStorageKey, JSON.stringify(broken)); await assert.rejects(f.service.getLedger(), code('storage_invalid'));
   }
 });
+
+// Enlaces externos: mismo libro de sesiones y créditos, sin proveedor de videollamadas propio.
+import { hasAssignedMeeting, isValidMeetingUrl, meetingPlatformLabel, openMeeting, type MeetingPlatform } from '../src/data/meeting';
+
+test('enlaces: solo HTTPS y dominios de la plataforma, sin credenciales ni protocolos ejecutables', () => {
+  for (const [platform, url] of [['google_meet', 'https://meet.google.com/abc-defg-hij'], ['zoom', 'https://us02web.zoom.us/j/123?pwd=abc'], ['webex', 'https://tecsup.webex.com/meet/clase']]) assert.equal(isValidMeetingUrl(platform as MeetingPlatform, url), true, url);
+  for (const url of ['', 'javascript:alert(1)', 'data:text/html,test', 'file:///tmp/a', '//meet.google.com/clase', 'http://meet.google.com/a', 'ftp://meet.google.com/a', 'https://meet.google.com.evil.test/a', 'https://evilmeet.google.com/a', 'https://evil.test/?next=https://meet.google.com', 'https://meet.google.com@evil.test/a', 'https://user:pass@meet.google.com/a', 'https://meet.google.com/a b', 'https://meet.google.com/a\nb', 'https://meet.google.com/a\u0000b', 'https://meet.google.com/' + 'x'.repeat(2048), 'https://meet.google.com\\@evil.test/a']) assert.equal(isValidMeetingUrl('google_meet', url), false, url);
+  assert.equal(isValidMeetingUrl('zoom', 'https://meet.google.com/abc'), false);
+  assert.equal(isValidMeetingUrl('unknown' as MeetingPlatform, 'https://meet.google.com/abc'), false);
+  assert.equal(meetingPlatformLabel('unknown' as MeetingPlatform), 'Sin plataforma asignada');
+  assert.equal(hasAssignedMeeting({}), false);
+  assert.equal(isValidMeetingUrl('google_meet', '  https://meet.google.com/a  '), true);
+});
+
+test('enlaces: asignación, edición, reintentos y recarga conservan créditos e historial único', async () => {
+  const f = await fixture(); await f.publish(); await f.service.reserveFixtureStudent(f.command, 'elena');
+  const before = await f.service.getLedger();
+  const action = { type: 'meeting' as const, sessionId: f.command.id, platform: 'google_meet' as const, url: '  https://meet.google.com/abc-defg-hij  ' };
+  await Promise.all(Array.from({ length: 6 }, () => f.service.updateMentorSession(action)));
+  let ledger = await f.service.getLedger();
+  assert.equal(ledger.sessions[0].meetingUrl, action.url.trim());
+  assert.equal(ledger.sessions[0].meetingAssignedAt, '2030-04-01T17:00:00.000Z');
+  assert.equal(ledger.notifications.filter(item => item.title === 'Enlace de sesión disponible').length, 1);
+  assert.equal(ledger.notifications[0].userId, 'elena'); assert.equal(ledger.notifications[0].target, 'sessions');
+  await f.service.updateMentorSession({ ...action, platform: 'zoom', url: 'https://us02web.zoom.us/j/123' });
+  ledger = await createLocalBookingStore(f.options).getLedger();
+  assert.equal(ledger.sessions[0].meetingPlatform, 'zoom');
+  assert.equal(ledger.sessions[0].meetingUrl, 'https://us02web.zoom.us/j/123');
+  const notifications = ledger.notifications.filter(item => item.title.startsWith('Enlace de sesión'));
+  assert.equal(notifications.length, 2); assert.equal(new Set(notifications.map(item => item.id)).size, 2);
+  assert.equal(ledger.sessions[0].history?.length, 3);
+  assert.deepEqual(ledger.wallet, before.wallet); assert.deepEqual(ledger.wallets, before.wallets); assert.deepEqual(ledger.movements, before.movements);
+});
+
+test('enlaces: bloquea estudiante, otro mentor, falta de aprobación y cuenta suspendida', async () => {
+  const f = await fixture(); await f.publish(); await f.service.reserveFixtureStudent(f.command, 'elena');
+  const action = { type: 'meeting' as const, sessionId: f.command.id, platform: 'google_meet' as const, url: 'https://meet.google.com/abc' };
+  await assert.rejects(f.service.updateSession(action as unknown as import('../src/data/sessionLifecycle').SessionAction), code('invalid_request'));
+  await assert.rejects(f.service.applyMentorFixture({ ...action, mentorId: 'carlos' }), code('invalid_transition'));
+  await assert.rejects(f.service.updateMentorSession({ ...action, sessionId: 'missing' }), code('invalid_transition'));
+  f.request.status = 'pending'; await assert.rejects(f.service.updateMentorSession(action), code('mentor_unavailable')); f.request.status = 'approved';
+  const before = await f.service.getLedger(); before.suspendedUserIds = ['current']; f.storage.setItem(bookingStorageKey, JSON.stringify(before));
+  await assert.rejects(f.service.updateMentorSession(action), code('account_suspended'));
+  assert.equal((await f.service.getLedger()).sessions[0].meetingUrl, null);
+});
+
+test('enlaces: admite próximas/en curso y rechaza por validar, completadas, canceladas y revisión', async () => {
+  for (const state of ['validation', 'completed', 'cancelled', 'review']) {
+    const f = await fixture(); await f.publish(); await f.service.reserveFixtureStudent(f.command, 'elena');
+    const action = { type: 'meeting' as const, sessionId: f.command.id, platform: 'webex' as const, url: 'https://tecsup.webex.com/meet/alex' };
+    await f.service.updateMentorSession(action);
+    if (state === 'cancelled') await f.service.updateFixtureStudent({ type: 'cancel', sessionId: f.command.id }, 'elena');
+    else if (state === 'review') await f.service.updateMentorSession({ type: 'report', sessionId: f.command.id, category: 'connection', reason: 'Problemas de conexión' });
+    else {
+      await f.service.updateMentorSession({ type: 'start', sessionId: f.command.id });
+      await f.service.updateMentorSession({ ...action, url: 'https://tecsup.webex.com/meet/nuevo' });
+      await f.service.updateMentorSession({ type: 'perform', sessionId: f.command.id });
+      if (state === 'completed') await f.service.updateFixtureStudent({ type: 'validate', sessionId: f.command.id }, 'elena');
+    }
+    const saved = f.storage.getItem(bookingStorageKey);
+    await assert.rejects(f.service.updateMentorSession(action), code('invalid_transition'));
+    assert.equal(f.storage.getItem(bookingStorageKey), saved);
+  }
+});
+
+test('enlaces: URL inválida y fallo de guardado no informan ni persisten cambios parciales', async () => {
+  const f = await fixture(); await f.publish(); await f.service.reserveFixtureStudent(f.command, 'elena');
+  const action = { type: 'meeting' as const, sessionId: f.command.id, platform: 'google_meet' as const, url: 'https://meet.google.com/abc' };
+  const saved = f.storage.getItem(bookingStorageKey);
+  await assert.rejects(f.service.updateMentorSession({ ...action, url: 'javascript:alert(1)' }), code('invalid_meeting_url'));
+  assert.equal(f.storage.getItem(bookingStorageKey), saved);
+  f.storage.fail = true; await assert.rejects(f.service.updateMentorSession(action), code('storage_failed')); f.storage.fail = false;
+  assert.equal(f.storage.getItem(bookingStorageKey), saved);
+  await f.service.updateMentorSession(action); assert.equal((await f.service.getLedger()).sessions[0].meetingUrl, action.url);
+});
+
+test('enlaces: apertura revalida URL y estado, usando pestaña nueva sin opener ni referrer', () => {
+  const calls: unknown[][] = []; const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { open: (...args: unknown[]) => calls.push(args) } });
+  try {
+    const session = { status: 'upcoming', meetingPlatform: 'google_meet' as const, meetingUrl: 'https://meet.google.com/abc' };
+    assert.equal(openMeeting(session), true); assert.deepEqual(calls, [[session.meetingUrl, '_blank', 'noopener,noreferrer']]);
+    for (const status of ['completed', 'cancelled', 'review', 'validation']) assert.equal(openMeeting({ ...session, status }), false);
+    assert.equal(openMeeting({ ...session, meetingUrl: 'javascript:alert(1)' }), false);
+    assert.equal(openMeeting({ ...session, meetingPlatform: 'unknown' as MeetingPlatform }), false);
+    assert.equal(calls.length, 1);
+  } finally { if (descriptor) Object.defineProperty(globalThis, 'window', descriptor); else Reflect.deleteProperty(globalThis, 'window'); }
+});

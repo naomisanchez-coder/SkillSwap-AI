@@ -10,6 +10,8 @@ import { canCancelSession, type SessionAction } from '../data/sessionLifecycle';
 import { formatSessionSchedule } from '../data/scheduling';
 import type { StudentService } from '../services/student';
 import { sessionMentorOwner, type MentorSessionAction } from '../data/mentor';
+import { hasAssignedMeeting, meetingPlatformLabel, openMeeting } from '../data/meeting';
+import { SessionMeetingEditor } from '../components/SessionMeetingEditor';
 
 const tabs = [['upcoming', 'Próximas'], ['active', 'En curso'], ['validation', 'Por validar'], ['completed', 'Completadas'], ['cancelled', 'Canceladas'], ['review', 'En revisión']] as const;
 type SessionStatus = ConfirmedBooking['status'];
@@ -43,12 +45,13 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
     try {
       const next = mentorAction ? await mentorAction(action as MentorSessionAction) : await service.updateSession(action as SessionAction);
       onChanged(next); setDialog(null);
-      setMessage(action.type === 'cancel' ? 'Reserva cancelada y créditos devueltos.' : action.type === 'validate' ? 'Sesión completada. Créditos liberados al mentor.' : action.type === 'report' ? 'Incidencia enviada. Los créditos siguen retenidos.' : action.type === 'start' ? 'Sesión iniciada.' : action.type === 'perform' ? 'Mentoría marcada como realizada. Pendiente de confirmación del estudiante; los créditos siguen retenidos.' : 'Valoración enviada.');
-      setTab(action.type === 'cancel' ? 'cancelled' : action.type === 'report' ? 'review' : action.type === 'start' ? 'active' : action.type === 'perform' ? 'validation' : 'completed');
+      setMessage(action.type === 'meeting' ? 'Enlace de sesión guardado.' : action.type === 'cancel' ? 'Reserva cancelada y créditos devueltos.' : action.type === 'validate' ? 'Sesión completada. Créditos liberados al mentor.' : action.type === 'report' ? 'Incidencia enviada. Los créditos siguen retenidos.' : action.type === 'start' ? 'Sesión iniciada.' : action.type === 'perform' ? 'Mentoría marcada como realizada. Pendiente de confirmación del estudiante; los créditos siguen retenidos.' : 'Valoración enviada.');
+      if (action.type !== 'meeting') setTab(action.type === 'cancel' ? 'cancelled' : action.type === 'report' ? 'review' : action.type === 'start' ? 'active' : action.type === 'perform' ? 'validation' : 'completed');
       requestAnimationFrame(() => heading.current?.focus());
     } catch (caught) { setError(caught instanceof BookingError ? caught.message : 'No pudimos guardar el cambio. Vuelve a intentarlo.'); }
     finally { inFlight.current = false; setBusy(false); }
   };
+  const join = (session: ConfirmedBooking) => { if (!openMeeting(session)) setError('El enlace no está disponible o no es válido. Vuelve a consultar la sesión.'); };
   const confirmations = (session: ConfirmedBooking) => <div className="mt-2 space-y-1 text-xs text-[#52645F]"><p><strong>Confirmación del mentor</strong> · {confirmationLabel(session.performedAt)}</p><p><strong>Confirmación del estudiante</strong> · {confirmationLabel(session.validatedAt)}</p>{session.adminResolution && <p className="font-semibold">Créditos liberados por resolución administrativa el {new Date(session.adminResolution.at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}.</p>}</div>;
   return <main className="max-w-[1080px] mx-auto px-4 md:px-8 py-8 md:py-12 text-[#182B2A]">
     <section className="rounded-[24px] bg-[#DCEBDD] border border-[#C9D8CC] p-5 sm:p-7 md:p-9">
@@ -76,7 +79,7 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
               <div className="flex flex-wrap items-center gap-2"><h2 className="font-bold">{mentorAction ? session.learnerName : session.mentorName}</h2><Badge variant={session.status === 'completed' ? 'success' : session.status === 'cancelled' ? 'danger' : session.status === 'review' ? 'warning' : 'primary'}>{tabs.find(([key]) => key === session.status)?.[1]}</Badge></div>
               <p className="mt-1 text-sm font-semibold text-[#24685F]">{session.skill} · {session.topic}</p>
               <p className="mt-2 text-sm text-[#60716C]">{formatSessionSchedule(session.date, session.time)} · {session.duration} min · {session.credits} créditos</p>
-              <p className="mt-2 text-xs font-semibold text-[#52645F]">Mentoría virtual · Enlace pendiente</p>
+              <p className="mt-2 text-xs font-semibold text-[#52645F]">Mentoría virtual · {hasAssignedMeeting(session) ? meetingPlatformLabel(session.meetingPlatform) : 'Enlace pendiente'}</p>
               {confirmations(session)}
               {!mentorAction && session.status === 'upcoming' && <p className="mt-2 text-xs text-[#60716C]">{canCancelSession(session, new Date(clock)) ? 'Cancelación disponible con devolución: mínimo 12 horas de anticipación.' : 'Cancelación no disponible: se requiere un mínimo de 12 horas de anticipación.'}</p>}
               {session.status === 'cancelled' && <p className="mt-2 text-sm text-[#B54747]">{session.cancellationReason} · {session.refundStatus}</p>}
@@ -85,7 +88,7 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
             </div>
             <div className="flex flex-wrap gap-2 lg:max-w-60">
               <Button variant="outline" onClick={() => open('detail', session.id)}>Ver detalle</Button>
-              {['upcoming', 'active'].includes(session.status) && <Button disabled>Enlace pendiente</Button>}
+              {['upcoming', 'active'].includes(session.status) && <Button disabled={!hasAssignedMeeting(session)} onClick={() => join(session)}>{hasAssignedMeeting(session) ? 'Unirse a la sesión' : 'Enlace pendiente'}</Button>}
               {!mentorAction && session.status === 'upcoming' && <Button variant="outline" disabled={!canCancelSession(session, new Date(clock))} onClick={() => open('cancel', session.id)}>Cancelar</Button>}
               {!mentorAction && session.status === 'validation' && <Button onClick={() => open('validate', session.id)}>Validar sesión</Button>}
               {mentorAction && session.status === 'upcoming' && <Button disabled={busy} variant="secondary" onClick={() => void submit({ type: 'start', sessionId: session.id })}>Iniciar sesión</Button>}
@@ -100,9 +103,12 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
     {selected && dialog && <SessionModal busy={busy} title={dialog.type === 'detail' ? 'Detalle de sesión' : dialog.type === 'cancel' ? '¿Cancelar esta reserva?' : dialog.type === 'validate' ? 'Confirmar sesión realizada' : dialog.type === 'report' ? 'Reportar incidencia' : dialog.type === 'perform' ? 'Confirmar mentoría realizada' : '¿Cómo fue tu experiencia?'} onClose={close} description={dialog.type === 'detail' ? selected.id : undefined}>
       {dialog.type === 'detail' && <>
         <dl className="space-y-3 text-sm break-words">{[
-          ['Participantes', `${selected.learnerName} y ${selected.mentorName}`], ['Habilidad', selected.skill], ['Tema', selected.topic], ['Fecha y hora', formatSessionSchedule(selected.date, selected.time)], ['Duración', `${selected.duration} minutos`], ['Créditos', selected.credits], ['Estado', tabs.find(([key]) => key === selected.status)?.[1]], ['Modalidad', 'Virtual · Enlace pendiente'],
+          ['Participantes', `${selected.learnerName} y ${selected.mentorName}`], ['Habilidad', selected.skill], ['Tema', selected.topic], ['Fecha y hora', formatSessionSchedule(selected.date, selected.time)], ['Duración', `${selected.duration} minutos`], ['Créditos', selected.credits], ['Estado', tabs.find(([key]) => key === selected.status)?.[1]], ['Modalidad', 'Virtual'], ['Plataforma', hasAssignedMeeting(selected) ? meetingPlatformLabel(selected.meetingPlatform) : 'Sin plataforma asignada'], ['Enlace', hasAssignedMeeting(selected) ? selected.meetingUrl : 'Enlace pendiente'],
         ].map(([label, value]) => <div key={label}><dt className="font-bold">{label}</dt><dd>{value}</dd></div>)}</dl>
         {confirmations(selected)}
+        <p className="mt-5 rounded-xl bg-[#F7F7F2] p-4 text-xs leading-5 text-[#60716C]">SkillSwap no incorpora videollamada propia. El enlace externo solo se habilita cuando existe uno asignado.</p>
+        {['upcoming', 'active'].includes(selected.status) && <Button full className="mt-5" disabled={!hasAssignedMeeting(selected)} onClick={() => join(selected)}>{hasAssignedMeeting(selected) ? 'Unirse a la sesión' : 'Enlace pendiente'}</Button>}
+        {mentorAction && ['upcoming', 'active'].includes(selected.status) && <SessionMeetingEditor key={selected.id} session={selected} busy={busy} onSave={(platform, url) => submit({ type: 'meeting', sessionId: selected.id, platform, url })} />}
         <h3 className="mt-5 font-bold">Historial de la sesión</h3>
         <ol className="mt-3 space-y-3 text-sm">{(selected.history ?? [{ id: `${selected.id}:booked`, at: selected.createdAt, label: 'Reserva confirmada', actor: 'system' }]).map(item => <li key={item.id}><p>{item.label}</p><time className="text-xs text-[#60716C]" dateTime={item.at}>{new Date(item.at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}</time></li>)}</ol>
         {ledger.incidents.filter(item => item.sessionId === selected.id).map(item => <div key={item.id} className="mt-4 rounded-xl bg-[#FFF4D6] p-3 text-sm break-words"><p className="font-semibold">{item.status === 'resolved' ? 'Incidencia resuelta' : item.status === 'closed' ? 'Incidencia cerrada' : 'Pendiente de revisión administrativa'}</p><p>{item.reason}</p>{item.resolutionComment && <p className="mt-2">Resolución: {item.resolutionComment} · {item.resolvedBy}</p>}<p className="mt-1 text-xs">{item.id}</p></div>)}

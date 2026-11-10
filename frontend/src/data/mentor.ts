@@ -12,7 +12,8 @@ export const mentorDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes',
 export const mentorTimes = ['5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM'];
 export type OfferSettings = { topic: string; description: string; level: string; durations: SessionDuration[]; active: boolean };
 export type MentorSettings = { availability: WeeklyAvailability; offers: Record<string, OfferSettings> };
-export type MentorSessionAction = { type: 'start' | 'perform'; sessionId: string } | { type: 'report'; sessionId: string; reason: string; category: import('./booking').IncidentCategory };
+export type MentorSessionAction = { type: 'start' | 'perform'; sessionId: string } | { type: 'report'; sessionId: string; reason: string; category: import('./booking').IncidentCategory }
+  | { type: 'meeting'; sessionId: string; platform: Exclude<import('./meeting').MeetingPlatform, null>; url: string };
 export type MentorWorkspace = { profile: UserProfile; approved: MentorSkillRequest[]; settings: MentorSettings; sessions: ConfirmedBooking[]; reviews: ReviewRecord[]; ledger: BookingLedger };
 export function mentorOwnerId(mentorId: string): string {
   return mentorId.startsWith('student-mentor-') ? mentorId.slice('student-mentor-'.length).split(':')[0] : `mentor-${mentorId}`;

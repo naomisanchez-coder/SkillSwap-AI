@@ -1,5 +1,68 @@
 # SkillSwap AI — frontend
 
+## Enlaces externos de las sesiones
+
+Mapa: **Modo mentor → Reservas recibidas → Ver detalle → Enlace virtual**.
+El mentor puede asignar o editar plataforma y URL de sus sesiones **Próximas** o
+**En curso**. Al editar se precargan los valores guardados. **Modo estudiante →
+Mis sesiones → Ver detalle** muestra la plataforma y el enlace, sin controles de
+edición. **Unirse a la sesión**, tanto en la tarjeta como en el detalle, abre otra
+pestaña. El panel del mentor también permite abrir el enlace de próximas mentorías.
+Cuando no hay un enlace válido se indica **Enlace pendiente** y no se habilita abrir.
+Las sesiones por validar, completadas, canceladas o en revisión conservan el enlace
+como información histórica, sin permitir editarlo ni unirse.
+
+Se adapta `meeting.ts` y el formulario de `SessionsHubPage.tsx` del Figma original.
+`MEETING_PLATFORMS` conserva Google Meet (`meet.google.com`), Zoom (`zoom.us`) y
+Cisco Webex (`webex.com`), con sus subdominios y protocolo **HTTPS** exclusivamente.
+Se comprueba la URL antes de guardar y de abrir; se rechazan dominios parecidos,
+plataformas desconocidas, credenciales incrustadas, espacios internos, caracteres
+de control, barras inversas y URLs de más de 2048 caracteres. Solo se recortan
+espacios exteriores; se conserva el contenido del enlace, incluidos sus parámetros.
+`window.open` usa `_blank` y `noopener,noreferrer`. No se crean salas ni se comprueba
+que exista la reunión externa: se valida el formato y el dominio.
+
+La acción tipada `meeting` amplía el contrato existente de `MentorService.updateSession`.
+El servicio local comprueba cuenta activa, aprobación del mentor, pertenencia y
+estado actual, y vuelve a validar la URL. La actualización se serializa junto a las
+demás operaciones de sesiones, con una sola escritura de enlace, fecha, historial y
+notificación para el estudiante. No modifica saldos, retenciones ni movimientos.
+Un reintento con los mismos valores no duplica historial ni notificación; las
+ediciones sucesivas tienen identificadores distintos incluso con la misma fecha.
+Si falla la escritura se conserva el enlace anterior, se muestra el error y se
+mantiene el formulario para reintentar. Se reutiliza el almacenamiento v1 sin borrar
+datos anteriores. La recarga, el cambio de modo y las actualizaciones entre pestañas
+consultan el mismo libro de sesiones. Acciones de fixtures ejecutadas en la misma
+pestaña por consola requieren recargar, como el resto de los fixtures existentes.
+
+Para probar un enlace en una reserva del estudiante con un mentor referencial,
+solo en desarrollo y con `VITE_ENABLE_FRONTEND_PREVIEW=true`:
+
+```js
+const { applyMentorFixture } = await import('/src/dev/studentMock.ts');
+await applyMentorFixture({ type: 'meeting', sessionId: 'ID-DE-TU-RESERVA',
+  mentorId: 'carlos', platform: 'google_meet', url: 'https://meet.google.com/abc-defg-hij' });
+location.reload();
+```
+
+Usar el ID y mentor de una reserva propia próxima o en curso. El fixture no se
+expone en `StudentService` ni en los botones estudiantiles. Para probar la edición
+del mentor, usar las solicitudes aprobadas y reservas de Elena/Diego descritas en
+la sección de mentor. No se altera el login real ni se añaden dependencias.
+
+Verificación: **66 pruebas automatizadas**, build, lint y `git diff --check`.
+Las nuevas pruebas cubren dominios/protocolos, permisos, suspensión, aprobación,
+estados, recarga, doble envío, edición, IDs únicos, fallos de guardado y apertura.
+Chrome a 320×740, 390×844, 768×1024, 844×390 y 1440×900: asignación y edición,
+precarga, recarga, cambio de modo, actualización entre pestañas, vista estudiantil
+sin edición, enlace ausente/manipulado, Tab/Shift+Tab, Escape, retorno del foco y
+apertura en otra pestaña sin `window.opener` ni `document.referrer`. Sin desbordamiento
+horizontal, errores JavaScript ni llamadas API; capturas revisadas. Los destinos
+externos se interceptaron en las pruebas: no se entró a reuniones reales. Scripts y
+capturas temporales fuera del repositorio. Pendientes: integración con la API de
+Naomi y permisos efectivos en servidor, dispositivos físicos, otros navegadores y
+lector de pantalla. Figma Make permite leer el código, pero no obtener captura directa.
+
 ## Interfaz de recuperación de contraseña
 
 Mapa: portada → **Iniciar sesión** → **¿Olvidaste tu contraseña?** →
@@ -329,8 +392,8 @@ location.reload();
 Los fixtures usan a Elena y Diego con billeteras separadas; repetir una confirmación
 no transfiere otra vez. Las acciones externas por consola requieren recargar la vista.
 No se añadieron dependencias, controles administrativos ni llamadas al backend.
-Conexión API y enlaces de videollamada siguen pendientes; estos
-últimos se muestran como **Enlace pendiente**, sin presentar una reunión inexistente.
+La conexión API sigue pendiente. La asignación de enlaces externos se describe al
+inicio de este documento; sin enlace válido se muestra **Enlace pendiente**.
 
 Validación: **47 pruebas automatizadas**, build, lint y revisión de diferencias.
 Chrome: recorrido de ambos roles, disponibilidad, ofertas, sesiones de 30/60/90,
@@ -544,9 +607,8 @@ previo de reservas pasó su regresión completa. Sin errores JavaScript ni llama
 La captura directa de Figma Make no está soportada por el conector; se reutilizó su
 código fuente. No se probaron dispositivos físicos ni lectores de pantalla.
 
-Pendientes: backend y asignación de
-enlaces de videollamada. La vista estudiantil muestra **Enlace pendiente** sin inventar
-una reunión. Web Locks coordina pestañas en navegadores compatibles; la alternativa
+Pendiente: integración backend. Los enlaces externos se gestionan como se describe
+al comienzo de este documento. Web Locks coordina pestañas en navegadores compatibles; la alternativa
 solo serializa dentro de una instancia. No se garantizan operaciones entre dispositivos.
 
 ## Reserva de mentoría
@@ -589,8 +651,8 @@ pero no se puede garantizar restaurar la pantalla exacta.
 
 **Volver al panel** actualiza saldo, próxima sesión y notificaciones y cierra el
 borrador. Una recarga vuelve a leer los registros persistidos. **Ver mis sesiones**
-y **Mis créditos** abren las vistas descritas arriba; los enlaces de reunión siguen
-pendientes de asignación.
+y **Mis créditos** abren las vistas descritas arriba. El mentor puede asignar el
+enlace externo desde el detalle; el estudiante lo consulta en Mis sesiones.
 No se modificó backend ni autenticación; los datos de prueba siguen limitados a la
 configuración explícita de desarrollo y no muestran carteles técnicos en la interfaz.
 
