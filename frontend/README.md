@@ -1,5 +1,62 @@
 # SkillSwap AI — frontend
 
+## Reserva de mentoría
+
+Desde el perfil de un mentor, **Reservar sesión** abre los tres pasos de
+`BookingFlowPage.tsx` original: fecha y horario, duración, revisión y confirmación.
+Se mantienen los costos académicos 30/60/90 minutos por 5/10/15 créditos.
+Las fechas se calculan en `America/Lima`, desde el día siguiente, como en el prototipo.
+Cada bloque publicado cubre una hora; 90 minutos requiere cobertura continua.
+No se cambia el horario silenciosamente si aparece un conflicto al confirmar.
+
+El servicio vuelve a validar oferta activa/aprobada, habilidad vigente, duración
+publicada, fecha futura, disponibilidad, solapamientos del mentor y del estudiante,
+y saldo. Impide autorreservas. El costo se deriva de `creditConfig.ts`, no de campos
+enviados por la pantalla. `scheduling.ts` reutiliza las funciones del prototipo y
+valida fechas reales e intervalos semiabiertos.
+
+`StudentService` incorpora `getBookingContext`, `confirmBooking`, `getBooking` y los
+métodos del borrador de navegación. `dev/bookingStore.ts` implementa la persistencia
+local mediante `skillswap:frontend-demo:bookings:v1`. Guarda en una sola escritura
+sesión, saldo disponible/retenido, movimiento de retención y notificación; si falla
+la escritura no modifica ninguno. Los créditos se retienen, no se consumen todavía.
+Reiniciar preferencias no elimina reservas ni devuelve créditos.
+
+El ID de reserva permanece estable durante el flujo y los reintentos. Un mismo ID
+con los mismos datos devuelve el comprobante guardado sin retener de nuevo; con
+otros datos se rechaza. Otros IDs compitiendo por el horario vuelven a validar bajo
+el bloqueo. La interfaz impide doble envío. En Chrome y navegadores con Web Locks,
+el bloqueo exclusivo también coordina pestañas del mismo origen; la cola alternativa
+coordina la misma pestaña. La futura API deberá garantizar estas operaciones mediante
+transacciones y restricciones propias; el frontend no sustituye esos controles.
+
+La pantalla de éxito utiliza exclusivamente el `ConfirmedBooking` devuelto por el
+servicio. No recalcula fecha ni hora a partir de la disponibilidad después de bloquear
+el horario. Puede recuperar ese comprobante aunque la oferta se desactive después.
+El borrador `skillswap:frontend-demo:booking-route:v1` en sessionStorage conserva
+selecciones, paso e ID al recargar; una reserva ya guardada abre su comprobante. Si
+el navegador impide sessionStorage, la reserva sigue en localStorage y en el panel,
+pero no se puede garantizar restaurar la pantalla exacta.
+
+**Volver al panel** actualiza saldo, próxima sesión y notificaciones y cierra el
+borrador. Una recarga vuelve a leer los registros persistidos. **Ver mis sesiones**
+y **Ver mis créditos** siguen mostrando sus destinos pendientes: no se ha trasladado
+la gestión completa de sesiones, cancelaciones, validaciones, enlaces ni movimientos.
+No se modificó backend ni autenticación; los datos de prueba siguen limitados a la
+configuración explícita de desarrollo y no muestran carteles técnicos en la interfaz.
+
+Para revisar en `npm run dev`, habilita `VITE_ENABLE_FRONTEND_PREVIEW=true`, completa
+el perfil si hace falta, abre Carlos desde el panel o recomendaciones y reserva un
+horario de las 7:00 PM para comprobar las tres duraciones. Revisa el resumen, confirma,
+recarga el comprobante y vuelve al panel. El saldo inicial del fixture es 20 créditos;
+las reservas se conservan y reducen ese disponible.
+
+`npm test` ejecuta las regresiones de reservas y del motor de recomendaciones.
+Incluye costos, doble envío, competencia por horario, solapamientos, saldo insuficiente,
+oferta desactivada, datos corruptos, fallo de escritura y la hora inmutable del
+comprobante. Chrome se comprobó en nueve tamaños, con teclado, borrador tras recarga,
+igualdad revisión/éxito/registro, oferta desactivada y dos pestañas simultáneas.
+
 ## Recomendaciones y perfil del mentor
 
 Se reutilizan `RecommendationsPage.tsx` y `MentorProfilePage.tsx` de Figma Make:
@@ -16,8 +73,8 @@ Se reutilizan `RecommendationsPage.tsx` y `MentorProfilePage.tsx` de Figma Make:
   restaura la posición y devuelve el foco a la tarjeta o al asistente de origen.
 - Los filtros se conservan durante la navegación en memoria. Recargar mantiene el
   comportamiento por estado `page` del proyecto: vuelve al panel o al perfil inicial.
-- **Reservar sesión** abre un aviso de funcionalidad pendiente: no crea reservas,
-  descuenta créditos ni envía solicitudes.
+- **Reservar sesión** abre el flujo local descrito arriba. No envía solicitudes a
+  una API ni integra todavía la gestión posterior de la sesión.
 
 `StudentService.getMentorProfile(id)` devuelve `MentorProfileDetails | null`. Un ID
 inexistente o un mentor no elegible muestra **Perfil no encontrado**, sin sustituirlo
@@ -59,8 +116,8 @@ Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y `npm run dev`:
   Permite habilidad, nivel, horario, revisión y hasta tres resultados; contempla errores
   de entrada y búsquedas sin coincidencias. Es el motor local del prototipo, sin un
   proveedor externo de IA.
-- Explorar, Para ti y los perfiles de mentor están disponibles. Sesiones, créditos,
-  solicitudes de mentor, reservas y logout conservan destinos pendientes al pulsarlos.
+- Explorar, Para ti, perfiles de mentor y reservas están disponibles. Sesiones,
+  créditos, solicitudes de mentor y logout conservan destinos pendientes al pulsarlos.
 
 `src/services/student.ts` define `StudentService`; `src/dev/studentMock.ts` y
 `src/dev/mentorFixtures.ts` proporcionan los datos de prueba. La composición recibe

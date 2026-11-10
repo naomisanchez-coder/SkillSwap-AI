@@ -10,6 +10,7 @@ import type { StudentService } from '../services/student';
 import type { ProfileService } from '../services/profile';
 import { emptyPreferences } from '../data/profileOptions';
 import { emptyDiscoveryFilters, type DiscoveryFilters } from '../data/discovery';
+import type { BookingDraft, BookingResult } from '../data/booking';
 import LandingPage from '../pages/LandingPage';
 import PublicExplorePage from '../pages/PublicExplorePage';
 import HowItWorksPage from '../pages/HowItWorksPage';
@@ -18,11 +19,12 @@ import ProfileSetupPage from '../pages/ProfileSetupPage';
 import StudentDashboardPage from '../pages/StudentDashboardPage';
 import RecommendationsPage from '../pages/RecommendationsPage';
 import MentorProfilePage from '../pages/MentorProfilePage';
+import BookingFlowPage from '../pages/BookingFlowPage';
 import { mockProfileService } from './profileMock';
 import { mockStudentService } from './studentMock';
 
-type Page = PublicDestination | 'profile-setup' | 'dashboard' | 'discover' | 'explore' | 'mentor' | 'loading';
-type MentorOrigin = Exclude<Page, 'mentor' | 'loading'>;
+type Page = PublicDestination | 'profile-setup' | 'dashboard' | 'discover' | 'explore' | 'mentor' | 'booking' | 'loading';
+type MentorOrigin = Exclude<Page, 'mentor' | 'booking' | 'loading'>;
 /** Composición local independiente del acceso real. Los fixtures viven en los servicios. */
 export default function FrontendPreview({ onRealAccess, studentService = mockStudentService, profileService = mockProfileService }: {
   onRealAccess: (page: 'login' | 'register') => void; studentService?: StudentService; profileService?: ProfileService;
@@ -37,15 +39,17 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
   const [publicQuery, setPublicQuery] = useState('');
   const [mentorId, setMentorId] = useState('');
   const [mentorOrigin, setMentorOrigin] = useState<MentorOrigin>('dashboard');
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
   const returnPosition = useRef<{ scrollY: number; mentorId: string; fromAssistant: boolean } | null>(null);
   const restoring = useRef(false);
   const reading = useRef(new Set<string>());
   useEffect(() => {
     let active = true;
-    studentService.getDashboard().then(next => {
+    Promise.all([studentService.getDashboard(), studentService.getBookingDraft()]).then(([next, draft]) => {
       if (!active) return;
       setSnapshot(next);
-      setPage(hasCompletePreferences(next.state.profile) ? 'dashboard' : 'profile-setup');
+      if (hasCompletePreferences(next.state.profile) && draft) { setBookingDraft(draft); setMentorId(draft.mentorId); setPage('booking'); }
+      else setPage(hasCompletePreferences(next.state.profile) ? 'dashboard' : 'profile-setup');
     }, () => { if (active) { setLoadError(true); setPage('profile-setup'); } });
     return () => { active = false; };
   }, [studentService, attempt]);
@@ -74,10 +78,27 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
     else setPending(({ sessions: 'Mis sesiones', wallet: 'Mis créditos', skills: 'Mis habilidades' })[next]);
   };
   const openMentor = (id: string) => {
-    setMentorOrigin(page === 'mentor' || page === 'loading' ? 'dashboard' : page);
+    setMentorOrigin(page === 'mentor' || page === 'booking' || page === 'loading' ? 'dashboard' : page);
     returnPosition.current = { scrollY: window.scrollY, mentorId: id, fromAssistant: Boolean(document.activeElement?.closest('[aria-labelledby="assistant-title"]')) };
     setMentorId(id);
     navigate('mentor');
+  };
+  const startBooking = async () => {
+    if (!snapshot || !hasCompletePreferences(snapshot.state.profile)) { navigate('profile-setup'); return; }
+    await studentService.clearBookingDraft();
+    setBookingDraft(null);
+    navigate('booking');
+  };
+  const leaveBooking = async (destination: 'mentor' | 'dashboard') => {
+    await studentService.clearBookingDraft();
+    setBookingDraft(null);
+    navigate(destination);
+  };
+  const confirmedBooking = (result: BookingResult) => {
+    setSnapshot(current => current && ({ ...current, state: { ...current.state, wallet: result.wallet,
+      sessions: [result.session, ...current.state.sessions.filter(item => item.id !== result.session.id)],
+      notifications: [...result.notifications.filter(item => !current.state.notifications.some(existing => existing.id === item.id)), ...current.state.notifications],
+    } }));
   };
   const markRead = async (id: string) => {
     if (reading.current.has(id)) return;
@@ -116,7 +137,9 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
         recommended={page === 'explore'} filters={filters} onFiltersChange={setFilters} onViewMentor={openMentor} onEditPreferences={() => navigate('profile-setup')} />}
     </StudentShell>}
     {page === 'mentor' && snapshot && <MentorProfilePage key={mentorId} profile={snapshot.state.profile} mentorId={mentorId} service={studentService}
-      onBack={() => { restoring.current = true; navigate(mentorOrigin); }} onBooking={() => setPending('Reservar sesión')} />}
+      onBack={() => { restoring.current = true; navigate(mentorOrigin); }} onBooking={() => void startBooking()} />}
+    {page === 'booking' && snapshot && <BookingFlowPage key={mentorId} mentorId={mentorId} draft={bookingDraft} service={studentService} onConfirmed={confirmedBooking}
+      onBack={() => void leaveBooking('mentor')} onHome={() => void leaveBooking('dashboard')} onBuyCredits={() => setPending('Mis créditos')} onSessions={() => setPending('Mis sesiones')} />}
     {page === 'landing' && <LandingPage {...actions} />}
     {page === 'public-explore' && <PublicExplorePage {...actions} mentors={publicMentors} searchQuery={publicQuery} onSearchChange={setPublicQuery} onPrivateExplore={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? 'explore' : 'profile-setup')} onMentor={openMentor} />}
     {page === 'how-it-works' && <HowItWorksPage {...actions} />}

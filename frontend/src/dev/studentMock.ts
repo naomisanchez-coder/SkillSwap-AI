@@ -5,6 +5,7 @@ import { mockProfileService } from './profileMock';
 import { mentors, reviewFixtures } from './mentorFixtures';
 import { isEligibleMentor } from '../data/recommendations';
 import { ACADEMIC_CREDIT_CONFIG } from '../data/creditConfig';
+import { createLocalBookingStore } from './bookingStore';
 
 export const studentActivityStorageKey = 'skillswap:frontend-demo:student:v1';
 // Fixtures referenciales del prototipo. No otorgan créditos ni modifican cuentas reales.
@@ -19,6 +20,8 @@ export const studentFixture: StudentDashboardData = {
   notifications: [{ id: 'profile-welcome', userId: 'frontend-demo-student', title: 'Tus preferencias de aprendizaje', description: 'Puedes actualizar tus intereses y horarios cuando lo necesites.', date: 'Hoy', read: false, target: 'profile' }],
 };
 
+const bookings = createLocalBookingStore({ storage: () => localStorage, routeStorage: () => sessionStorage, getMentors: () => mentors, identity: studentFixture.profile, initialWallet: studentFixture.wallet });
+
 function assertDevelopment() {
   if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRONTEND_PREVIEW !== 'true') throw new Error('Servicio de prueba disponible solo en desarrollo.');
 }
@@ -31,6 +34,12 @@ function readNotificationIds(): string[] {
   } catch { return []; }
 }
 export const mockStudentService: StudentService = {
+  async getBookingContext(id) { assertDevelopment(); return bookings.getBookingContext(id); },
+  async confirmBooking(command) { assertDevelopment(); return bookings.confirmBooking(command); },
+  async getBooking(id) { assertDevelopment(); return bookings.getBooking(id); },
+  async getBookingDraft() { assertDevelopment(); return bookings.getBookingDraft(); },
+  async saveBookingDraft(draft) { assertDevelopment(); return bookings.saveBookingDraft(draft); },
+  async clearBookingDraft() { assertDevelopment(); return bookings.clearBookingDraft(); },
   async getMentorProfile(id) {
     assertDevelopment();
     const mentor = mentors.find(item => item.id === id);
@@ -42,13 +51,18 @@ export const mockStudentService: StudentService = {
     const preferences = await mockProfileService.getPreferences();
     const readIds = readNotificationIds();
     const state = structuredClone(studentFixture);
+    const ledger = await bookings.getLedger();
+    state.wallet = ledger.wallet;
+    state.sessions = [...ledger.sessions, ...state.sessions];
+    state.notifications = [...ledger.notifications, ...state.notifications];
     state.profile = { ...state.profile, ...(preferences ?? emptyPreferences()) };
     state.notifications = state.notifications.map(item => ({ ...item, read: readIds.includes(item.id) }));
     return { state, mentors: structuredClone(mentors) };
   },
   async markNotificationRead(id) {
     assertDevelopment();
-    if (!studentFixture.notifications.some(item => item.id === id && item.userId === studentFixture.profile.id)) throw new Error('Notificación no disponible.');
+    const ledger = await bookings.getLedger();
+    if (![...studentFixture.notifications, ...ledger.notifications].some(item => item.id === id && item.userId === studentFixture.profile.id)) throw new Error('Notificación no disponible.');
     localStorage.setItem(studentActivityStorageKey, JSON.stringify([...new Set([...readNotificationIds(), id])]));
   },
 };
