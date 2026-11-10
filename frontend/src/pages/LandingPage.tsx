@@ -1,4 +1,6 @@
 import { Icons } from '../components/icons';
+import { Avatar } from '../components/ui';
+import type { PublicMentor } from '../data/publicMentors';
 import { PublicFooter, PublicHeader, type PublicDestination } from '../components/PublicChrome';
 import { HeroCarousel } from '../components/HeroCarousel';
 import { demoMentorPhotos, homeSecondaryPhoto, heroPhotos, publicSkillCategories } from '../data/publicContent';
@@ -19,13 +21,8 @@ const faq = [
   ['¿Recibiré un certificado oficial?', 'No se prometen certificados oficiales. El prototipo conserva el historial de horas y sesiones como reconocimiento de participación.'],
 ] as const;
 
-const mentorPreview = [
-  ['carlos', 'Carlos Mendoza', 'Programación con Python'],
-  ['andrea', 'Andrea Torres', 'Lógica y análisis de datos'],
-  ['luis', 'Luis García', 'Desarrollo de proyectos'],
-] as const;
-
 export default function LandingPage({
+  mentors,
   userName,
   onNavigate,
   onLogin,
@@ -33,6 +30,7 @@ export default function LandingPage({
   onDashboard,
   onLogout,
 }: {
+  mentors: PublicMentor[];
   userName?: string;
   onNavigate: (destination: PublicDestination) => void;
   onLogin: () => void;
@@ -87,12 +85,14 @@ export default function LandingPage({
             </div>
             <button type="button" onClick={() => onNavigate('public-explore')} className="min-h-11 px-5 rounded-xl border border-[#B8D4CA] text-sm font-bold text-[#176B5B] hover:bg-[#DDF6ED]">Explorar catálogo</button>
           </div>
+          {!mentors.length && <p className="mt-9 text-[#60716C]">No hay ofertas disponibles en este momento.</p>}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-9">
-            {mentorPreview.map(([id, name, skill]) => {
+            {mentors.slice(0, 3).map(mentor => {
+              const { id, name, skill } = mentor;
               const image = demoMentorPhotos[id];
               return (
                 <article key={id} className="rounded-3xl border border-[#E4EBE7] bg-[#FAFBF8] p-4 flex items-center gap-4">
-                  <img src={image.src} srcSet={image.srcSet} alt={image.alt} className="w-20 h-20 rounded-2xl object-cover object-top" />
+                  {mentor.image ? <img src={mentor.image} srcSet={image?.srcSet} alt={name} className="w-20 h-20 rounded-2xl object-cover object-top" /> : <div className="w-20 h-20 shrink-0 rounded-2xl bg-[#DCEBDD] flex items-center justify-center"><Avatar name={name} size="lg" /></div>}
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#176B5B]">Perfil de demostración</span>
                     <h3 className="mt-1 font-bold">{name}</h3>

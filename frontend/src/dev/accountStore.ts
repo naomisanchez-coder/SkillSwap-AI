@@ -1,6 +1,7 @@
 import { AccountError, applicationStatuses, normalizeApplication, normalizePersonalProfile, type AccountData, type ApplicationCommand, type PersonalProfile } from '../data/account';
 import type { AccountService } from '../services/account';
 import { auditRecord, validateAudit, type SkillDecision } from '../data/admin';
+import { notifyCatalogChanged } from '../services/catalog';
 
 export const accountStorageKey = 'skillswap:frontend-demo:account:v1';
 export type AccountFiles = {
@@ -35,6 +36,7 @@ export function createLocalAccountStore({ storage, files, identity, now = () => 
   const write = (data: AccountData) => {
     try { storage().setItem(accountStorageKey, JSON.stringify(data)); }
     catch { throw new AccountError('storage_failed', 'No pudimos guardar los cambios en este navegador. Se conservó la información anterior. Inténtalo nuevamente.'); }
+    notifyCatalogChanged();
     return structuredClone(data);
   };
   const serialized = <T,>(run: () => T | Promise<T>): Promise<T> => {

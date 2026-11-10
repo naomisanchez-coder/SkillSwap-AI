@@ -1,18 +1,17 @@
 import type { AdminService } from '../services/admin';
-import { adminIdentity, type AdminUser } from '../data/admin';
+import type { AdminUser } from '../data/admin';
 import { mockAccountService, decideApplication } from './accountMock';
 import { localActivity, localIdentity, learnerFixtures } from './localActivity';
 import { studentFixture } from './studentMock';
 import { mentors } from './mentorFixtures';
+import { previewAccess } from './previewAccess';
 
 // Acceso de desarrollo separado del login real; no es un mecanismo de autorización.
-let administrator = false;
-const accessKey = 'skillswap:frontend:admin-access';
 function assertDevelopment() { if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRONTEND_PREVIEW !== 'true') throw new Error('Acceso disponible solo en desarrollo con configuración explícita.'); }
-function assertAdmin() { assertDevelopment(); if (!administrator) administrator = sessionStorage.getItem(accessKey) === adminIdentity.id; if (!administrator) throw new Error('Accede con la cuenta administradora para continuar.'); }
-export function enterAdminPreview() { assertDevelopment(); sessionStorage.setItem(accessKey, adminIdentity.id); administrator = true; }
-export function restoreAdminPreview() { assertDevelopment(); administrator = sessionStorage.getItem(accessKey) === adminIdentity.id; return administrator; }
-export function leaveAdminPreview() { administrator = false; sessionStorage.removeItem(accessKey); }
+function assertAdmin() { assertDevelopment(); if (previewAccess().read() !== 'admin') throw new Error('Accede con la cuenta administradora para continuar.'); }
+export function enterAdminPreview() { assertDevelopment(); previewAccess().enter('admin'); }
+export function restoreAdminPreview() { assertDevelopment(); return previewAccess().read() === 'admin'; }
+export function leaveAdminPreview() { previewAccess().logout(); }
 async function users(): Promise<AdminUser[]> {
   const account = await mockAccountService.getAccount(); const profile = studentFixture.profile;
   return [{ id: localIdentity.id, name: account.profile.name ?? localIdentity.name, email: profile.email, career: profile.career, cycle: profile.cycle, verified: true },

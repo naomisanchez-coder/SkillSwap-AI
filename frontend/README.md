@@ -1,5 +1,82 @@
 # SkillSwap AI — frontend
 
+## Cierre de sesión y catálogo compartido
+
+`App` separa la composición de desarrollo (`DevelopmentApp`) del acceso real y la
+navegación pública (`PublicApp`). Se conservan el registro y login existentes.
+Estudiante, mentor y administración cierran el acceso de prueba y vuelven a la
+portada pública anónima, sin llamar a la API. Se limpian el rol de prueba, la sección
+administrativa, la ruta privada y el borrador transitorio de reserva. Se conservan
+perfil, preferencias, fotografías/PDF, solicitudes, reservas confirmadas, sesiones,
+créditos, lectura de notificaciones y auditoría.
+
+`previewAccess` mantiene una versión de salida por origen y compara el acceso de cada
+pestaña con esa versión. La salida invalida también las otras pestañas, las recargas
+y las restauraciones por Atrás o bfcache. Esa marca de salida no es una credencial
+ni un permiso real. No se borran datos de localStorage ni IndexedDB para cerrar.
+Si falla el guardado necesario para registrar la salida, se informa el error.
+
+Para volver a probar el estudiante después de salir, con Vite y
+`VITE_ENABLE_FRONTEND_PREVIEW=true`, abrir
+`http://127.0.0.1:5175/?view=student` y seleccionar **Acceder como estudiante**.
+El acceso reutiliza el perfil y la actividad guardados. Administración sigue entrando
+por `/?view=admin`; su salida también regresa a la portada y retira el acceso.
+Sin la configuración de desarrollo, estas entradas no habilitan vistas privadas.
+
+El logout real usa el contrato documentado por el backend de Naomi:
+`POST /api/auth/logout`, `credentials: include`, JSON `{}` y cabecera
+`X-CSRF-Token` con el token de la sesión mantenido en memoria. Solo una respuesta
+`200` con `{ "status": "ok" }` confirma la salida. No se intentan leer ni borrar
+cookies HttpOnly desde JavaScript: su revocación y limpieza corresponden al servidor.
+Durante el envío se evita el doble envío; una comprobación previa de sesión no puede
+restaurar una respuesta antigua sobre el logout. Si falla la red, el servidor, CSRF
+o el formato de respuesta, no se afirma éxito, se conserva la sesión en memoria y
+se ofrece reintentar. Comprobar nuevamente la sesión permite aclarar un resultado
+incierto. El token nunca se escribe en almacenamiento del navegador ni en logs.
+
+**Limitación de integración:** la rama `feature/backend` de Naomi documenta logout,
+login y `/me` como propuestos, todavía no implementados. Se verificó el cliente con
+respuestas HTTP controladas; no se declara probada una revocación real en MySQL.
+Referencia: `backend/docs/auth-api.md` de esa rama. No se modifica su contrato de
+registro, sus reglas actuales ni ningún archivo del backend en este incremento.
+
+`CatalogService` y `useCatalog` alimentan exploración pública y las tarjetas de la
+portada. En desarrollo, `mockCatalogService` lee el mismo `localActivity` usado por
+los servicios del estudiante y mentor. `composeMentorCatalog` combina el catálogo
+referencial y las ofertas de habilidades aprobadas con el estado de las cuentas.
+Se elimina la segunda lista fija de `publicMentors.ts`; ese archivo conserva solo
+el tipo de proyección pública. La oferta debe estar publicada, aprobada, vigente y
+tener disponibilidad. Una cuenta suspendida queda fuera; reactivar o republicar
+actualiza las vistas. La aprobación por sí sola no publica una oferta.
+
+Las vistas reciben actualizaciones por escrituras en la misma pestaña y por cambios
+en otras pestañas, y vuelven a consultar al recuperar el foco. Los errores muestran
+un aviso y permiten reintentar; no se presenta como vigente un catálogo cuya lectura
+falló. Se conserva la búsqueda pública durante las actualizaciones. Las ofertas
+propias son visibles al público, pero se excluyen de las recomendaciones y reservas
+del propietario. Los pesos, el límite de tres recomendaciones, filtros y costos
+permanecen sin cambios. Las reservas históricas no se eliminan al pausar o suspender.
+La compilación de producción conserva un proveedor referencial de la misma fuente
+base, preparado para sustituirse por el adaptador API; no consume un endpoint de
+catálogo inventado ni concede acceso a los almacenes de desarrollo.
+
+Mapa actualizado: estudiante/mentor/administración → **Cerrar sesión** → portada
+anónima → exploración pública; nueva entrada de prueba explícita → actividad anterior.
+El resto de los pendientes de la revisión general no se implementa en este incremento.
+
+Validación: build, lint, `git diff --check` y **60 pruebas automatizadas** correctos.
+Chrome: logout de los tres accesos a 320×740, 768×1024, 844×390 y 1440×900;
+catálogo y búsqueda a 360×800, 768×1024 y 1440×900. Se comprobaron teclado, portada
+anónima, recarga/Atrás, salida entre pestañas, conservación de los registros, aprobación
+sin publicación, publicación/pausa y suspensión/reactivación. Sin llamadas a la API
+ni errores JavaScript en el recorrido de prueba. Se revisaron capturas de la portada.
+Para el cliente real se probaron respuestas HTTP controladas a 360, 768 y 1440 px:
+cookie HttpOnly, CSRF, errores 500/403/red/respuesta inválida, reintento y doble clic,
+respuesta válida, eliminación de cookie por el servidor de prueba y posterior `/me`
+sin sesión. Pendientes: API real de Naomi, CORS/HTTPS del despliegue, dispositivos
+físicos, otros navegadores y lector de pantalla. Los scripts temporales y capturas
+permanecen fuera del repositorio; no se añadieron dependencias.
+
 ## Administración
 
 Se adapta `AdminOperationsPage.tsx` de Figma Make: resumen, solicitudes, usuarios,
@@ -242,7 +319,7 @@ Mapa de navegación actualizado:
 - **En observación** o **Rechazada** → corregir y reenviar con el mismo ID.
   Se conservan las observaciones anteriores en el historial; vuelve a **Pendiente**.
 - Una habilidad aprobada habilita la vista del mentor descrita arriba. La aprobación
-  administrativa real y logout siguen pendientes; una solicitud pendiente no habilita ofertas.
+  administrativa real requiere integración API; una solicitud pendiente no habilita ofertas.
 
 `AccountService` separa los componentes de `dev/accountMock.ts` y
 `dev/accountStore.ts`. Los cambios personales y solicitudes se guardan en
@@ -346,7 +423,7 @@ Mapa de navegación actualizado:
 - Mis sesiones → detalle, cancelación, validación, reporte o valoración según estado.
 - Mis sesiones / Mis créditos → asistente → perfil del mentor → volver al origen.
 - Mi perfil → editar preferencias → perfil; Mis habilidades → solicitudes para enseñar.
-  Logout sigue mostrando un aviso de destino pendiente al seleccionarlo.
+  Cerrar sesión vuelve a la portada pública, conservando la actividad guardada.
 
 Sesiones y billetera se restauran al recargar mediante `sessionStorage`; las reservas,
 confirmaciones, incidencias, reseñas y movimientos permanecen en `localStorage`.
@@ -546,7 +623,7 @@ Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y `npm run dev`:
   de entrada y búsquedas sin coincidencias. Es el motor local del prototipo, sin un
   proveedor externo de IA.
 - Explorar, Para ti, perfiles de mentor, reservas, sesiones, créditos, perfil personal
-  y solicitudes para enseñar están disponibles. Logout conserva un destino pendiente.
+  y solicitudes para enseñar están disponibles. Logout vuelve a la portada pública.
 
 `src/services/student.ts` define `StudentService`; `src/dev/studentMock.ts` y
 `src/dev/mentorFixtures.ts` proporcionan los datos de prueba. La composición recibe
@@ -635,8 +712,8 @@ en la entrega y esperar la confirmación del equipo antes de la siguiente etapa.
 Están disponibles la portada y la navegación pública: Explorar habilidades, Cómo
 funciona y Compartir mis habilidades. La navegación usa estado `page`, como el prototipo,
 sin rutas URL: al recargar se vuelve al inicio. El registro está conectado a la API;
-login y recuperación de sesión están conectados a la API; logout real y conexión de
-funciones privadas siguen pendientes y muestran un aviso. El perfil inicial solo está
+login y recuperación de sesión están conectados a la API; el cliente de logout usa
+el contrato documentado y la conexión de funciones privadas sigue pendiente. El perfil inicial solo está
 disponible en la vista de desarrollo descrita arriba. El catálogo público usa perfiles de demostración
 del código original; la búsqueda consulta nombre, habilidad y biografía, y las categorías
 rellenan ese mismo buscador. Actualmente los tres mentores de demostración enseñan Python.
@@ -747,9 +824,10 @@ absoluta. El cliente no decide permisos ni interpreta la cookie para dar acceso.
 
 El acceso confirmado muestra una sección provisional con el usuario y rol devueltos
 por la API, el estado del perfil y los destinos privados pendientes. Se conserva
-la navegación pública. Logout, paneles, onboarding y recuperación de contraseña
+la navegación pública. Paneles, onboarding y recuperación de contraseña
 solo muestran avisos de funcionalidad pendiente; no se llaman sus endpoints ni se
-simula cerrar sesión. El registro sigue creando cuentas sin verificar y sin sesión.
+simula una respuesta del servidor. Logout se implementa según el contrato descrito
+al comienzo de este documento. El registro sigue creando cuentas sin verificar y sin sesión.
 
 ### Pruebas de login
 

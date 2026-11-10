@@ -1,7 +1,7 @@
 import { createLocalBookingStore } from './bookingStore';
 import { mockAccountService } from './accountMock';
 import { mentors } from './mentorFixtures';
-import { publishedMentors } from '../data/mentor';
+import { composeMentorCatalog } from '../data/catalog';
 import { ACADEMIC_CREDIT_CONFIG } from '../data/creditConfig';
 
 export const localIdentity = { id: 'frontend-demo-student', name: 'Alex' };
@@ -13,7 +13,6 @@ export const localActivity = createLocalBookingStore({
   async getApprovedRequests() { return (await mockAccountService.getAccount()).requests; },
   async getMentors(ledger) {
     const account = await mockAccountService.getAccount();
-    const own = publishedMentors(account, ledger, { name: account.profile.name ?? localIdentity.name, bio: account.profile.bio ?? '' });
-    return [...structuredClone(mentors), ...own].map(item => ({ ...item, active: item.active && !ledger.suspendedUserIds?.includes(item.ownerUserId ?? `mentor-${item.id}`) }));
+    return composeMentorCatalog(mentors, account, ledger, localIdentity.name);
   },
 });

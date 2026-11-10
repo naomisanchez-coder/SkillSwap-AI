@@ -12,6 +12,7 @@ import type { WeeklyAvailability } from '../data/scheduling';
 import { ACTIVE_SKILLS } from '../data/skillCatalog';
 import { transitionAdmin } from '../data/adminLifecycle';
 import type { AdminActivityAction } from '../data/admin';
+import { notifyCatalogChanged } from '../services/catalog';
 
 export const bookingStorageKey = 'skillswap:frontend-demo:bookings:v1';
 export const bookingDraftKey = 'skillswap:frontend-demo:booking-route:v1';
@@ -85,6 +86,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     validateLedger(next, identity.id, initialWallet, participantInitials);
     try { storage().setItem(bookingStorageKey, JSON.stringify(next)); }
     catch { throw new BookingError('storage_failed', 'No pudimos guardar la reserva. No se retuvieron créditos. Vuelve a intentarlo.'); }
+    notifyCatalogChanged();
     return result(next, session.id);
   };
   const validDraft = (value: unknown): value is BookingDraft => {
@@ -105,6 +107,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     if (next !== previous) {
       try { storage().setItem(bookingStorageKey, JSON.stringify(next)); }
       catch { throw new BookingError('storage_failed', 'No pudimos guardar el cambio. La sesión y los créditos siguen sin modificaciones. Vuelve a intentarlo.'); }
+      notifyCatalogChanged();
     }
     return structuredClone(next);
   });
@@ -118,6 +121,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     validateLedger(ledger, identity.id, initialWallet, participantInitials);
     try { storage().setItem(bookingStorageKey, JSON.stringify(ledger)); }
     catch { throw new BookingError('storage_failed', 'No pudimos guardar los cambios. Se conservó la configuración anterior. Inténtalo nuevamente.'); }
+    notifyCatalogChanged();
     return structuredClone(ledger);
   };
   return {

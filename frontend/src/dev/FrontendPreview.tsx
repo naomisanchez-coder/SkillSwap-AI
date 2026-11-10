@@ -7,7 +7,8 @@ import type { MentorService } from '../services/mentor';
 import type { PublicDestination } from '../components/PublicChrome';
 import type { StudentDashboardSnapshot } from '../data/student';
 import { hasCompletePreferences, summarizeMentorReviews } from '../data/student';
-import { publicMentors } from '../data/publicMentors';
+import { useCatalog } from '../hooks/useCatalog';
+import { mockCatalogService } from './catalogMock';
 import type { StudentService } from '../services/student';
 import type { ProfileService } from '../services/profile';
 import type { AccountService } from '../services/account';
@@ -41,9 +42,12 @@ type Page = PublicDestination | 'profile-setup' | 'dashboard' | 'discover' | 'ex
 const isMentorPage = (value: string): value is MentorPage => Object.values(mentorPages).includes(value as MentorPage);
 type MentorOrigin = Exclude<Page, 'mentor' | 'booking' | 'loading'>;
 /** Composición local independiente del acceso real. Los fixtures viven en los servicios. */
-export default function FrontendPreview({ onRealAccess, studentService = mockStudentService, profileService = mockProfileService, accountService = mockAccountService, mentorService = mockMentorService }: {
-  onRealAccess: (page: 'login' | 'register') => void; studentService?: StudentService; profileService?: ProfileService; accountService?: AccountService; mentorService?: MentorService;
+export default function FrontendPreview({ onRealAccess, onLogout, studentService = mockStudentService, profileService = mockProfileService, accountService = mockAccountService, mentorService = mockMentorService }: {
+  onRealAccess: (page: 'login' | 'register') => void; onLogout: () => void; studentService?: StudentService; profileService?: ProfileService; accountService?: AccountService; mentorService?: MentorService;
 }) {
+  const catalog = useCatalog(mockCatalogService);
+  const [logoutError, setLogoutError] = useState('');
+  const logout = () => { try { onLogout(); } catch { setLogoutError('No pudimos cerrar el acceso de este navegador. Vuelve a intentarlo.'); } };
   const [page, setPage] = useState<Page>('loading');
   const [snapshot, setSnapshot] = useState<StudentDashboardSnapshot | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -76,7 +80,7 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
       else {
         let saved = ''; try { saved = sessionStorage.getItem('skillswap:frontend:page') ?? ''; } catch { /* Navegación en memoria. */ }
         const mentorApproved = next.state.account?.requests.some(item => item.status === 'approved' && item.ownerUserId === next.state.profile.id);
-        setPage(hasCompletePreferences(next.state.profile) ? (isMentorPage(saved) ? (mentorApproved ? saved : 'skills') : saved === 'sessions' || saved === 'wallet' || saved === 'profile' || saved === 'skills' ? saved : saved === 'mentor-application' ? 'skills' : 'dashboard') : 'profile-setup');
+        setPage(hasCompletePreferences(next.state.profile) ? (isMentorPage(saved) ? (mentorApproved ? saved : 'skills') : saved === 'sessions' || saved === 'wallet' || saved === 'profile' || saved === 'skills' ? saved : saved === 'mentor-application' ? 'skills' : ['landing', 'public-explore', 'how-it-works', 'share-skills'].includes(saved) ? saved as Page : 'dashboard') : 'profile-setup');
       }
     }, error => { if (active) { setLoadErrorMessage(error instanceof AccountError || error instanceof BookingError ? error.message : 'No pudimos cargar tu panel. Comprueba que el navegador permita almacenamiento local y vuelve a intentarlo.'); setLoadError(true); setPage('profile-setup'); } });
     return () => { active = false; };
@@ -170,9 +174,11 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
     onLogin: () => onRealAccess('login'),
     onRegister: () => onRealAccess('register'),
     onDashboard: () => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? 'dashboard' : 'profile-setup'),
-    onLogout: () => setPending('Cerrar sesión'),
+    onLogout: logout,
   };
   return <>
+    {logoutError && <aside role="alert" className="p-4 text-[#B54747]">{logoutError}<Button variant="outline" onClick={logout}>Reintentar cierre</Button></aside>}
+    {catalog.error && <aside role="alert" className="p-4 text-[#B54747]">No pudimos actualizar el catálogo.<Button variant="outline" onClick={catalog.retry}>Reintentar catálogo</Button></aside>}
     {page === 'loading' && <p role="status" className="p-6">Cargando tu espacio de aprendizaje…</p>}
     {loadError && <aside role="alert" className="border-b border-[#E8C2C2] bg-[#FFF3F0] p-4 text-[#B54747]">{loadErrorMessage} <Button variant="outline" onClick={() => { setLoadError(false); setPage('loading'); setAttempt(current => current + 1); }}>Reintentar</Button></aside>}
     {page === 'profile-setup' && !loadError && <ProfileSetupPage service={profileService} startEditing backLabel={preferencesOrigin === 'profile' || preferencesOrigin === 'mentor-account' ? 'Volver al perfil' : preferencesOrigin === 'skills' ? 'Volver a mis habilidades' : 'Volver al inicio'} onReset={() => setSnapshot(current => current && ({ ...current, state: { ...current.state, profile: { ...current.state.profile, ...emptyPreferences() } } }))} onBack={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? preferencesOrigin : 'landing')} onComplete={preferences => {
@@ -183,7 +189,7 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
     }} />}
     {(page === 'dashboard' || page === 'discover' || page === 'explore' || page === 'sessions' || page === 'wallet' || page === 'profile' || page === 'skills' || page === 'mentor-application') && snapshot && <StudentShell active={page === 'mentor-application' ? 'skills' : page} userName={snapshot.state.profile.name} userPhoto={photo.url || snapshot.state.profile.photo} credits={snapshot.state.wallet.available}
       notifications={snapshot.state.notifications.filter(item => item.userId === snapshot.state.profile.id)} onReadNotification={id => void markRead(id)}
-      onNavigate={privateNavigate} onPublicHome={() => navigate('landing')} onLogout={() => setPending('Cerrar sesión')}
+      onNavigate={privateNavigate} onPublicHome={() => navigate('landing')} onLogout={logout}
       onMentorSessions={() => openMentorMode('sessions')}
       teachingAction={mentorApproved ? { label: 'Ir al panel de mentor', onClick: () => openMentorMode() } : { label: 'Quiero ser mentor', onClick: () => openApplication() }}>
       {page === 'dashboard' && <StudentDashboardPage state={snapshot.state} mentors={snapshot.mentors} onExplore={() => navigate('explore')}
@@ -193,20 +199,20 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
         recommended={page === 'explore'} filters={filters} onFiltersChange={setFilters} onViewMentor={openMentor} onEditPreferences={() => editPreferences()} />}
       {page === 'sessions' && snapshot.state.activity && <SessionsHubPage ledger={snapshot.state.activity} service={studentService} onChanged={changedActivity} onExplore={() => navigate('discover')} />}
       {page === 'wallet' && snapshot.state.activity && <CreditsHubPage state={snapshot.state.activity} />}
-      {page === 'profile' && <ProfilePage profile={snapshot.state.profile} photo={photo} service={accountService} onChanged={changedAccount} onEditPreferences={() => editPreferences('profile')} onLogout={() => setPending('Cerrar sesión')} />}
+      {page === 'profile' && <ProfilePage profile={snapshot.state.profile} photo={photo} service={accountService} onChanged={changedAccount} onEditPreferences={() => editPreferences('profile')} onLogout={logout} />}
       {page === 'skills' && <SkillsPage profile={snapshot.state.profile} requests={snapshot.state.account?.requests ?? []} service={accountService} onNew={() => openApplication()} onEdit={openApplication} onEditPreferences={() => editPreferences('skills')} />}
       {page === 'mentor-application' && <MentorApplicationPage key={applicationKey} initialRequest={snapshot.state.account?.requests.find(item => item.id === editingRequestId)} existingRequests={snapshot.state.account?.requests ?? []} service={accountService} onChanged={changedAccount} onBack={() => navigate('skills')} />}
       {(page === 'sessions' || page === 'wallet') && <RecommendationAssistant mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings} onViewMentor={openMentor} />}
     </StudentShell>}
     {isMentorPage(page) && snapshot && <MentorArea key={attempt} active={Object.entries(mentorPages).find(([, value]) => value === page)![0] as MentorDestination} service={mentorService} studentService={studentService} accountService={accountService}
       profile={snapshot.state.profile} photo={photo} notifications={snapshot.state.notifications} onReadNotification={id => void markRead(id)} onNavigate={next => navigate(mentorPages[next])}
-      onStudentMode={() => void studentMode()} onLedger={changedActivity} onAccount={changedAccount} onEditPreferences={() => editPreferences('mentor-account')} onApplication={() => openApplication()} onLogout={() => setPending('Cerrar sesión')} />}
+      onStudentMode={() => void studentMode()} onLedger={changedActivity} onAccount={changedAccount} onEditPreferences={() => editPreferences('mentor-account')} onApplication={() => openApplication()} onLogout={logout} />}
     {page === 'mentor' && snapshot && <MentorProfilePage key={mentorId} profile={snapshot.state.profile} mentorId={mentorId} service={studentService}
       onBack={() => { restoring.current = true; navigate(mentorOrigin); }} onBooking={() => void startBooking()} />}
     {page === 'booking' && snapshot && <BookingFlowPage key={mentorId} mentorId={mentorId} draft={bookingDraft} service={studentService} onConfirmed={confirmedBooking}
       onBack={() => void leaveBooking('mentor')} onHome={() => void leaveBooking('dashboard')} onBuyCredits={() => void leaveBooking('wallet')} onSessions={() => void leaveBooking('sessions')} />}
-    {page === 'landing' && <LandingPage {...actions} />}
-    {page === 'public-explore' && <PublicExplorePage {...actions} mentors={publicMentors} searchQuery={publicQuery} onSearchChange={setPublicQuery} onPrivateExplore={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? 'explore' : 'profile-setup')} onMentor={openMentor} />}
+    {page === 'landing' && <LandingPage {...actions} mentors={catalog.mentors} />}
+    {page === 'public-explore' && <PublicExplorePage {...actions} mentors={catalog.mentors} searchQuery={publicQuery} onSearchChange={setPublicQuery} onPrivateExplore={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? 'explore' : 'profile-setup')} onMentor={openMentor} />}
     {page === 'how-it-works' && <HowItWorksPage {...actions} />}
     {page === 'share-skills' && <ShareSkillsPage {...actions} onStartSharing={() => openApplication()} />}
     {(pending || notificationError) && <Modal labelledBy="pending-destination-title" onClose={() => { setPending(null); setNotificationError(false); }}>

@@ -15,12 +15,16 @@ export class AuthError extends Error {
   }
 }
 
-async function requestSession(path: 'login' | 'me', signal: AbortSignal, input?: { email: string; password: string; remember: boolean }): Promise<AuthSession> {
-  const base = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '');
+function apiBase(value: string | undefined) {
+  const base = value?.trim().replace(/\/+$/, '');
   try {
     const url = new URL(base ?? '');
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
   } catch { throw new AuthError(0, 'API_CONFIG_INVALID', 'No se puede conectar con el servicio. Contacta al equipo del proyecto.'); }
+  return base!;
+}
+async function requestSession(path: 'login' | 'me', signal: AbortSignal, input?: { email: string; password: string; remember: boolean }): Promise<AuthSession> {
+  const base = apiBase(import.meta.env.VITE_API_URL);
   let response: Response;
   let body: unknown;
   try {
@@ -64,3 +68,15 @@ async function requestSession(path: 'login' | 'me', signal: AbortSignal, input?:
 
 export const login = (input: { email: string; password: string; remember: boolean }, signal: AbortSignal) => requestSession('login', signal, input);
 export const getSession = (signal: AbortSignal) => requestSession('me', signal);
+
+/** Contrato documentado: cookie, CSRF de sesión en memoria, sin campos de negocio. */
+export async function logoutSession(csrfToken: string, signal: AbortSignal, baseUrl = import.meta.env.VITE_API_URL): Promise<void> {
+  const base = apiBase(baseUrl);
+  if (!/^[a-f0-9]{64}$/.test(csrfToken)) throw new AuthError(0, 'CSRF_MISSING', 'No pudimos autorizar el cierre. Vuelve a comprobar la sesión.');
+  let response: Response;
+  try {
+    response = await fetch(`${base}/auth/logout`, { method: 'POST', credentials: 'include', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: '{}', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+  } catch { throw new AuthError(0, 'NETWORK_ERROR', 'No pudimos cerrar tu sesión porque no se pudo conectar con el servicio. Vuelve a intentarlo.'); }
+  const data: unknown = await response.json().catch(() => null);
+  if (response.status !== 200 || !data || typeof data !== 'object' || (data as { status?: unknown }).status !== 'ok') throw new AuthError(response.status, 'LOGOUT_FAILED', 'No pudimos confirmar el cierre de tu sesión. Vuelve a intentarlo o comprueba la sesión.');
+}
