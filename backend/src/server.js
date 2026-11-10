@@ -6,7 +6,8 @@ import { readEmailConfig, readOtpConfig } from './config/email.js';
 import { createSmtpMailer } from './adapters/smtp.js';
 import { createEmailRepository } from './modules/auth/email.repository.js';
 import { createEmailService } from './modules/auth/email.service.js';
-import { createCodeProtection } from './modules/auth/email-code.js';
+import { createEmailRateRepository } from './modules/auth/email-rate.repository.js';
+import { createRateIdentifier, createCodeProtection } from './modules/auth/email-code.js';
 
 let database;
 let emailService;
@@ -38,7 +39,7 @@ try {
   const smtp = readEmailConfig(process.env);
   if (smtp) {
     const otp = readOtpConfig(process.env);
-    emailService = createEmailService({ repository: createEmailRepository(database),
+    emailService = createEmailService({ rateRepository: createEmailRateRepository(database), rateIdentifier: createRateIdentifier(otp.rateKeyHex), repository: createEmailRepository(database),
       mailer: createSmtpMailer(smtp), protection: createCodeProtection(otp.protection), policy: otp.policy,
       onEvent(event) { console.info(`email_verification: ${event}`); },
     });

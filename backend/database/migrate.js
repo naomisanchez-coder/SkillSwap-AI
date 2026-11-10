@@ -5,6 +5,8 @@ import { pathToFileURL } from 'node:url';
 import mysql from 'mysql2/promise';
 
 const version = '001_auth_foundation';
+export const latestMigration = '002_otp_delivery_safety';
+const versions = [version, latestMigration];
 const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth']);
 const expectedTables = ['schema_migrations', 'careers', 'career_cycles', 'users',
   'student_profiles', 'email_verifications', 'auth_sessions', 'credit_transactions'].sort();
@@ -29,20 +31,27 @@ export function migrationConfiguration(env, apply = false) {
     connectTimeout: 5000, timezone: 'Z', dateStrings: true };
 }
 
-export async function readMigration() {
-  const bytes = await readFile(new URL('./migrations/001_auth_foundation.sql', import.meta.url));
-  const sql = bytes.toString('utf8');
-  // Deliberately supports only this reviewed SQL format: no procedures, delimiters,
-  // block comments or semicolons inside literals. Do not use as a generic SQL parser.
-  const statements = sql.replace(/^\s*--.*$/gm, '').split(';').map((s) => s.trim()).filter(Boolean);
-  ensure(statements.length === expectedTables.length + 3, 'MIGRATION_FORMAT_INVALID');
-  ensure(statements.every((s) => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s)),
-    'MIGRATION_FORMAT_INVALID');
-  ensure(statements.at(-1) === 'INSERT INTO schema_migrations (version, checksum)\nVALUES (@skillswap_migration_version, @skillswap_migration_checksum)', 'MIGRATION_HISTORY_INVALID');
-  const created = statements.filter((s) => s.startsWith('CREATE TABLE '));
-  ensure(JSON.stringify(created.map((s) => s.match(/^CREATE TABLE ([a-z_]+) /)?.[1]).sort()) ===
-    JSON.stringify(expectedTables), 'MIGRATION_TABLES_INVALID');
-  return { version, checksum: createHash('sha256').update(bytes).digest('hex'), statements };
+export async function readMigration(selected = version) {
+  ensure(versions.includes(selected), 'MIGRATION_VERSION_INVALID');
+  const bytes = await readFile(new URL(`./migrations/${selected}.sql`, import.meta.url));
+  const statements = bytes.toString('utf8').replace(/^\s*--.*$/gm, '').split(';').map(s => s.trim()).filter(Boolean);
+  ensure(statements[0] === "SET SESSION time_zone = '+00:00'" && statements[1] === "SET SESSION sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'", 'MIGRATION_FORMAT_INVALID');
+  const history = 'INSERT INTO schema_migrations (version, checksum)\nVALUES (@skillswap_migration_version, @skillswap_migration_checksum)';
+  ensure(statements.at(-1) === history, 'MIGRATION_HISTORY_INVALID');
+  const created = statements.filter(s => s.startsWith('CREATE TABLE '));
+  const tables = selected === version ? expectedTables : ['otp_request_limits'];
+  ensure(JSON.stringify(created.map(s => s.match(/^CREATE TABLE ([a-z_]+) /)?.[1]).sort()) === JSON.stringify(tables), 'MIGRATION_TABLES_INVALID');
+  const alter = "ALTER TABLE email_verifications\n  DROP CHECK chk_verifications_status,\n  ADD CONSTRAINT chk_verifications_status CHECK (status IN ('SENDING', 'PENDING', 'CONSUMED', 'REVOKED', 'EXPIRED', 'EXHAUSTED')),\n  ALTER COLUMN status SET DEFAULT 'SENDING'";
+  ensure(statements.length === (selected === version ? expectedTables.length + 3 : 5), 'MIGRATION_FORMAT_INVALID');
+  ensure(statements.every(s => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s) || (selected === latestMigration && s === alter)), 'MIGRATION_FORMAT_INVALID');
+  const checksum = createHash('sha256').update(bytes).digest('hex');
+  if (selected === version) ensure(checksum === 'a544084c180a8c8ce701bd506bc98819d4e433b61460b1b20b7dbe4f0e1061c8', 'MIGRATION_IMMUTABLE_CHECKSUM');
+  return { version: selected, checksum, statements };
+}
+
+export async function readMigrations(through = version) {
+  ensure(versions.includes(through), 'MIGRATION_VERSION_INVALID');
+  return Promise.all(versions.slice(0, versions.indexOf(through) + 1).map(v => readMigration(v)));
 }
 
 export async function executeMigrationStatements(connection, statements) {
@@ -52,15 +61,23 @@ export async function executeMigrationStatements(connection, statements) {
 
 // Conservative parser for direct SHOW GRANTS output, not arbitrary GRANT SQL.
 // Never infer minimum privileges from global rights, roles or wildcard scopes.
-export function checkMigrationPrivileges(rows, database, partialRevokes, { requireUpdate = false } = {}) {
+export function checkMigrationPrivileges(rows, database, partialRevokes, { requireUpdate = false, requireAlter = false } = {}) {
   ensure(allowedSchemas.has(database), 'MIGRATION_TARGET_INVALID');
   ensure([0, 1, '0', '1'].includes(partialRevokes), 'MIGRATION_PRIVILEGE_MODE_UNKNOWN');
   ensure(Array.isArray(rows) && rows.length > 0, 'MIGRATION_PRIVILEGES_MISSING');
   const literalMode = Number(partialRevokes) === 1;
   const targetPrivileges = new Set();
+  let tableAlter = false;
   for (const row of rows) {
     const values = Object.values(row);
     ensure(values.length === 1 && typeof values[0] === 'string', 'MIGRATION_GRANT_AMBIGUOUS');
+    // Table-level grants use literal schema names, not database-level patterns.
+    const alterGrant = values[0].match(/^GRANT ALTER ON `(skillswap_ai|skillswap_ai_test_auth)`\.`email_verifications` TO `(?:``|[^`])+`@`(?:``|[^`])+`$/);
+    if (alterGrant) {
+      ensure(requireAlter, 'MIGRATION_EXCESS_PRIVILEGES_REJECTED');
+      if (alterGrant[1] === database) tableAlter = true;
+      continue;
+    }
     const match = values[0].match(/^GRANT ([A-Z_, ]+) ON (\*\.\*|`(?:``|[^`])+`\.\*) TO `(?:``|[^`])+`@`(?:``|[^`])+`$/);
     ensure(match, 'MIGRATION_GRANT_AMBIGUOUS');
     const privileges = match[1].split(', ');
@@ -90,10 +107,11 @@ export function checkMigrationPrivileges(rows, database, partialRevokes, { requi
   }
   const required = ['CREATE', 'REFERENCES', 'SELECT', 'INSERT'];
   if (requireUpdate) required.push('UPDATE');
+  if (requireAlter) ensure(tableAlter, 'MIGRATION_PRIVILEGES_MISSING');
   ensure(required.every((privilege) => targetPrivileges.has(privilege)), 'MIGRATION_PRIVILEGES_MISSING');
 }
 
-async function inspect(connection, config, migration) {
+async function inspect(connection, config, migrations) {
   const [[instance]] = await connection.query(
     'SELECT VERSION() AS version, DATABASE() AS db, @@port AS port, CURRENT_USER() AS account, @@GLOBAL.partial_revokes AS partialRevokes');
   ensure(/^8\.4\./.test(instance.version) && instance.db === config.database && instance.port === 3306,
@@ -101,7 +119,7 @@ async function inspect(connection, config, migration) {
   const account = instance.account.slice(0, instance.account.lastIndexOf('@'));
   ensure(account === config.user && account !== 'skillswap_app', 'MIGRATION_IDENTITY_INVALID');
   const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
-  checkMigrationPrivileges(grants, config.database, instance.partialRevokes);
+  checkMigrationPrivileges(grants, config.database, instance.partialRevokes, { requireAlter: migrations.length > 1 });
   const [objects] = await connection.execute(
     'SELECT TABLE_NAME AS name, TABLE_TYPE AS type, ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
     [config.database]);
@@ -110,14 +128,35 @@ async function inspect(connection, config, migration) {
     'SELECT (SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ?) + (SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA = ?) AS count',
     [config.database, config.database]);
   ensure(Number(other.count) === 0, 'MIGRATION_UNEXPECTED_OBJECTS');
-  if (!objects.length) return 'pending';
-  ensure(JSON.stringify(objects.map((o) => o.name).sort()) === JSON.stringify(expectedTables) &&
-    objects.every((o) => o.type === 'BASE TABLE' && o.engine === 'InnoDB'), 'MIGRATION_PARTIAL_OR_FOREIGN_SCHEMA');
+  if (!objects.length) return 0;
   const [history] = await connection.query('SELECT version, checksum FROM schema_migrations ORDER BY version');
-  ensure(history.length === 1 && history[0].version === migration.version &&
-    history[0].checksum === migration.checksum, 'MIGRATION_HISTORY_MISMATCH');
-  await checkStructure(connection, config.database, migration);
-  return 'applied';
+  ensure(history.length > 0 && history.length <= migrations.length && history.every((row, i) => row.version === migrations[i].version && row.checksum === migrations[i].checksum), 'MIGRATION_HISTORY_MISMATCH');
+  const applied = migrations.slice(0, history.length);
+  const tables = [...expectedTables, ...(history.length > 1 ? ['otp_request_limits'] : [])].sort();
+  ensure(JSON.stringify(objects.map((o) => o.name).sort()) === JSON.stringify(tables) &&
+    objects.every((o) => o.type === 'BASE TABLE' && o.engine === 'InnoDB'), 'MIGRATION_PARTIAL_OR_FOREIGN_SCHEMA');
+  await checkStructure(connection, config.database, { statements: applied.flatMap(m => m.statements) });
+  {
+    const [status] = await connection.execute("SELECT COLUMN_DEFAULT AS value FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'email_verifications' AND COLUMN_NAME = 'status'", [config.database]);
+    ensure(status.length === 1 && status[0].value === (history.length > 1 ? 'SENDING' : 'PENDING'), 'MIGRATION_STATUS_DEFAULT_MISMATCH');
+    const [checks] = await connection.execute("SELECT CHECK_CLAUSE AS clause FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = ? AND CONSTRAINT_NAME = 'chk_verifications_status'", [config.database]);
+    // MySQL exposes charset introducers and backslash-escaped quotes in this
+    // metadata. Match the entire known IN expression, never just extract words
+    // from an arbitrary CHECK (which could contain an additional OR predicate).
+    const clause = checks.length === 1 ? checks[0].clause.replaceAll("\\'", "'")
+      .replace(/_(?:utf8mb4|utf8mb3|ascii|latin1|binary)(?=')/gi, '')
+      .replaceAll('`status`', 'status').replace(/\s/g, '') : '';
+    const expression = clause.match(/^\(statusin\((.*)\)\)$/i) ?? clause.match(/^statusin\((.*)\)$/i);
+    const values = expression ? expression[1].split(',') : [];
+    const states = values.length && values.every(value => /^'[A-Z_]+'$/.test(value))
+      ? values.map(value => value.slice(1, -1)).sort() : [];
+    ensure(JSON.stringify(states) === JSON.stringify([...(history.length > 1 ? ['SENDING'] : []),'PENDING','CONSUMED','REVOKED','EXPIRED','EXHAUSTED'].sort()), 'MIGRATION_STATUS_CHECK_MISMATCH');
+  }
+  if (migrations.length > 1 && history.length === 1) {
+    const [[active]] = await connection.query("SELECT COUNT(*) AS count FROM email_verifications WHERE created_at > DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 1 HOUR) OR (status = 'PENDING' AND expires_at > UTC_TIMESTAMP(6))");
+    ensure(Number(active.count) === 0, 'MIGRATION_LEGACY_REQUESTS_REVIEW_REQUIRED');
+  }
+  return history.length;
 }
 
 async function checkStructure(connection, database, migration) {
@@ -130,7 +169,7 @@ async function checkStructure(connection, database, migration) {
   ensure(checks.every((c) => c.enforced === 'YES'), 'MIGRATION_CHECK_DISABLED');
   for (const statement of migration.statements.filter((s) => s.startsWith('CREATE TABLE '))) {
     const table = statement.match(/^CREATE TABLE ([a-z_]+) /)[1];
-    const expected = [...statement.matchAll(/^  ([a-z_]+) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT|BOOLEAN)/gm)];
+    const expected = [...statement.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT|BOOLEAN)/gm)];
     const actual = columns.filter((c) => c.t === table);
     ensure(actual.length === expected.length, 'MIGRATION_COLUMNS_MISMATCH');
     expected.forEach((match, index) => {
@@ -147,35 +186,38 @@ async function checkStructure(connection, database, migration) {
 }
 
 export async function runMigration(connection, config, {
-  apply = false, allowDdl = false, validatedChecksum,
+  apply = false, allowDdl = false, validatedChecksum, validatedChecksums = {}, through = version,
 } = {}) {
   ensure(config.host === '127.0.0.1' && config.port === 3306 && config.user !== 'skillswap_app' &&
-    typeof config.database === 'string' && config.database.length <= 64 &&
     allowedSchemas.has(config.database), 'MIGRATION_TARGET_INVALID');
-  const migration = await readMigration();
+  const migrations = await readMigrations(through);
+  const migration = migrations.at(-1);
   if (apply) {
     ensure(allowDdl === true, 'MIGRATION_DDL_NOT_AUTHORIZED');
-    if (config.database === 'skillswap_ai') {
-      // Operator attestation after isolated validation; not proof of a test run.
-      ensure(validatedChecksum === migration.checksum, 'MIGRATION_ISOLATED_VALIDATION_REQUIRED');
+    ensure(validatedChecksums && typeof validatedChecksums === 'object' && !Array.isArray(validatedChecksums), 'MIGRATION_VALIDATION_MAP_INVALID');
+    if (config.database === 'skillswap_ai') for (const item of migrations) {
+      const checksum = through === version ? validatedChecksum : validatedChecksums[item.version];
+      ensure(checksum === item.checksum, 'MIGRATION_ISOLATED_VALIDATION_REQUIRED');
     }
   }
-  if (!apply) return { state: await inspect(connection, config, migration), checksum: migration.checksum, applied: false };
+  const report = (count, applied) => ({ state: count === migrations.length ? 'applied' : 'pending', checksum: migration.checksum, applied,
+    ...(migrations.length > 1 ? { migrations: migrations.map((m,i) => ({ version: m.version, checksum: m.checksum, state: i < count ? 'applied' : 'pending' })) } : {}) });
+  if (!apply) return report(await inspect(connection, config, migrations), false);
   const lockName = `skillswap-migrations:${createHash('sha256').update(config.database).digest('hex').slice(0, 32)}`;
   const [[lock]] = await connection.execute('SELECT GET_LOCK(?, 5) AS acquired', [lockName]);
   ensure(lock.acquired === 1, 'MIGRATION_LOCK_UNAVAILABLE');
   try {
-    // Reinspect after acquiring the lock: no time-of-check/time-of-use gap.
-    const state = await inspect(connection, config, migration);
-    if (state === 'applied') return { state, checksum: migration.checksum, applied: false };
-    await connection.execute('SET @skillswap_migration_version = ?, @skillswap_migration_checksum = ?',
-      [migration.version, migration.checksum]);
-    await executeMigrationStatements(connection, migration.statements);
-    ensure(await inspect(connection, config, migration) === 'applied', 'MIGRATION_POSTCHECK_FAILED');
-    return { state: 'applied', checksum: migration.checksum, applied: true };
-  } finally {
-    await connection.execute('SELECT RELEASE_LOCK(?)', [lockName]);
-  }
+    let count = await inspect(connection, config, migrations);
+    const initial = count;
+    while (count < migrations.length) {
+      const item = migrations[count];
+      await connection.execute('SET @skillswap_migration_version = ?, @skillswap_migration_checksum = ?', [item.version, item.checksum]);
+      await executeMigrationStatements(connection, item.statements);
+      ensure(await inspect(connection, config, migrations) === count + 1, 'MIGRATION_POSTCHECK_FAILED');
+      count++;
+    }
+    return report(count, count > initial);
+  } finally { await connection.execute('SELECT RELEASE_LOCK(?)', [lockName]); }
 }
 
 const direct = process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
@@ -183,7 +225,7 @@ if (direct) {
   let connection;
   try {
     const args = process.argv.slice(2);
-    ensure(args.length === 0 || (args.length === 1 && ['--check', '--apply'].includes(args[0])), 'MIGRATION_ARGUMENT_INVALID');
+    ensure(args.length <= 2 && (args.length === 0 || ['--check', '--apply'].includes(args[0])) && (args.length < 2 || args[1] === `--through=${latestMigration}`), 'MIGRATION_ARGUMENT_INVALID');
     const apply = args[0] === '--apply';
     // Deliberately no dotenv or DB_* fallback: migration identity is separate.
     const config = migrationConfiguration(process.env, apply);
@@ -191,6 +233,8 @@ if (direct) {
     const result = await runMigration(connection, config, {
       apply, allowDdl: process.env.MIGRATION_ALLOW_DDL === 'yes',
       validatedChecksum: process.env.MIGRATION_VALIDATED_CHECKSUM,
+      through: args[1] ? latestMigration : version,
+      validatedChecksums: process.env.MIGRATION_VALIDATED_CHECKSUMS ? JSON.parse(process.env.MIGRATION_VALIDATED_CHECKSUMS) : {},
     });
     console.info(JSON.stringify(result));
   } catch (error) {

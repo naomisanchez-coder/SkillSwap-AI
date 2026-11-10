@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes, createHmac } from 'node:crypto';
 import { createCodeProtection } from '../src/modules/auth/email-code.js';
-import { createEmailService, validateEmailRequest } from '../src/modules/auth/email.service.js';
+import { createEmailService as rawEmailService, validateEmailRequest } from '../src/modules/auth/email.service.js';
 
-// Synthetic policy injected for algorithm tests; no production defaults inferred.
+// Approved policy; transport/persistence are substituted in these unit tests.
+const createEmailService = options => rawEmailService({ rateRepository: { take: async () => ({ allowed: true }) }, rateIdentifier: () => randomBytes(32), ...options });
 const policy = { ttlSeconds: 600, cooldownSeconds: 60, windowSeconds: 3600, maxPerWindow: 5, maxAttempts: 5 };
 const email = 'prueba.aislada@tecsup.edu.pe';
 const protection = () => createCodeProtection({ keyHex: randomBytes(32).toString('hex'), keyVersion: 'test-v1', digits: 6 });
@@ -28,7 +29,7 @@ test('send-code accepts only normalized institutional email and rejects extra fi
   for (const body of [null, [], {}, { email, code: 'extra' }, { email: 'third.party@example.invalid' },
     { email: 'prueba.aislada+alias@tecsup.edu.pe' }, { email: 2 }]) assert.throws(() => validateEmailRequest(body), e => e.code === 'VALIDATION_ERROR');
 });
-test('public acceptance is uniform and precedes eligibility/persistence/network work', async () => {
+test('public acceptance is uniform after quota admission and precedes eligibility/network work', async () => {
   let started = false, sent = 0;
   const service = createEmailService({ policy, protection: protection(), repository: {
     health: async () => {}, reserve: async () => { started = true; return null; },

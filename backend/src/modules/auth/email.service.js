@@ -1,3 +1,5 @@
+import { otpPolicy } from './email.policy.js';
+
 import { randomUUID } from 'node:crypto';
 import { PublicError } from '../../errors/PublicError.js';
 
@@ -10,18 +12,17 @@ export function validateEmailRequest(input) {
 }
 
 export function validateDeliveryPolicy(policy) {
-  if (!policy || Object.values(policy).some(v => !Number.isInteger(v) || v < 1) ||
-      Object.keys(policy).length !== 5 || !['ttlSeconds','cooldownSeconds','windowSeconds','maxPerWindow','maxAttempts'].every(k => Object.hasOwn(policy,k)) ||
-      policy.ttlSeconds > 3600 || policy.cooldownSeconds < 60 || policy.windowSeconds < policy.cooldownSeconds || policy.windowSeconds > 86400 ||
-      policy.maxPerWindow > 20 || policy.maxAttempts > 10) throw new Error('Invalid delivery policy');
+  if (!policy || Object.keys(policy).length !== 5 || Object.entries(otpPolicy).some(([key,value]) => policy[key] !== value)) throw new Error('Approved OTP policy required');
 }
 
-export function createEmailService({ repository, mailer, protection, policy, onEvent = () => {} }) {
+export function createEmailService({ repository, rateRepository, rateIdentifier, mailer, protection, policy = otpPolicy, onEvent = () => {} }) {
   validateDeliveryPolicy(policy);
+  if (typeof rateRepository?.take !== 'function' || typeof rateIdentifier !== 'function') throw new Error('Persistent rate limiter required');
   policy = Object.freeze({ ...policy });
   const jobs = [];
   const waiters = [];
   let active = 0;
+  let admissions = 0;
   let closed = false;
   const signal = (event) => { try { onEvent(event); } catch { /* Diagnostics must not alter delivery semantics. */ } };
   function pump() {
@@ -29,7 +30,7 @@ export function createEmailService({ repository, mailer, protection, policy, onE
       const job = jobs.shift(); active++;
       void deliver(job).finally(() => {
         active--; pump();
-        if (!active && !jobs.length) for (const resolve of waiters.splice(0)) resolve();
+        if (!admissions && !active && !jobs.length) for (const resolve of waiters.splice(0)) resolve();
       });
     }
   }
@@ -44,6 +45,9 @@ export function createEmailService({ repository, mailer, protection, policy, onE
       // Transaction committed and connection released before any network call.
       if (message.expiresAt.getTime() <= Date.now()) throw new Error('Expired before delivery');
       await mailer.sendVerification({ ...message, code });
+      if (!await repository.confirmDelivery(id)) {
+        await repository.revoke(id); signal('activation_rejected'); return;
+      }
       signal('smtp_accepted'); // Not proof of mailbox reception.
     } catch {
       signal(reserved ? 'delivery_failed' : 'persistence_failed');
@@ -56,17 +60,27 @@ export function createEmailService({ repository, mailer, protection, policy, onE
     limits: Object.freeze({ cooldownSeconds: policy.cooldownSeconds, windowSeconds: policy.windowSeconds, maxPerWindow: policy.maxPerWindow }),
     async request(input) {
       const email = validateEmailRequest(input);
-      if (closed || active + jobs.length >= 100) throw new PublicError('SERVICE_UNAVAILABLE');
-      try { await repository.health(); } catch { throw new PublicError('SERVICE_UNAVAILABLE'); }
-      // Recheck after await so parallel health checks cannot overflow queue capacity.
-      if (closed || active + jobs.length >= 100) throw new PublicError('SERVICE_UNAVAILABLE');
-      const id = randomUUID();
-      jobs.push({ id, email });
-      // Scheduling after acceptance prevents eligibility/SMTP latency leaking via response time.
-      setImmediate(pump);
-      return { status: 'accepted', verificationId: id, message: 'Si corresponde, recibirás un código de verificación.' };
+      if (closed || active + jobs.length + admissions >= 100) throw new PublicError('SERVICE_UNAVAILABLE');
+      admissions++;
+      try {
+        await repository.health();
+        const admission = await rateRepository.take(rateIdentifier(email));
+        if (!admission.allowed) {
+          const error = new PublicError('RATE_LIMITED');
+          error.retryAfter = admission.retryAfter;
+          throw error;
+        }
+        if (closed) throw new PublicError('SERVICE_UNAVAILABLE');
+        const id = randomUUID();
+        jobs.push({ id, email });
+        setImmediate(pump);
+        return { status: 'accepted', verificationId: id, message: 'Si corresponde, recibirás un código de verificación.' };
+      } catch (error) {
+        if (error instanceof PublicError) throw error;
+        throw new PublicError('SERVICE_UNAVAILABLE');
+      } finally { admissions--; if (!admissions && !active && !jobs.length) for (const resolve of waiters.splice(0)) resolve(); }
     },
-    idle() { return active || jobs.length ? new Promise(resolve => waiters.push(resolve)) : Promise.resolve(); },
-    async close() { closed = true; if (active || jobs.length) await new Promise(resolve => waiters.push(resolve)); mailer.close?.(); },
+    idle() { return admissions || active || jobs.length ? new Promise(resolve => waiters.push(resolve)) : Promise.resolve(); },
+    async close() { closed = true; if (admissions || active || jobs.length) await new Promise(resolve => waiters.push(resolve)); mailer.close?.(); },
   });
 }

@@ -1,3 +1,5 @@
+import { otpPolicy, otpDigits } from '../modules/auth/email.policy.js';
+
 // No dotenv side effects here: the server supplies its existing private environment.
 export function readEmailConfig(source) {
   if (source.SMTP_ENABLED === undefined || source.SMTP_ENABLED === '' || source.SMTP_ENABLED === 'false') return null;
@@ -17,15 +19,13 @@ export function readEmailConfig(source) {
 }
 
 export function readOtpConfig(source) {
-  const integer = (key) => {
-    if (typeof source[key] !== 'string' || !/^\d+$/.test(source[key])) throw new Error('OTP policy configuration required');
-    const value = Number(source[key]);
-    if (!Number.isSafeInteger(value) || value < 1) throw new Error('Invalid OTP policy configuration');
-    return value;
-  };
-  return {
-    protection: { keyHex: source.OTP_HMAC_KEY_HEX, keyVersion: source.OTP_HMAC_KEY_VERSION, digits: integer('OTP_DIGITS') },
-    policy: { ttlSeconds: integer('OTP_TTL_SECONDS'), cooldownSeconds: integer('OTP_COOLDOWN_SECONDS'),
-      windowSeconds: integer('OTP_WINDOW_SECONDS'), maxPerWindow: integer('OTP_MAX_PER_WINDOW'), maxAttempts: integer('OTP_MAX_ATTEMPTS') },
-  };
+  const settings = { OTP_DIGITS: otpDigits, OTP_TTL_SECONDS: otpPolicy.ttlSeconds,
+    OTP_COOLDOWN_SECONDS: otpPolicy.cooldownSeconds, OTP_WINDOW_SECONDS: otpPolicy.windowSeconds,
+    OTP_MAX_PER_WINDOW: otpPolicy.maxPerWindow, OTP_MAX_ATTEMPTS: otpPolicy.maxAttempts };
+  for (const [key, value] of Object.entries(settings)) if (source[key] !== undefined && source[key] !== '' && source[key] !== String(value)) throw new Error('OTP policy override rejected');
+  if (!/^[0-9a-fA-F]{64}$/.test(source.OTP_HMAC_KEY_HEX ?? '') ||
+      !/^[0-9a-fA-F]{64}$/.test(source.OTP_RATE_HMAC_KEY_HEX ?? '') ||
+      source.OTP_HMAC_KEY_HEX.toLowerCase() === source.OTP_RATE_HMAC_KEY_HEX.toLowerCase()) throw new Error('Distinct private OTP keys required');
+  return { protection: { keyHex: source.OTP_HMAC_KEY_HEX, keyVersion: source.OTP_HMAC_KEY_VERSION, digits: otpDigits },
+    rateKeyHex: source.OTP_RATE_HMAC_KEY_HEX, policy: otpPolicy };
 }

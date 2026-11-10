@@ -45,8 +45,8 @@ test('implicit TLS is selected on 465 and every enabled OTP setting is explicit'
   createSmtpMailer(readEmailConfig({...env(),SMTP_PORT:'465'}),{createTransport:c=>{options=c;return {close(){}};}});
   assert.equal(options.secure,true);assert.equal(options.requireTLS,true);
   const {readOtpConfig}=await import('../src/config/email.js');
-  assert.throws(()=>readOtpConfig({}),/configuration required/);
-  const source={OTP_HMAC_KEY_HEX:randomBytes(32).toString('hex'),OTP_HMAC_KEY_VERSION:'test',OTP_DIGITS:'6',
+  assert.throws(()=>readOtpConfig({}),/keys required/);
+  const source={OTP_HMAC_KEY_HEX:randomBytes(32).toString('hex'),OTP_HMAC_KEY_VERSION:'test',OTP_RATE_HMAC_KEY_HEX:randomBytes(32).toString('hex'),OTP_DIGITS:'6',
     OTP_TTL_SECONDS:'600',OTP_COOLDOWN_SECONDS:'60',OTP_WINDOW_SECONDS:'3600',OTP_MAX_PER_WINDOW:'5',OTP_MAX_ATTEMPTS:'5'};
   assert.equal(readOtpConfig(source).policy.maxAttempts,5);
   assert.equal(readOtpConfig(source).protection.digits,6);

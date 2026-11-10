@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID, randomBytes, scryptSync } from 'node:crypto';
 import mysql from 'mysql2/promise';
-import { migrationConfiguration, runMigration, executeMigrationStatements, checkMigrationPrivileges } from '../database/migrate.js';
+import { migrationConfiguration, runMigration, executeMigrationStatements, checkMigrationPrivileges, latestMigration, readMigrations } from '../database/migrate.js';
 
 const version = '001_auth_foundation';
 const bytes = await readFile(new URL('../database/migrations/001_auth_foundation.sql', import.meta.url));
@@ -246,6 +246,7 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
 }, async (t) => {
   // Read only explicit integration variables; never fall back to application DB credentials.
   const config = testConfiguration(process.env);
+  const latestTables = [...tables, 'otp_request_limits'].sort();
   let connection;
   try {
     connection = await mysql.createConnection(config);
@@ -254,15 +255,15 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
     assert.equal(instance.db, config.database);
     assert.equal(instance.port, 3306);
     const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
-    checkMigrationPrivileges(grants, config.database, instance.partialRevokes, { requireUpdate: true });
-    await runMigration(connection, config, { apply: true, allowDdl: true });
-    assert.equal((await runMigration(connection, config, { apply: true, allowDdl: true })).applied, false, 'Reapplication must be a verified no-op');
+    checkMigrationPrivileges(grants, config.database, instance.partialRevokes, { requireUpdate: true, requireAlter: true });
+    await runMigration(connection, config, { apply: true, allowDdl: true, through: latestMigration });
+    assert.equal((await runMigration(connection, config, { apply: true, allowDdl: true, through: latestMigration })).applied, false, 'Reapplication must be a verified no-op');
 
     const [metadata] = await connection.execute(
       'SELECT TABLE_NAME AS name, ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?', [config.database]);
-    assert.deepEqual(metadata.map((r) => r.name).sort(), tables);
+    assert.deepEqual(metadata.map((r) => r.name).sort(), latestTables);
     assert.ok(metadata.every((r) => r.engine === 'InnoDB'));
-    for (const table of tables.filter((name) => name !== 'schema_migrations')) {
+    for (const table of latestTables.filter((name) => name !== 'schema_migrations')) {
       const [[row]] = await connection.query(`SELECT COUNT(*) AS count FROM \`${table}\``);
       assert.equal(row.count, 0, 'Test schema must contain no business data before fixtures');
     }
@@ -276,7 +277,7 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
       (column.t === 'email_verifications' && column.c === 'code')));
     const [constraints] = await connection.execute(
       'SELECT CONSTRAINT_TYPE AS type FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ?', [config.database]);
-    assert.equal(constraints.filter((r) => r.type === 'PRIMARY KEY').length, tables.length);
+    assert.equal(constraints.filter((r) => r.type === 'PRIMARY KEY').length, latestTables.length);
     assert.equal(constraints.filter((r) => r.type === 'FOREIGN KEY').length, 7);
     assert.ok(constraints.filter((r) => r.type === 'CHECK').length >= 20);
     await connection.beginTransaction();
@@ -350,12 +351,12 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
     } finally {
       await connection.rollback();
     }
-    for (const table of tables.filter((name) => name !== 'schema_migrations')) {
+    for (const table of latestTables.filter((name) => name !== 'schema_migrations')) {
       const [[row]] = await connection.query(`SELECT COUNT(*) AS count FROM \`${table}\``);
       assert.equal(row.count, 0, 'All synthetic fixtures must be rolled back');
     }
     const [history] = await connection.query('SELECT version, checksum FROM schema_migrations');
-    assert.deepEqual(history, [{ version, checksum }]);
+    assert.deepEqual(history, (await readMigrations(latestMigration)).map(m=>({version:m.version,checksum:m.checksum})));
   } catch (error) {
     // mysql2 errors may contain SQL/bind values; never forward that object to node:test.
     const code = /^[A-Z0-9_]+$/.test(error.code ?? '') ? error.code : 'INTEGRATION_CHECK_FAILED';

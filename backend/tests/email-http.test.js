@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { createApp } from '../src/app.js';
-import { createEmailService } from '../src/modules/auth/email.service.js';
+import { createEmailService as rawEmailService } from '../src/modules/auth/email.service.js';
 import { createCodeProtection } from '../src/modules/auth/email-code.js';
+const createEmailService = options => rawEmailService({ rateRepository: { take: async () => ({ allowed: true }) }, rateIdentifier: () => randomBytes(32), ...options });
 const policy = { ttlSeconds: 600, cooldownSeconds: 60, windowSeconds: 3600, maxPerWindow: 5, maxAttempts: 5 };
 async function run(emailService, work) {
   const server = createApp({ database: { check: async () => {} }, origins: ['http://localhost:5173'], emailService }).listen(0, '127.0.0.1');
@@ -36,5 +37,12 @@ test('configured injection returns exact 202 DTO without cookies/OTP, and cooldo
     assert.match(body.verificationId,/^[0-9a-f-]{36}$/);
     const limited=await post(base,{email:'prueba.aislada@tecsup.edu.pe'});assert.equal(limited.status,429);assert.ok(Number(limited.headers.get('retry-after'))>0);
     await service.idle();assert.equal(sends,0);
+  });
+});
+test('verification remains unavailable: SENDING cannot be submitted to an implemented verifier', async () => {
+  await run(undefined, async base => {
+    const response=await fetch(`${base}/api/auth/email/verify`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({verificationId:'opaque-test-id',code:String(randomInt(0,1000000)).padStart(6,'0')})});
+    assert.equal(response.status,404);
   });
 });

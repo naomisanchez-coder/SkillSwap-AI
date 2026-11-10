@@ -1,6 +1,6 @@
 # Contratos de autenticación — SkillSwap AI
 
-**POST /api/auth/register implementado en 1.3B. POST /api/auth/email/send-code implementado como infraestructura configurable 1.4A, sin entrega real validada. Los demás endpoints de autenticación y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos automáticamente.
+**POST /api/auth/register implementado en 1.3B. POST /api/auth/email/send-code implementado como infraestructura configurable 1.4A, con ampliación 002 aplicada en ambas bases y sin recepción SMTP real validada. Los demás endpoints de autenticación y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos automáticamente.
 
 ## Fuentes y precedencia
 
@@ -130,7 +130,7 @@ No establece cookie de sesión. La decisión de disparar el primer envío de cor
 
 ## 2. Envío o reenvío de código
 
-**Estado: INFRAESTRUCTURA IMPLEMENTADA en 1.4A; SMTP real y valores funcionales pendientes de configurar/aprobar.**
+**Estado: INFRAESTRUCTURA IMPLEMENTADA en 1.4A; política aprobada; ampliación 002 aplicada en ambas bases y SMTP real pendiente.**
 
 **Método y ruta:** `POST /api/auth/email/send-code`.
 
@@ -158,9 +158,9 @@ No establece cookie de sesión. La decisión de disparar el primer envío de cor
 
 Respuesta uniforme para cuentas inexistentes, verificadas o no elegibles, con identificadores indistinguibles en formato. El identificador no autoriza acceso. `202` significa aceptación, no recepción. Fallos generales del servicio pueden producir `503`, sin revelar existencia de cuentas mediante errores específicos de destinatario.
 
-**Autorización y seguridad:** público, sin sesión protegida. Código generado criptográficamente; persistir HMAC ligado al desafío con clave exclusiva del backend. No devolver códigos ni registrarlos. Limitar por IP/correo y controlar reenvíos atómicamente. Un reenvío admitido revoca el desafío previo; un fallo SMTP revoca el nuevo sin restaurar el anterior. No hay reintento automático. La transacción termina antes de SMTP.
+**Autorización y seguridad:** público, sin sesión protegida. Código generado criptográficamente; persistir HMAC ligado al desafío con clave exclusiva del backend. No devolver códigos ni registrarlos. Limitar por IP/correo y controlar reenvíos atómicamente. Un reenvío admitido revoca el desafío previo. El nuevo se crea SENDING y solo pasa a PENDING tras aceptación SMTP y confirmación MySQL. Si falla SMTP, permanece no verificable incluso si falla la revocación compensatoria. No se restaura el anterior ni se reintenta automáticamente. La transacción termina antes de SMTP.
 
-Valores aún pendientes de ratificación: seis dígitos, diez minutos de vigencia, cinco intentos por desafío, espera mínima de 60 segundos y cinco emisiones por hora. No hay defaults de producción; la configuración exige valores explícitos aprobados. Las pruebas usan esos valores como fixtures. Los límites acumulados cuentan también desafíos revocados, expirados o con fallo de entrega.
+Política aprobada: seis dígitos, diez minutos de vigencia, cinco intentos por desafío, espera mínima de 60 segundos y cinco solicitudes admitidas por correo en ventana móvil de una hora. El backend fija estos valores y rechaza sobrescrituras incompatibles. La propuesta 002 cuenta admisiones antes de consultar existencia de cuenta, también cuando no genera desafío o falla la entrega. Los rechazos 429/503 no generan desafío; un fallo posterior puede consumir un cupo ya confirmado.
 
 **Errores:** `422 VALIDATION_ERROR`, `429` con `Retry-After`, `503` y errores comunes.
 
@@ -394,7 +394,7 @@ Migración: `001_auth_foundation.sql`, validada en `skillswap_ai_test_auth` y ap
 
 Los IDs deben generarse en servidor. TECSUP sigue siendo una institución fija de dominio, no un valor editable por React. La gramática pendiente no se inventa en SQL: la restricción estudiantil impone dominio exacto, punto interior, ausencia de puntos consecutivos y de `+`; el servicio de registro implementa la validación más estricta aprobada. El hash codificado requiere prefijo `$` y longitud mínima, pero SQL no prueba que sea un hash criptográfico válido; esa responsabilidad corresponde al servicio de contraseñas.
 
-Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y todas las conexiones escritoras deberán usar UTC. No se fijan duraciones de sesión, vigencia de código ni máximo de intentos por defecto: siguen pendientes de aprobación.
+Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y todas las conexiones escritoras deberán usar UTC. Las duraciones de sesión siguen pendientes. La política OTP aprobada fija 600 segundos y cinco intentos por desafío; el consumo de intentos corresponde a 1.4B.
 
 **Límites que exigen transacciones de servicio posteriores:** crear usuario/perfil conjuntamente; verificar carrera activa; comprobar que la cuenta está verificada y habilitada al crear/usar sesión; consumir desafío, verificar usuario y conceder créditos conjuntamente. La FK del movimiento garantiza propietario del desafío, pero no que esté consumido: el servicio deberá comprobarlo bajo bloqueo. El libro admite movimientos futuros con signo; esta tabla por sí sola no garantiza saldo agregado no negativo ni implementa reservas.
 
@@ -418,3 +418,11 @@ Solo se implementa el registro. El 201 no verifica correo, no confirma envío, n
 Protecciones y respuestas implementadas: 400 JSON malformado, 413 cuerpo mayor de 100kb, 415 falta application/json, 422 validación con fields, 409 duplicado confirmado, 403 origen de navegador no autorizado, 429 con Retry-After y 503 por capacidad de hash/limitador. Un fallo interno conserva 500 genérico. Los límites iniciales por proceso son 10/IP y 5/correo cada 60 segundos, con 2000 claves hash en memoria. Los clientes sin Origin pueden usar la API; con Origin deben coincidir exactamente con CORS_ORIGIN. No hay confianza automática en cabeceras de proxy. Una implantación con múltiples procesos requiere revisar el limitador compartido y el proxy.
 
 Pruebas reales: node scripts/verify-local.js utiliza exclusivamente el esquema aislado y la cuenta DML autorizada. Comprueba HTTP 201, consentimiento persistido 1.0.0, hash, 409 y concurrencia, salud 200 y ausencia de sesiones/verificaciones/créditos. No aplica migraciones nuevas. Los endpoints restantes de este documento continúan siendo contratos de trabajo y sus decisiones pendientes no bloquean el registro actual del prototipo.
+
+## Estado definitivo de infraestructura 1.4A
+
+La migración 002 está aplicada y validada en skillswap_ai_test_auth y skillswap_ai. Incorpora otp_request_limits por HMAC del correo y estado inicial SENDING. Los límites persisten para correos existentes e inexistentes mediante una fila bloqueada y cinco timestamps; los controles por IP/origen siguen siendo complementarios. Ningún correo desconocido se almacena en claro en ese registro.
+
+La política está aprobada y fijada por el backend. Solo queda pendiente configurar y comprobar recepción SMTP real. La verificación 1.4B permanece ausente (404), no implementada: su futuro flujo deberá exigir PENDING vigente, intentos disponibles y HMAC correcto bajo bloqueo; excluir SENDING, REVOKED, EXPIRED, EXHAUSTED y CONSUMED. No se activa ninguna cuenta ni se conceden créditos o sesiones en 1.4A.
+
+Ver [validación de 002](otp-migration-002.md) y [configuración de correo](email-delivery.md). Se conservaron ambos SQL y sus checksums, catálogo principal y fila original de 001. Las pruebas de negocio escriben exclusivamente en el esquema aislado.
