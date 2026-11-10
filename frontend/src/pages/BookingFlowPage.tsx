@@ -9,6 +9,7 @@ import { isEligibleMentor } from '../data/recommendations';
 import { dayNameFromISO, formatSessionDate, formatSessionTime, getNextAvailableDates } from '../data/scheduling';
 import type { StudentService } from '../services/student';
 import { bookingReceiptMessage } from '../data/bookingReceipt';
+import { MeetingLink } from '../components/MeetingLink';
 
 type Step = 'schedule' | 'duration' | 'confirm' | 'success';
 type Actions = { onBack: () => void; onBuyCredits: () => void; onSessions: () => void; onHome: () => void };
@@ -28,7 +29,8 @@ function BookingSuccess({ session, onSessions, onHome }: { session: ConfirmedBoo
           <div className="mt-6 rounded-2xl bg-[#F7F7F2] p-5 text-left">
             <p className="font-bold">{session.skill} con {session.mentorName}</p>
             <p className="mt-2 text-sm text-[#60716C]">{formattedDate} · {formattedTime} · {session.duration} minutos</p>
-            <p className="mt-1 text-sm text-[#60716C]">{session.credits} créditos {session.status === 'cancelled' ? 'devueltos' : session.status === 'completed' ? 'utilizados' : 'retenidos'} · Mentoría virtual · Enlace pendiente</p>
+            <p className="mt-1 text-sm text-[#60716C]">{session.credits} créditos {session.status === 'cancelled' ? 'devueltos' : session.status === 'completed' ? 'utilizados' : 'retenidos'} · Mentoría virtual</p>
+            <div className="mt-2 text-[#60716C]"><MeetingLink session={session} /></div>
           </div>
           <div className="mt-7 flex flex-col sm:flex-row justify-center gap-3">
             <Button size="lg" onClick={onSessions}>Ver mis sesiones</Button>

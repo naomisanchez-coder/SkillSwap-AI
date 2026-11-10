@@ -1,5 +1,73 @@
 # SkillSwap AI — frontend
 
+## Mapa vigente: revisión local y acceso API
+
+Con Vite y `VITE_ENABLE_FRONTEND_PREVIEW=true` se habilita la composición local.
+No modifica cuentas del backend, no guarda contraseñas y no sustituye datos de
+perfil, reservas o historial ya guardados al revisar el registro.
+
+| Entrada / acción | Destino y comportamiento |
+| --- | --- |
+| `/?view=register` o Crear cuenta en la vista local | Formulario original con sus validaciones y aceptación legal; servicio `previewRegistration`, sin HTTP ni creación de cuenta real. |
+| Completar registro local | `EmailVerificationPage`: pendiente → generar código local → incorrecto / expirado / error / comprobación completada. |
+| Reenviar código local | Renueva la vigencia de cinco minutos y limpia el campo; no envía correo. |
+| Continuar con el perfil | Reabre el estudiante de desarrollo y sus preferencias existentes, o el perfil inicial si están incompletas. No acredita correo ni concede sesión API. |
+| Volver a iniciar sesión / Crear cuenta | Formularios navegables sin comprobación automática de sesión en el modo local. El envío manual del login conserva su servicio API existente. |
+| `/?view=register&verification=expired` | Primer código vencido; reenviar permite completar normalmente. Solo desarrollo. |
+| `/?view=register&verification=service-error` | Primer intento falla; reintentar permite continuar. Solo desarrollo. |
+| `/?view=api` con preview habilitado | Acceso API explícito: conserva `/auth/me`, cookies, CSRF, login y registro reales y sus errores. |
+| Preview deshabilitado / producción | Composición API habitual; los parámetros de fixtures no habilitan acceso local. |
+| Registro API confirmado → Verificar correo | Interfaz con integración pendiente; sin emisión, reenvío, entrada de código ni verificación real hasta contar con el contrato de Naomi. |
+| Mentor → Mi perfil | Resumen académico compartido: habilidades aprobadas, ofertas publicadas y media/cantidad de reseñas de los servicios actuales. |
+| Comprobante / Administración → Sesiones → detalle | Muestra plataforma y URL guardadas cuando son válidas, o Enlace pendiente cuando faltan o son inválidas. |
+
+La pantalla de correo adapta `EmailVerificationPage.tsx` de Figma Make: conserva
+estructura, colores, tipografía, icono, código de seis dígitos y estados. El código
+de fixture `246810` y el estado de expiración viven únicamente en
+`dev/registrationPreview.ts`, en memoria; no hay correos, credenciales ni tokens en
+localStorage. Recargar reinicia esta comprobación; la entrada `?view=register`
+vuelve al registro, sin cambiar la cuenta de prueba anterior. El éxito se identifica como comprobación local y
+requiere pulsar Continuar; no imita una verificación de identidad del servidor.
+La capa `EmailVerificationService` permite incorporar después el contrato real.
+Su adaptador API actual devuelve `integration_pending` y no realiza peticiones.
+
+Se elimina la activación accidental de sesión API al abrir Crear cuenta desde la
+composición local. `PublicApp` recibe los servicios de registro/verificación y el
+indicador `apiSession` desde `DevelopmentApp`; `useAuthSession(false)` evita tanto
+la consulta inicial como la recuperación de bfcache. En modo API no se ocultan los
+errores de sesión o red. Registro sigue sin iniciar sesión, y el contrato real,
+las versiones legales `v1` y los controles del servidor permanecen intactos.
+
+`MeetingLink` comparte `hasAssignedMeeting` y `openMeeting` de `meeting.ts` para el
+listado/detalle administrativo y los comprobantes. Revalida HTTPS/dominio antes de
+mostrar/abrir y usa `_blank`, `noopener,noreferrer`. Solo permite abrir en sesiones
+próximas o en curso; los estados históricos conservan la URL como texto. No crea
+reuniones ni carga sus páginas sin acción del usuario. El resumen de mentor se
+calcula desde `MentorWorkspace`, sin duplicar identidades, saldos ni reseñas.
+
+Verificación del incremento: **75 pruebas automatizadas**, build, lint y
+`git diff --check`. Chrome: registro/verificación a 320×740, 390×844, 768×1024,
+844×390 y 1440×900; error, expiración y reintento con fixtures; retorno login/registro
+sin aviso global; contrato API con HTTP controlado. Resumen y enlaces a 390×844,
+768×1024, 844×390 y 1440×900, recarga, cambio de modo, reseña actualizada,
+consulta administrativa, apertura sin opener/referrer y URL manipulada bloqueada.
+Sin errores JavaScript ni llamadas API en los recorridos locales. Los destinos de
+reunión se interceptaron; no se entró a llamadas reales. Capturas revisadas; scripts
+y capturas fuera del repo. El bundle de producción no contiene el código ni los
+servicios de fixtures. Sin dependencias nuevas. Figma Make no ofrece captura directa;
+se leyó y reutilizó su código fuente.
+
+**Pendiente de integración real:** verificación y reenvío por API; recuperación de
+contraseña (la interfaz existente solo comprueba formato); acceso desde login real
+a perfil inicial/paneles según roles; catálogo y servicios privados de Naomi,
+almacenamiento remoto de archivos y autorización efectiva del servidor. Mi panel,
+recomendaciones, perfil de mentor y solicitud para compartir están implementados en
+desarrollo y conservan avisos de integración en la composición API. No se añade un
+formulario de cambio/restablecimiento de contraseña que el Figma original no tiene.
+Pendientes de prueba: API real de Naomi, dispositivos físicos, otros navegadores
+y lector de pantalla. Las secciones inferiores documentan los incrementos anteriores;
+este mapa prevalece para la navegación y los modos actuales.
+
 ## Correcciones de navegación, comprobantes y notificaciones
 
 Mapa actualizado:
@@ -806,7 +874,8 @@ Este incremento sigue `ProfileSetupPage.tsx` de Figma Make: habilidades del cat�
 activo, nivel, un horario semanal y objetivo académico. Conserva las selecciones al
 retroceder. Todos los pasos son obligatorios; al terminar guarda y abre el panel.
 La disponibilidad incluye el inicio y el final del horario. Se puede volver a editar
-desde el panel; las pantallas privadas restantes continúan pendientes.
+desde el panel; las pantallas privadas están implementadas en la composición local.
+Su conexión con la sesión real sigue pendiente de integración API.
 
 Para probar sin backend:
 

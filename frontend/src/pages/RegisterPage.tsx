@@ -2,17 +2,17 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LegalModal } from '../components/LegalModal';
 import { Icons } from '../components/icons';
 import { ACADEMIC_CYCLES, AUTHORIZED_TECSUP_EMAIL_DOMAINS, getTecsupEmailValidationError, normalizeTecsupEmail, TECSUP_CAREERS, TECSUP_INSTITUTION } from '../data/academicCatalog';
-import { LEGAL_VERSIONS, registerStudent, RegistrationError } from '../services/registration';
+import { LEGAL_VERSIONS, registerStudent, RegistrationError, type RegistrationService } from '../services/registration';
 
 import { AuthLayout } from '../components/AuthLayout';
 import { AuthField, PasswordField, SelectField, FieldError } from '../components/AuthFields';
 
 // Presentación y campos adaptados de AuthPage.tsx del prototipo original.
-export default function RegisterPage({ onBack, onLogin }: { onBack: () => void; onLogin: () => void }) {
-  return <AuthLayout onBack={onBack}><RegisterForm onSwitch={onLogin} /></AuthLayout>;
+export default function RegisterPage({ onBack, onLogin, service = registerStudent, localPreview = false, onVerifyEmail }: { onBack: () => void; onLogin: () => void; service?: RegistrationService; localPreview?: boolean; onVerifyEmail?: (email: string) => void }) {
+  return <AuthLayout onBack={onBack}><RegisterForm onSwitch={onLogin} service={service} localPreview={localPreview} onVerifyEmail={onVerifyEmail} /></AuthLayout>;
 }
 
-function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
+function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSwitch: () => void; service: RegistrationService; localPreview: boolean; onVerifyEmail?: (email: string) => void }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -60,12 +60,14 @@ function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
     const controller = new AbortController();
     controllerRef.current = controller;
     try {
-      const user = await registerStudent({ firstName: firstName.trim(), lastName: lastName.trim(),
+      const user = await service({ firstName: firstName.trim(), lastName: lastName.trim(),
         email: normalizeTecsupEmail(email), career, cycle: Number(cycle), password,
         termsAccepted: true, termsVersion: LEGAL_VERSIONS.terms, privacyVersion: LEGAL_VERSIONS.privacy }, controller.signal);
+      if (controller.signal.aborted) return;
       setPassword('');
       setConfirmPassword('');
-      setCreatedEmail(user.email);
+      if (localPreview && onVerifyEmail) onVerifyEmail(user.email);
+      else setCreatedEmail(user.email);
     } catch (error) {
       if (!controller.signal.aborted) setErrors(error instanceof RegistrationError ? error.fields : { general: 'No fue posible completar el registro. Inténtalo más tarde.' });
     } finally {
@@ -81,6 +83,8 @@ function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
       <p className="mt-4 leading-7 text-[#60716C]">Registramos tu cuenta de estudiante con el correo <strong className="break-all text-[#182B2A]">{createdEmail}</strong>.</p>
       <p role="status" className="mt-5 rounded-2xl border border-[#D5C7AE] bg-[#F8F0E2] p-4 text-sm leading-6 text-[#725D3B]">Tu correo sigue sin verificar. El envío y la verificación de correo todavía requieren integración; no hemos enviado ningún mensaje. Podrás acceder cuando se habilite ese proceso y verifiques tu cuenta.</p>
       <p className="mt-4 text-sm text-[#60716C]">El registro no inicia sesión. Tu perfil queda pendiente de completar.</p>
+      {onVerifyEmail && <button type="button" onClick={() => onVerifyEmail(createdEmail)} className="mt-6 min-h-12 w-full rounded-xl bg-[#24685F] text-white font-bold">Verificar correo</button>}
+      <button type="button" onClick={onSwitch} className="mt-3 min-h-11 w-full text-sm font-bold text-[#24685F]">Volver a iniciar sesión</button>
     </section>
   );
 

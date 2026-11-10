@@ -15,9 +15,10 @@ const textareaClass = 'mt-2 w-full border border-[#E2E8E0] rounded-xl p-3 text-s
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'No pudimos guardar los cambios. Vuelve a intentarlo.';
 
 /** Vistas estudiantiles de AccountMentorPages.tsx del Make original. */
-export function ProfilePage({ profile, photo, service, onChanged, onEditPreferences, onLogout }: {
+export function ProfilePage({ profile, photo, service, onChanged, onEditPreferences, onLogout, mentorSummary }: {
   profile: UserProfile; photo: ReturnType<typeof useStoredFile>; service: AccountService;
   onChanged: (account: AccountData) => void; onEditPreferences: () => void; onLogout: () => void;
+  mentorSummary?: { approvedSkills: string[]; publishedOffers: number; averageRating: number; reviewCount: number };
 }) {
   const [name, setName] = useState(profile.name);
   const [bio, setBio] = useState(profile.bio);
@@ -60,6 +61,15 @@ export function ProfilePage({ profile, photo, service, onChanged, onEditPreferen
   return <main className="max-w-[980px] mx-auto px-4 md:px-8 py-8 md:py-12 text-[#182B2A]">
     <section className="rounded-[24px] bg-[#DCEBDD] border border-[#C9D8CC] p-5 sm:p-7 md:p-9"><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#24685F]">Tu cuenta</p><h1 ref={heading} tabIndex={-1} className="mt-2 text-3xl md:text-4xl font-extrabold">Mi perfil</h1><p className="mt-2 text-[#52645F]">Tus cambios actualizan el panel y el sistema de recomendaciones.</p></section>
     <form className="space-y-5 mt-8" onSubmit={event => { event.preventDefault(); void save(); }}>
+      {mentorSummary && <Card className="p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#24685F]">Perfil mentor</p><h2 className="mt-2 text-xl font-bold">Resumen académico compartido</h2></div><Badge variant="success">Misma cuenta TECSUP</Badge></div>
+        <div className="grid sm:grid-cols-3 gap-4 mt-5">
+          <div className="rounded-xl bg-[#F7F7F2] p-4"><p className="text-2xl font-bold text-[#24685F]">{mentorSummary.approvedSkills.length}</p><p className="text-sm text-[#64748B]">Habilidades aprobadas</p></div>
+          <div className="rounded-xl bg-[#F7F7F2] p-4"><p className="text-2xl font-bold text-[#24685F]">{mentorSummary.publishedOffers}</p><p className="text-sm text-[#64748B]">Ofertas publicadas</p></div>
+          <div className="rounded-xl bg-[#F7F7F2] p-4"><p className="text-2xl font-bold text-[#24685F]">{mentorSummary.reviewCount ? mentorSummary.averageRating.toFixed(1) : '—'}</p><p className="text-sm text-[#64748B]">{mentorSummary.reviewCount} valoraciones</p></div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">{mentorSummary.approvedSkills.map(skill => <Badge key={skill}>{skill}</Badge>)}</div>
+      </Card>}
       <Card className="p-5 sm:p-6"><h2 className="text-xl font-bold">Información personal</h2>
         <div className="mt-5 flex items-center gap-4"><div className="relative shrink-0"><Avatar name={name} src={photo.url || profile.photo} size="xl" /><button type="button" disabled={busy} onClick={event => { event.currentTarget.focus(); photoInput.current?.click(); }} aria-label="Cambiar fotografía de perfil" className="absolute -right-2 -bottom-2 w-11 h-11 rounded-full bg-[#24685F] text-white border-2 border-white flex items-center justify-center shadow-md hover:bg-[#1D5149]"><Icons.Camera s={16} /></button><input ref={photoInput} type="file" accept={ACCEPTED_PROFILE_PHOTO_TYPES.join(',')} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; void selectPhoto(file); }} hidden /></div><div className="min-w-0 flex-1"><p className="font-bold">Fotografía de perfil</p><p className="mt-1 text-sm text-[#60716C]">JPG, PNG o WebP. Máximo 2 MB. Se guarda en este navegador.</p></div></div>
         {photo.loading && <p className="mt-3 text-sm" role="status">Recuperando fotografía…</p>}

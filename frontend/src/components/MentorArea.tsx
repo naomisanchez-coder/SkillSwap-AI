@@ -45,6 +45,6 @@ export function MentorArea({ active, service, studentService, accountService, pr
     {active === 'earnings' && <MentorEarningsPage workspace={workspace} onBack={() => onNavigate('mentor-dashboard')} />}
     {active === 'reviews' && <MentorReviewsPage workspace={workspace} />}
     {active === 'skills' && <SkillsPage profile={profile} requests={workspace.approved} service={accountService} onNew={onApplication} onEdit={onApplication} onEditPreferences={onEditPreferences} />}
-    {active === 'profile' && <ProfilePage profile={profile} photo={photo} service={accountService} onChanged={onAccount} onEditPreferences={onEditPreferences} onLogout={onLogout} />}
+    {active === 'profile' && <ProfilePage profile={profile} photo={photo} service={accountService} onChanged={onAccount} onEditPreferences={onEditPreferences} onLogout={onLogout} mentorSummary={{ approvedSkills: [...new Set(workspace.approved.map(item => item.skill))], publishedOffers: workspace.approved.filter(item => workspace.settings.offers[item.id]?.active).length, averageRating: workspace.reviews.length ? workspace.reviews.reduce((sum, item) => sum + item.rating, 0) / workspace.reviews.length : 0, reviewCount: workspace.reviews.length }} />}
   </MentorShell>;
 }

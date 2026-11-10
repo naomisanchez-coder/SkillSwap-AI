@@ -9,9 +9,13 @@ import { useCatalog } from './hooks/useCatalog'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
 import { useAuthSession } from './hooks/useAuthSession'
+import EmailVerificationPage from './pages/EmailVerificationPage'
+import type { RegistrationService } from './services/registration'
+import type { EmailVerificationService } from './services/emailVerification'
 
-export default function PublicApp({ initialPage, catalogService = referenceCatalogService, apiSession = true, onRealAccess }: { initialPage: PublicDestination | 'register' | 'login'; catalogService?: CatalogService; apiSession?: boolean; onRealAccess?: (page: 'login' | 'register') => void }) {
-  const [page, setPage] = useState<PublicDestination | 'register' | 'login'>(initialPage)
+export default function PublicApp({ initialPage, catalogService = referenceCatalogService, apiSession = true, registrationService, verificationService, onLocalVerified }: { initialPage: PublicDestination | 'register' | 'login'; catalogService?: CatalogService; apiSession?: boolean; registrationService?: RegistrationService; verificationService?: EmailVerificationService; onLocalVerified?: () => void }) {
+  const [page, setPage] = useState<PublicDestination | 'register' | 'login' | 'verify-email'>(initialPage)
+  const [verificationEmail, setVerificationEmail] = useState('')
   const [pendingDestination, setPendingDestination] = useState<string | null>(null)
   const { state: auth, recoverSession, acceptSession, logout, loggingOut, logoutError } = useAuthSession(apiSession)
   const catalog = useCatalog(catalogService)
@@ -23,7 +27,7 @@ export default function PublicApp({ initialPage, catalogService = referenceCatal
 
   const navigate = (destination: PublicDestination | 'register' | 'login') => {
     if (loggingOut) return
-    if (!apiSession && (destination === 'login' || destination === 'register') && onRealAccess) { onRealAccess(destination); return }
+
     setPendingDestination(null)
     setPage(destination)
     window.scrollTo({ top: 0, behavior: 'instant' })
@@ -74,7 +78,8 @@ export default function PublicApp({ initialPage, catalogService = referenceCatal
       )}
       {page === 'login' && <LoginPage onBack={() => navigate('landing')} onRegister={() => navigate('register')}
         onAuthenticated={next => { acceptSession(next); navigate('landing') }} />}
-      {page === 'register' && <RegisterPage onBack={() => navigate('landing')} onLogin={() => navigate('login')} />}
+      {page === 'register' && <RegisterPage onBack={() => navigate('landing')} onLogin={() => navigate('login')} service={registrationService} localPreview={!apiSession && Boolean(registrationService)} onVerifyEmail={email => { setVerificationEmail(email); setPage('verify-email'); window.scrollTo({ top: 0, behavior: 'instant' }) }} />}
+      {page === 'verify-email' && <EmailVerificationPage email={verificationEmail} service={verificationService} onHome={() => navigate('landing')} onBackToLogin={() => navigate('login')} onVerified={onLocalVerified} />}
       {page === 'landing' && <LandingPage {...publicHeaderActions} mentors={catalog.mentors} />}
       {page === 'public-explore' && (
         <PublicExplorePage

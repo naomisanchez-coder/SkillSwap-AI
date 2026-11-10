@@ -1,9 +1,10 @@
 export const LEGAL_VERSIONS = { terms: 'v1', privacy: 'v1' } as const;
 
-type RegistrationRequest = {
+export type RegistrationRequest = {
   firstName: string; lastName: string; email: string; career: string; cycle: number; password: string;
   termsAccepted: true; termsVersion: string; privacyVersion: string;
 };
+export type RegistrationService = (input: RegistrationRequest, signal: AbortSignal) => Promise<{ email: string }>;
 
 export class RegistrationError extends Error {
   readonly fields: Record<string, string>;
