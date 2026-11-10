@@ -2,11 +2,11 @@
 
 SkillSwap AI es una plataforma académica para el intercambio de habilidades entre estudiantes de TECSUP. El backend será responsable de la identidad, autorización, verificación institucional, reglas de negocio y persistencia compartida. MySQL será la fuente de verdad; el navegador no podrá asignar permisos, verificación ni créditos.
 
-## Estado del incremento 1.1
+## Estado del incremento 1.2 (aplicado y validado)
 
-La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. Este incremento añade únicamente documentación.
+La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. El incremento 1.1 añadió documentación. El incremento 1.2 incorpora el esquema relacional, un ejecutor seguro y pruebas reales. La migración fue validada en `skillswap_ai_test_auth` y aplicada con autorización explícita a la base principal de desarrollo `skillswap_ai`.
 
-**La autenticación está planificada, no implementada.** Registro, correo real, sesiones de usuario, créditos y migraciones todavía no están disponibles. Los contratos propuestos están en [docs/auth-api.md](docs/auth-api.md).
+**La autenticación está planificada, no implementada.** Registro, correo real, sesiones de usuario y concesión de créditos todavía no están disponibles. Las ocho tablas ya existen en ambas bases; disponer de tablas no implementa los casos de uso de autenticación. Los contratos propuestos están en [docs/auth-api.md](docs/auth-api.md).
 
 ## Arquitectura
 
@@ -30,7 +30,7 @@ Versiones comprobadas en el entorno del incremento 1.1:
 | dotenv | 18.0.10 |
 | cors | 2.8.6 |
 
-El manifiesto admite Node `^24.0.0 || ^26.0.0`. La base de datos objetivo es MySQL Community Server 8.4; la versión de parche del servidor no se volvió a consultar durante este incremento documental. `package-lock.json` fija el árbol reproducible de dependencias.
+El manifiesto admite Node `^24.0.0 || ^26.0.0`. La versión del servidor comprobada durante el incremento 1.2 es MySQL Community Server 8.4.13. `package-lock.json` fija el árbol reproducible de dependencias.
 
 ## Estructura existente
 
@@ -42,7 +42,10 @@ backend/
 ├── package.json
 ├── package-lock.json
 ├── database/
-│   └── .gitkeep           # Sin migraciones implementadas
+│   ├── .gitkeep
+│   ├── migrate.js
+│   └── migrations/
+│       └── 001_auth_foundation.sql # Aplicada y validada localmente
 ├── docs/
 │   └── auth-api.md
 ├── src/
@@ -58,7 +61,8 @@ backend/
 │       └── health.routes.js
 ├── tests/
 │   ├── .gitkeep
-│   └── health.test.js
+│   ├── health.test.js
+│   └── migrations.test.js
 └── uploads/              # Local, ignorado; sin funcionalidad de carga
 ```
 
@@ -157,6 +161,98 @@ Las pruebas HTTP abren puertos locales efímeros. Las auditorías npm necesitan 
 - Usar commits progresivos con prefijos `feat`, `fix`, `test` o `docs` y descripción en español, por ejemplo: `docs(backend): documentar contratos de autenticacion`.
 - Revisar pruebas, alcance, diferencias y secretos antes de publicar únicamente en `origin feature/backend`. No usar force push ni preparar archivos indiscriminadamente.
 
+## Migración 001_auth_foundation
+
+Archivo: [database/migrations/001_auth_foundation.sql](database/migrations/001_auth_foundation.sql). Prepara ocho tablas InnoDB: `schema_migrations`, `careers`, `career_cycles`, `users`, `student_profiles`, `email_verifications`, `auth_sessions` y `credit_transactions`. `career_cycles` normaliza las combinaciones autorizadas de carrera y ciclo; no se carga ningún catálogo. No contiene cuentas, administradores, códigos ni créditos iniciales.
+
+**Estado real:** aplicada con `skillswap_migrator` en `skillswap_ai_test_auth` y `skillswap_ai`; 28 pruebas aprobadas, ninguna omitida. Verificadas 8 claves primarias, 7 foráneas, 6 UNIQUE y 31 CHECK. Cada esquema conserva una única fila de historial; las tablas de negocio permanecen vacías. Las inserciones sintéticas se ejecutaron únicamente en pruebas y se revirtieron. El archivo no se ejecuta al arrancar Express. El usuario aplicativo conserva DML y no ejecuta esta migración.
+
+### Evidencia de validación
+
+Checksum SHA-256 aprobado y registrado en ambos esquemas:
+
+```text
+a544084c180a8c8ce701bd506bc98819d4e433b61460b1b20b7dbe4f0e1061c8
+```
+
+La inspección previa de la principal confirmó esquema vacío, identidad `skillswap_migrator@127.0.0.1`, permisos específicos y checksum validado. La segunda aplicación devolvió `applied: false`, sin duplicar tablas ni historial. Los endpoints de salud se comprueban separadamente del DDL.
+
+Conservar configuraciones locales separadas: `.env.migrations.local` para pruebas y `.env.migrations.main.local` para la principal; ambas quedan ignoradas por `.env.*`. No sobrescribir una con otra ni versionarlas. Node puede cargarlas explícitamente con `--env-file`; el ejecutor no las descubre automáticamente. Las variables heredadas del proceso tienen precedencia: verificar siempre el destino efectivo.
+
+La configuración de migraciones usa `MIGRATION_*`; la suite real usa `MIGRATION_TEST_*`. Para ejecutar la integración, proporcionar las cuatro variables de pruebas en el proceso desde un mecanismo local seguro, nunca copiar contraseñas a comandos o documentación. En esta validación se mapearon las credenciales locales a las variables de pruebas únicamente en memoria.
+
+### Procedimiento de ejecución aprobado por alcance
+
+Antes de ejecutar DDL, disponer de una cuenta distinta de `skillswap_app`, con permisos mínimos de `CREATE`, `REFERENCES`, `SELECT` e `INSERT` en el esquema destino; las pruebas también necesitan `UPDATE`. No usar `root` como usuario aplicativo. La cuenta de migraciones tiene concesiones independientes y exactas para cada destino autorizado; UPDATE se limita al esquema aislado. No solicitar secretos por chat ni incluirlos en argumentos, logs o archivos versionados.
+
+1. Revisar instancia `127.0.0.1:3306`, MySQL 8.4, identidad autenticada, permisos y objetos existentes. El destino de aplicación es `skillswap_ai`; la validación debe usar un esquema aislado precreado y expresamente autorizado.
+2. Adquirir un bloqueo asesor por esquema con `GET_LOCK` en la misma conexión; comprobar que se obtuvo. Mantenerlo hasta terminar y liberarlo en `finally`.
+3. Calcular SHA-256 de los bytes exactos del archivo. Inspeccionar historial y objetos: esquema vacío para primera aplicación; si existe la versión completada, comprobar checksum y estructura antes de omitirla. Ante deriva, tablas parciales o ajenas, detenerse sin modificar objetos.
+4. Configurar UTC, modo SQL estricto y las variables de sesión `@skillswap_migration_version = '001_auth_foundation'` y `@skillswap_migration_checksum` con el SHA-256 calculado. Estas variables contienen metadatos técnicos, no secretos.
+5. Ejecutar cada sentencia secuencialmente y detenerse al primer error. El único `INSERT` del archivo registra versión/checksum al final, después de todas las creaciones. Nunca continuar con `--force` ni registrar éxito desde un bloque `finally`.
+6. Verificar tablas, restricciones e historial. Liberar el bloqueo y cerrar conexión. Conservar un reporte sin credenciales.
+
+MySQL hace commits implícitos con DDL: no prometer rollback global. Si falla una creación, pueden quedar tablas parciales sin fila de éxito. No borrarlas ni reanudar automáticamente: inspeccionar y acordar recuperación. La ausencia de una fila no significa que no exista DDL parcial.
+
+El ejecutor autorizado es [database/migrate.js](database/migrate.js), reutilizado por las pruebas. Importarlo no abre conexiones ni aplica DDL. Solo admite la migración revisada `001_auth_foundation`; no es un parser SQL genérico. No lee `.env` ni reutiliza variables `DB_*`.
+
+Configurar de forma segura en el proceso `MIGRATION_DB`, `MIGRATION_USER` y `MIGRATION_PASSWORD`. Solo admite exactamente `skillswap_ai` y `skillswap_ai_test_auth` en `127.0.0.1:3306`. Si se especifican `MIGRATION_HOST` o `MIGRATION_PORT`, deben coincidir exactamente con ese destino. Sin credenciales separadas, falla antes de conectarse. No suministrar contraseñas en argumentos ni historial del shell.
+
+Desde `backend/`, la inspección predeterminada no ejecuta DDL ni registra historial:
+
+```sh
+node database/migrate.js --check
+```
+
+La aplicación explícita requiere `MIGRATION_ALLOW_DDL=yes` configurada por el operador. Para `skillswap_ai` también exige `MIGRATION_VALIDATED_CHECKSUM` igual al SHA-256 del archivo que ya pasó las pruebas aisladas. Esta variable es una declaración del operador, no una demostración automática de que se ejecutaron las pruebas. No configurarla para eludir una validación pendiente.
+
+```sh
+node database/migrate.js --apply
+```
+
+El ejecutor verifica identidad autenticada, permisos directos, versión, destino, objetos, checksum e historial. Bloquea la aplicación por esquema e inspecciona nuevamente bajo el bloqueo. Un esquema parcial, objetos ajenos, historial distinto o deriva básica de estructura bloquean la ejecución. No elimina objetos ni otorga permisos. Solo registra la versión al terminar las sentencias y hace una comprobación posterior.
+
+La comprobación estructural compara tablas, motor, nombres/orden/tipos de columnas, nombres de restricciones y CHECK habilitados. No demuestra equivalencia completa de expresiones CHECK, valores por defecto o definiciones de índices bajo nombres iguales; esos cambios requieren revisión humana y migraciones versionadas. Si la comprobación posterior falla tras el INSERT final, existe registro técnico de sentencias terminadas, pero la ejecución global se informa como fallida y bloquea publicación.
+
+### Privilegios exactos y preparación manual de Workbench
+
+El ejecutor consulta `@@GLOBAL.partial_revokes` antes de interpretar `SHOW GRANTS FOR CURRENT_USER()`. No cambia esta opción ni modifica permisos. Si no conoce su valor, bloquea la comprobación.
+
+- Con `partial_revokes=OFF`, los guiones bajos de la concesión deben estar escapados: `skillswap\_ai\_test\_auth`. Un nombre sin escapes representa un patrón y se rechaza, aunque visualmente coincida con el destino.
+- Con `partial_revokes=ON`, usar el nombre literal sin barras: `skillswap_ai_test_auth`. Por política conservadora, representaciones con barras se rechazan en este modo; no se adivina su significado ni se recomienda cambiar la opción global.
+- Solo se acumulan privilegios de concesiones directas sobre el esquema exacto. Se permiten entradas independientes sobre los dos destinos autorizados, pero los permisos de uno nunca satisfacen los del otro.
+- Se requieren SELECT, INSERT, CREATE y REFERENCES. UPDATE está permitido únicamente en pruebas y es obligatorio para la suite de integración. No se necesitan DELETE, ALTER, DROP, TRIGGER ni EVENT para este incremento.
+- `USAGE ON *.*` es la única entrada global aceptada. Se rechazan permisos globales operativos, ALL PRIVILEGES, GRANT OPTION, roles, revocaciones parciales, ámbitos de tabla, esquemas ajenos y formatos ambiguos. No ampliar permisos para hacer pasar el preflight.
+
+En Workbench, abrir Server → Users and Privileges, seleccionar la cuenta de migraciones y mantener Administrative Roles sin privilegios globales. En Schema Privileges → Add Entry, configurar exclusivamente el esquema de pruebas: si partial_revokes está OFF, usar Schemas matching pattern con `skillswap\_ai\_test\_auth`; si está ON, seleccionar el esquema literal `skillswap_ai_test_auth`. Marcar SELECT, INSERT, UPDATE, CREATE y REFERENCES; revisar el alcance antes de Apply. Los permisos locales fueron preparados manualmente por la desarrolladora; el ejecutor no crea cuentas ni modifica concesiones.
+
+Confirmar mediante consultas de solo lectura `SELECT @@GLOBAL.partial_revokes;` y `SHOW GRANTS FOR CURRENT_USER();` desde la conexión de migraciones. No alterar `skillswap_app`. La entrada exacta de migraciones sobre la principal usa únicamente SELECT, INSERT, CREATE y REFERENCES; el escape depende de la misma opción global. Un esquema de pruebas vacío aún no equivale a migración validada.
+
+### Pruebas aisladas optativas
+
+`npm test` ejecuta comprobaciones estáticas, el control de detención ante errores y la suite de salud. Sin configuración explícita, la prueba de integración aparece como **SKIP**; eso no valida sintaxis SQL ni restricciones en MySQL.
+
+Para habilitarla, un operador debe configurar de forma segura en el proceso:
+
+| Variable | Requisito |
+| --- | --- |
+| `MIGRATION_TEST_DB` | Exactamente `skillswap_ai_test_auth`, precreado y autorizado; vacío en primera aplicación o con el historial compatible y sin datos de negocio al repetir pruebas; nunca `skillswap_ai` ni otros sufijos |
+| `MIGRATION_TEST_USER` | Cuenta de migraciones de pruebas distinta del usuario aplicativo |
+| `MIGRATION_TEST_PASSWORD` | Secreto local, nunca en ejemplos ni historial de comandos |
+| `MIGRATION_TEST_ALLOW_DDL` | `yes`, consentimiento explícito para crear tablas en ese esquema aislado |
+
+Host y puerto están fijados en `127.0.0.1:3306`; no se reutilizan credenciales de aplicación. No se añaden estas claves a `.env.example` en este incremento. Proporcionar las cuatro variables completas; una configuración parcial debe fallar, no omitirse silenciosamente.
+
+Ejecutar desde `backend/`:
+
+```sh
+node --test tests/migrations.test.js
+```
+
+La integración verifica versión, destino, permisos directos, esquema vacío/historial compatible, creación, reaplicación sin cambios, tipos, claves, roles, normalización, ciclos autorizados, caducidades y concesión inicial única. Las cuentas y catálogos sintéticos se insertan únicamente dentro de una transacción y se revierten; las tablas y la fila técnica del historial permanecen para inspección. No se ejecuta `DROP`, `TRUNCATE` ni limpieza destructiva. Las concesiones por roles, globales operativas o con sintaxis no reconocida se rechazan; la suite usa el mismo comprobador de permisos que el ejecutor y exige UPDATE para las pruebas.
+
+La prueba de fallo del ejecutor sin MySQL demuestra detención antes del historial; no equivale a comprobar un fallo DDL real del servidor. La integración real de este incremento pasó; esto no valida automáticamente futuras modificaciones del SQL. No hacer commit ni push si falta alguna verificación obligatoria.
+
 ## Próximos incrementos
 
-Pendientes de aprobación: decisiones del contrato, migraciones reproducibles, registro institucional, envío real de correo, concesión inicial atómica y sesiones seguras. Este documento no autoriza ejecutar esos incrementos ni implementar recuperación de contraseña, reservas o funcionalidades de mentoría.
+Pendientes de aprobación o implementación: decisiones del contrato, catálogo académico oficial, hash de contraseñas, registro institucional, envío real de correo, concesión inicial atómica y sesiones seguras. Este documento no autoriza ejecutar esos incrementos ni implementar recuperación de contraseña, reservas o funcionalidades de mentoría.

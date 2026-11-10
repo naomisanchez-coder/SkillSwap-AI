@@ -1,6 +1,6 @@
 # Contratos de autenticación — SkillSwap AI
 
-**Estado de todos los endpoints de este documento: PROPUESTO, NO IMPLEMENTADO.** El incremento 1.1 solo documenta contratos. Los únicos endpoints actuales son los de salud descritos en [../README.md](../README.md).
+**Estado de todos los endpoints de este documento: PROPUESTO, NO IMPLEMENTADO.** El incremento 1.1 documentó contratos; el 1.2 implementó y validó únicamente persistencia; los casos de uso de autenticación siguen pendientes. Los únicos endpoints actuales son los de salud descritos en [../README.md](../README.md).
 
 ## Fuentes y precedencia
 
@@ -373,3 +373,31 @@ La validación React inspeccionada permitía usuarios sin punto y alias: deberá
 Los accesos demo, códigos fijos, roles en Web Storage y variables Vite con credenciales no forman parte de la autenticación funcional. Las pruebas y datos ficticios deben quedar aislados de cuentas reales.
 
 Recuperación de contraseña, modificación de perfil, reservas, aprobación de mentores, liquidación de sesiones y panel administrativo no se implementan por aparecer en documentos históricos. Su alcance requiere autorización posterior.
+
+
+## Persistencia implementada en el incremento 1.2
+
+Migración: `001_auth_foundation.sql`, validada en `skillswap_ai_test_auth` y aplicada con autorización a `skillswap_ai`. Ambas conservan ocho tablas y una fila de historial, sin datos de negocio. Pasaron 28 pruebas, incluida la integración real en la base aislada. Checksum: `a544084c180a8c8ce701bd506bc98819d4e433b61460b1b20b7dbe4f0e1061c8`. No modifica los contratos HTTP ni implementa endpoints. El [README del backend](../README.md#migración-001_auth_foundation) describe la ejecución segura y el estado de pruebas.
+
+| Tabla | Correspondencia y garantías preparadas |
+| --- | --- |
+| `users` | UUID textual, nombres, correo ASCII normalizado/único, hash con formato codificado, roles `STUDENT`/`ADMIN`, estados, verificación, aceptación y versiones legales, fechas UTC |
+| `careers` | Catálogo vacío, código único y estado activo; sin denominaciones oficiales inventadas |
+| `career_cycles` | Pares carrera/ciclo autorizados, PK compuesta; permite rangos no contiguos sin duplicar atributos del catálogo |
+| `student_profiles` | Un perfil por usuario, FK compuesta que exige `STUDENT`, carrera/ciclo existentes y onboarding booleano; sin cuenta de mentor |
+| `email_verifications` | UUID de desafío, propietario, HMAC de 32 bytes y versión de clave, intentos configurables, estados y fechas coherentes |
+| `auth_sessions` | Digest de 32 bytes del identificador opaco, propietario, HMAC CSRF, última actividad, vencimientos absoluto/inactivo, revocación y preferencia remember |
+| `credit_transactions` | Importe entero no nulo/cero, motivo, referencia única, vínculo opcional a desafío del mismo usuario y concesión inicial única de exactamente 20 |
+| `schema_migrations` | Versión única, SHA-256 y fecha UTC, insertados solo al terminar la secuencia sin errores |
+
+Los IDs deben generarse en servidor. TECSUP sigue siendo una institución fija de dominio, no un valor editable por React. La gramática pendiente no se inventa en SQL: la restricción estudiantil impone dominio exacto, punto interior, ausencia de puntos consecutivos y de `+`; el servicio posterior completará la validación aprobada. El hash codificado requiere prefijo `$` y longitud mínima, pero SQL no prueba que sea un hash criptográfico válido; esa responsabilidad corresponde al servicio de contraseñas.
+
+Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y todas las conexiones escritoras deberán usar UTC. No se fijan duraciones de sesión, vigencia de código ni máximo de intentos por defecto: siguen pendientes de aprobación.
+
+**Límites que exigen transacciones de servicio posteriores:** crear usuario/perfil conjuntamente; verificar carrera activa; comprobar que la cuenta está verificada y habilitada al crear/usar sesión; consumir desafío, verificar usuario y conceder créditos conjuntamente. La FK del movimiento garantiza propietario del desafío, pero no que esté consumido: el servicio deberá comprobarlo bajo bloqueo. El libro admite movimientos futuros con signo; esta tabla por sí sola no garantiza saldo agregado no negativo ni implementa reservas.
+
+La columna generada `initial_grant_user_id` y su índice UNIQUE impiden dos movimientos `INITIAL_EMAIL_VERIFICATION` para el mismo usuario aunque cambie la referencia. Otros motivos no pueden sustituir la concesión inicial: el servidor seleccionará motivos autorizados y no permitirá editar/eliminar el historial desde la API. Los permisos DML del usuario aplicativo no convierten el libro en inmutable frente a acceso SQL directo.
+
+`auth_sessions` es un esquema propio, **no una afirmación de compatibilidad con express-session o un store concreto**. La biblioteca y el adaptador deberán revisarse antes de implementar sesiones. El HMAC CSRF no permite recuperar su texto original desde MySQL: definir derivación segura o rotación al recuperar sesión y su política de múltiples pestañas antes de integrar React. No almacenar cookies ni tokens de acceso en claro para forzar compatibilidad.
+
+El ejecutor autorizado `database/migrate.js` solo admite `skillswap_ai` y el esquema aislado exacto `skillswap_ai_test_auth`. Inspecciona sin DDL por defecto, exige credenciales separadas y consulta `partial_revokes` antes de comprobar concesiones directas; rechaza privilegios globales operativos, comodines, ALL PRIVILEGES y permisos excesivos. Los escapes de guiones bajos se aceptan con partial_revokes OFF; con ON se exige el nombre literal sin barras. Solo se acepta USAGE global. SELECT, INSERT, CREATE y REFERENCES son los mínimos; UPDATE se reserva al esquema de pruebas y es obligatorio en su suite; las pruebas aisladas reutilizan su lógica. No se configura automáticamente desde las credenciales de la aplicación. El historial no se considera aplicado por existir el archivo ni por pasar pruebas estáticas. No se han insertado usuarios, carreras, administradores o créditos en el esquema aplicativo.
