@@ -1,0 +1,85 @@
+{
+  "version": "1.0.0",
+  "source": "https://www.tecsup.edu.pe/segmento-joven/",
+  "scope": "Selección inicial; no acredita disponibilidad por sede ni duración oficial.",
+  "cycles": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "careers": [
+    {
+      "id": "509a1f0f-2051-5f4d-bac2-ea1b050029ea",
+      "code": "software",
+      "name": "Diseño y Desarrollo de Software"
+    },
+    {
+      "id": "ddaaa053-4c6e-5e21-a62b-381f77b694f0",
+      "code": "redes",
+      "name": "Administración de Redes y Comunicaciones con mención en Virtualización y Seguridad Informática"
+    },
+    {
+      "id": "cab6850b-8d9c-5e87-9772-3178559beeef",
+      "code": "big-data",
+      "name": "Big Data y Ciencia de Datos"
+    },
+    {
+      "id": "d51f450a-cbc2-5bca-ba0f-5ad481147327",
+      "code": "videojuegos",
+      "name": "Diseño y Desarrollo de Simuladores y Videojuegos"
+    },
+    {
+      "id": "1d104f11-9578-5099-a5be-65b6b422bf20",
+      "code": "animacion",
+      "name": "Modelado y Animación Digital"
+    },
+    {
+      "id": "445e2d4c-af22-5199-b782-ae94b8f1b66a",
+      "code": "mecatronica",
+      "name": "Mecatrónica Industrial"
+    },
+    {
+      "id": "69a062ba-4f31-50b1-8916-f4202d63aaee",
+      "code": "electronica",
+      "name": "Electrónica y Automatización Industrial"
+    },
+    {
+      "id": "e334d685-6a3f-55ad-ac8d-ab8b3fcfa641",
+      "code": "mecanica-electrica",
+      "name": "Tecnología Mecánica Eléctrica"
+    },
+    {
+      "id": "d55bce39-7911-564c-b66c-8e8c42cf2138",
+      "code": "marketing",
+      "name": "Marketing Digital Analítico"
+    },
+    {
+      "id": "b6eca147-4d27-5c9a-9c02-1d8f55da2975",
+      "code": "diseno-industrial",
+      "name": "Diseño Industrial"
+    },
+    {
+      "id": "a1160cb9-4d85-5cea-8571-5358ea530660",
+      "code": "maquinaria-pesada",
+      "name": "Gestión y Mantenimiento de Maquinaria Pesada"
+    },
+    {
+      "id": "b5a89879-b1cc-5474-ba5d-0d5bdd8930e1",
+      "code": "plantas-industriales",
+      "name": "Mantenimiento y Gestión de Plantas Industriales"
+    },
+    {
+      "id": "da6ff533-20cd-540c-b97e-2e58c2a4e566",
+      "code": "mineria",
+      "name": "Operaciones Mineras"
+    },
+    {
+      "id": "20074709-e195-508a-8090-1c7f0df5c306",
+      "code": "quimica",
+      "name": "Procesos Químicos y Metalúrgicos"
+    }
+  ]
+}

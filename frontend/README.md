@@ -1,5 +1,71 @@
 # SkillSwap AI — frontend
 
+## Registro integrado con el contrato de Naomi (261b8a5)
+
+El registro HTTP usa los nueve campos de `POST /api/auth/register`, sin cookies,
+sesión, envío automático de correo ni concesión de créditos. Espera `201` con
+`user.email`, `role: student`, `emailVerified: false` y `onboardingComplete: false`.
+La cuenta creada se presenta con verificación pendiente. Verificación y reenvío
+siguen sin integración; no se invoca `/email/send-code` en este incremento.
+
+El correo normalizado admite únicamente `nombre.apellido@tecsup.edu.pe`, con dos
+segmentos de letras ASCII. El catálogo de 14 carreras y ciclos 1–6 es una copia de
+`backend/database/catalogs/academic-1.0.0.json`. Los documentos completos en
+`src/data/legal/` son copias íntegras de términos y privacidad **1.0.0** de esa rama;
+se muestran en los modales, incluidos sus pendientes de responsable/contacto y
+revisión jurídica. No se presentan como autorización para una puesta en servicio
+pública. El servidor sigue comprobando carreras/ciclos activos en MySQL.
+
+Las validaciones de nombres y contraseña cuentan puntos de código Unicode,
+rechazan secuencias mal formadas y controles en nombres. Contraseña: 8–128 puntos
+de código y hasta 512 bytes, sin recortar ni normalizar; confirmación solo local.
+Se conservan selección, datos previos y servicios locales de desarrollo.
+
+Configurar `frontend/.env.local` (ignorado) con la URL real del entorno autorizado:
+
+```dotenv
+VITE_API_URL=http://127.0.0.1:4000/api
+VITE_ENABLE_API_SESSION=false
+VITE_ENABLE_FRONTEND_PREVIEW=true
+```
+
+Ejecutar `npm ci` si faltan las dependencias y `npm run dev -- --host 127.0.0.1`.
+Abrir `/?view=api-register` para registro HTTP; `/?view=register` conserva el
+registro local. Sin preview, Crear cuenta desde la portada usa el servicio HTTP.
+Reiniciar Vite después de cambiar variables. Mantener host/puerto del sitio para
+conservar los datos locales. El backend debe permitir ese origen exacto mediante
+`CORS_ORIGIN`; su ejemplo usa `localhost:5173`, diferente de `127.0.0.1:5173`.
+
+`VITE_ENABLE_API_SESSION` es **false por defecto**: no se consulta `/auth/me`, ruta
+que aún no implementa Naomi. Solo habilitarla expresamente cuando esté disponible;
+no desactiva los contratos de login/logout existentes ni concede acceso privado.
+La bandera es de composición, no de seguridad. Los permisos efectivos son del servidor.
+
+Registro distingue `422` por campo, `409 EMAIL_ALREADY_REGISTERED`, `503`, red y
+respuesta inválida. En `429`, interpreta `Retry-After` en segundos o fecha HTTP,
+informa la espera y bloquea el reenvío durante ella; nunca reintenta solo. Sin
+cabecera legible muestra un aviso general. **Pendiente de Naomi:** exponer
+`Retry-After` mediante CORS (`Access-Control-Expose-Headers`); el middleware actual
+no lo expone. No se cambia el backend para resolverlo desde este incremento.
+
+Pruebas del contrato con HTTP controlado y fixtures no acreditan persistencia real,
+SMTP ni conexión MySQL. Para comprobar altas reales se necesita la URL del entorno
+de pruebas aislado de Naomi, CORS autorizado y permiso para crear sus cuentas de
+prueba: una alta persistente escribe en la base. No se utilizan credenciales MySQL
+en el frontend. Los recursos copiados se deben actualizar de forma explícita si
+Naomi versiona su contrato; no hay endpoint de catálogo/legal implementado aún.
+
+Comprobaciones: build, lint, **81 pruebas** y `git diff --check`; Chrome con HTTP
+controlado en 320×740, 390×844, 768×1024, 844×390 y 1440×900. Se revisaron campos,
+normalización, documentos completos, teclado, límites del modal, doble clic,
+429/422/409/503/red, respuesta inválida y confirmación sin sesión ni correo. También
+se repitió el recorrido local registro/verificación/perfil, incluidos error y
+expiración, sin solicitudes HTTP. Estas comprobaciones no escriben en MySQL.
+
+Las secciones históricas inferiores describen incrementos anteriores: las menciones
+a versiones `v1`, cinco carreras y recuperación automática de sesión quedan
+reemplazadas por esta sección para el registro actual.
+
 ## Mapa vigente: revisión local y acceso API
 
 Con Vite y `VITE_ENABLE_FRONTEND_PREVIEW=true` se habilita la composición local.

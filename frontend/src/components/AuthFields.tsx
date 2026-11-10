@@ -94,6 +94,7 @@ export function PasswordField({
   onToggle,
   error,
   autoComplete,
+  maxLength = 128,
 }: {
   id: string;
   label: string;
@@ -103,6 +104,7 @@ export function PasswordField({
   onToggle: () => void;
   error?: string;
   autoComplete: string;
+  maxLength?: number;
 }) {
   return (
     <div>
@@ -115,7 +117,7 @@ export function PasswordField({
           value={value}
           onChange={event => onChange(event.target.value)}
           autoComplete={autoComplete}
-          maxLength={128}
+          maxLength={maxLength}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${id}-error` : undefined}
           className={`w-full h-12 rounded-xl border bg-white pl-11 pr-12 text-sm text-[#182B2A] focus:outline-none focus:ring-2 focus:ring-[#B9D2C4] ${error ? 'border-[#B54747]' : 'border-[#C9D4CC] focus:border-[#24685F]'}`}

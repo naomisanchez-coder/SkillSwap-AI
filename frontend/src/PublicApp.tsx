@@ -13,7 +13,7 @@ import EmailVerificationPage from './pages/EmailVerificationPage'
 import type { RegistrationService } from './services/registration'
 import type { EmailVerificationService } from './services/emailVerification'
 
-export default function PublicApp({ initialPage, catalogService = referenceCatalogService, apiSession = true, registrationService, verificationService, onLocalVerified }: { initialPage: PublicDestination | 'register' | 'login'; catalogService?: CatalogService; apiSession?: boolean; registrationService?: RegistrationService; verificationService?: EmailVerificationService; onLocalVerified?: () => void }) {
+export default function PublicApp({ initialPage, catalogService = referenceCatalogService, apiSession = import.meta.env.VITE_ENABLE_API_SESSION === 'true', registrationService, verificationService, onLocalVerified }: { initialPage: PublicDestination | 'register' | 'login'; catalogService?: CatalogService; apiSession?: boolean; registrationService?: RegistrationService; verificationService?: EmailVerificationService; onLocalVerified?: () => void }) {
   const [page, setPage] = useState<PublicDestination | 'register' | 'login' | 'verify-email'>(initialPage)
   const [verificationEmail, setVerificationEmail] = useState('')
   const [pendingDestination, setPendingDestination] = useState<string | null>(null)

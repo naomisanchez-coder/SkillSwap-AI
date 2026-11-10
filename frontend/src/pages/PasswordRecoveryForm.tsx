@@ -48,8 +48,8 @@ export default function PasswordRecoveryForm({ initialEmail, onBack, service = p
     <form ref={form} onSubmit={submit} noValidate aria-busy={loading} className="mt-8 space-y-5">
       <AuthField id="recovery-email" label="Correo institucional" type="email" value={email}
         onChange={value => { setEmail(value); setError(''); setChecked(false); setServiceError(''); }}
-        placeholder="sheila@tecsup.edu.pe" autoComplete="email" maxLength={254} disabled={loading}
-        error={error} helper="Usa el dominio exacto @tecsup.edu.pe." icon={<Icons.Mail s={17} />} />
+        placeholder="sheila.diaz@tecsup.edu.pe" autoComplete="email" maxLength={254} disabled={loading}
+        error={error} helper="Usa nombre.apellido@tecsup.edu.pe, con un solo punto y únicamente letras antes del dominio." icon={<Icons.Mail s={17} />} />
       {checked && <p role="status" className="rounded-xl border border-[#C9D4CC] bg-[#DCEBDD] px-4 py-3 text-sm text-[#24685F]">El formato del correo institucional es válido. La recuperación sigue pendiente de integración. No se ha enviado ningún correo.</p>}
       {serviceError && <p role="alert" className="rounded-xl border border-[#E8C2C2] bg-[#FFF3F0] px-4 py-3 text-sm text-[#B54747]">{serviceError}</p>}
       <button type="submit" disabled={loading} className="w-full min-h-12 rounded-xl bg-[#24685F] text-white font-bold hover:bg-[#1D5149] disabled:opacity-55">{loading ? 'Comprobando…' : 'Comprobar correo'}</button>

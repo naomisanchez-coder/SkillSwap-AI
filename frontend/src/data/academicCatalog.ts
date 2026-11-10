@@ -1,23 +1,19 @@
+import catalog from './academic-1.0.0.json' with { type: 'json' };
 export const TECSUP_INSTITUTION = 'TECSUP';
 
 /**
  * Catálogo referencial para el prototipo.
  * Las denominaciones deben confirmarse antes de una puesta en servicio.
  */
-export const TECSUP_CAREERS = [
-  'Diseño y Desarrollo de Software',
-  'Administración de Redes y Comunicaciones',
-  'Mecatrónica Industrial',
-  'Electrotecnia Industrial',
-  'Gestión y Mantenimiento de Maquinaria Industrial',
-] as const;
+export const TECSUP_CAREERS: readonly string[] = catalog.careers.map(career => career.name);
 
-export const ACADEMIC_CYCLES = [1, 2, 3, 4, 5, 6] as const;
+export const ACADEMIC_CYCLES: readonly number[] = catalog.cycles;
 
 export const AUTHORIZED_TECSUP_EMAIL_DOMAINS: readonly string[] = ['tecsup.edu.pe'];
 export const TECSUP_EMAIL_DOMAIN_STATUS = 'configured' as const;
 
-const TECSUP_STUDENT_EMAIL_PATTERN = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@tecsup\.edu\.pe$/;
+// Contrato de registro: dos segmentos de letras ASCII y un único punto.
+const TECSUP_STUDENT_EMAIL_PATTERN = /^[a-z]+\.[a-z]+@tecsup\.edu\.pe$/;
 
 export function normalizeTecsupEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -32,7 +28,7 @@ export function getTecsupEmailValidationError(email: string): string | null {
   const parts = normalized.split('@');
 
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return 'Ingresa un correo institucional válido, por ejemplo: sheila@tecsup.edu.pe.';
+    return 'Usa el formato nombre.apellido@tecsup.edu.pe, por ejemplo: sheila.diaz@tecsup.edu.pe.';
   }
 
   if (parts[1] === 'demo.pe') {
@@ -44,7 +40,7 @@ export function getTecsupEmailValidationError(email: string): string | null {
   }
 
   if (!TECSUP_STUDENT_EMAIL_PATTERN.test(normalized)) {
-    return 'Ingresa un nombre de usuario válido antes de @tecsup.edu.pe, sin espacios ni puntos al inicio, al final o consecutivos.';
+    return 'Usa nombre.apellido@tecsup.edu.pe: dos segmentos de letras de la a a la z separados por un solo punto, sin números, símbolos ni espacios interiores.';
   }
 
   return null;

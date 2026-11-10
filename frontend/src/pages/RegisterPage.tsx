@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LegalModal } from '../components/LegalModal';
 import { Icons } from '../components/icons';
-import { ACADEMIC_CYCLES, AUTHORIZED_TECSUP_EMAIL_DOMAINS, getTecsupEmailValidationError, normalizeTecsupEmail, TECSUP_CAREERS, TECSUP_INSTITUTION } from '../data/academicCatalog';
+import { ACADEMIC_CYCLES, AUTHORIZED_TECSUP_EMAIL_DOMAINS, normalizeTecsupEmail, TECSUP_CAREERS, TECSUP_INSTITUTION } from '../data/academicCatalog';
+import { validateRegistrationForm } from '../data/registrationValidation';
 import { LEGAL_VERSIONS, registerStudent, RegistrationError, type RegistrationService } from '../services/registration';
 
 import { AuthLayout } from '../components/AuthLayout';
@@ -26,12 +27,20 @@ function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSw
   const [legalDocument, setLegalDocument] = useState<'terms' | 'privacy' | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [retryUntil, setRetryUntil] = useState(0);
+  const [retrySeconds, setRetrySeconds] = useState(0);
   const [createdEmail, setCreatedEmail] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
   const inFlight = useRef(false);
   const controllerRef = useRef<AbortController | null>(null);
   useEffect(() => () => controllerRef.current?.abort(), []);
+  useEffect(() => {
+    if (!retryUntil) return;
+    const update = () => setRetrySeconds(Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000)));
+    update(); const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryUntil]);
   useEffect(() => {
     if (Object.keys(errors).length) {
       formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [data-registration-error]')?.focus();
@@ -41,18 +50,8 @@ function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSw
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (inFlight.current) return;
-    const nextErrors: Record<string, string> = {};
-    if (firstName.trim().length < 2 || firstName.trim().length > 100) nextErrors.firstName = 'Ingresa entre 2 y 100 caracteres para tus nombres.';
-    if (lastName.trim().length < 2 || lastName.trim().length > 100) nextErrors.lastName = 'Ingresa entre 2 y 100 caracteres para tus apellidos.';
-    if (!TECSUP_CAREERS.some(item => item === career)) nextErrors.career = 'Selecciona tu carrera.';
-    if (!ACADEMIC_CYCLES.some(item => item === Number(cycle))) nextErrors.cycle = 'Selecciona un ciclo entre 1 y 6.';
-    const emailError = getTecsupEmailValidationError(email);
-    if (emailError || normalizeTecsupEmail(email).length > 254) nextErrors.email = emailError ?? 'El correo no puede superar 254 caracteres.';
-    if (password.length < 8 || password.length > 128) nextErrors.password = 'La contraseña debe tener entre 8 y 128 caracteres.';
-    if (!confirmPassword) nextErrors.confirm = 'Confirma tu contraseña.';
-    else if (password !== confirmPassword) nextErrors.confirm = 'Las contraseñas son diferentes.';
-    if (!accepted) nextErrors.terms = 'Debes aceptar los términos y la política de privacidad.';
+    if (inFlight.current || Date.now() < retryUntil) return;
+    const nextErrors = validateRegistrationForm({ firstName, lastName, email, career, cycle, password, confirmPassword, accepted });
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
     setErrors({});
     inFlight.current = true;
@@ -69,7 +68,10 @@ function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSw
       if (localPreview && onVerifyEmail) onVerifyEmail(user.email);
       else setCreatedEmail(user.email);
     } catch (error) {
-      if (!controller.signal.aborted) setErrors(error instanceof RegistrationError ? error.fields : { general: 'No fue posible completar el registro. Inténtalo más tarde.' });
+      if (!controller.signal.aborted) {
+        setErrors(error instanceof RegistrationError ? error.fields : { general: 'No fue posible completar el registro. Inténtalo más tarde.' });
+        if (error instanceof RegistrationError && error.retryAfterSeconds) { setRetryUntil(Date.now() + error.retryAfterSeconds * 1000); setRetrySeconds(error.retryAfterSeconds); }
+      }
     } finally {
       inFlight.current = false;
       if (!controller.signal.aborted) setLoading(false);
@@ -100,8 +102,8 @@ function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSw
         <fieldset disabled={loading} className="space-y-5 min-w-0">
         <legend className="sr-only">Datos del registro</legend>
         <div className="grid sm:grid-cols-2 gap-4">
-          <AuthField id="register-first-name" label="Nombres" value={firstName} onChange={setFirstName} placeholder="Tus nombres" autoComplete="given-name" error={errors.firstName} maxLength={100} icon={<Icons.Users s={17} />} />
-          <AuthField id="register-last-name" label="Apellidos" value={lastName} onChange={setLastName} placeholder="Tus apellidos" autoComplete="family-name" error={errors.lastName} maxLength={100} />
+          <AuthField id="register-first-name" label="Nombres" value={firstName} onChange={setFirstName} placeholder="Tus nombres" autoComplete="given-name" error={errors.firstName} maxLength={200} icon={<Icons.Users s={17} />} />
+          <AuthField id="register-last-name" label="Apellidos" value={lastName} onChange={setLastName} placeholder="Tus apellidos" autoComplete="family-name" error={errors.lastName} maxLength={200} />
         </div>
         <AuthField id="register-institution" label="Institución" value={TECSUP_INSTITUTION} onChange={() => {}} helper="Institución fija para este proyecto académico." disabled />
         <AuthField
@@ -114,7 +116,7 @@ function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSw
           autoComplete="email"
           error={errors.email}
           maxLength={254}
-          helper={`Dominio autorizado: ${AUTHORIZED_TECSUP_EMAIL_DOMAINS.map(domain => `@${domain}`).join(', ')}`}
+          helper={`Formato: nombre.apellido, con un solo punto y únicamente letras. Dominio autorizado: ${AUTHORIZED_TECSUP_EMAIL_DOMAINS.map(domain => `@${domain}`).join(', ')}`}
           icon={<Icons.Mail s={17} />}
         />
         <div className="grid sm:grid-cols-[1fr_150px] gap-4">
@@ -127,14 +129,14 @@ function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSw
             {ACADEMIC_CYCLES.map(item => <option key={item} value={item}>{item}.º ciclo</option>)}
           </SelectField>
         </div>
-        <p className="-mt-2 text-xs leading-5 text-[#60716C]">Catálogo referencial pendiente de confirmar denominaciones vigentes.</p>
-        <PasswordField id="register-password" label="Contraseña" value={password} onChange={setPassword} show={showPassword} onToggle={() => setShowPassword(value => !value)} error={errors.password} autoComplete="new-password" />
+        <p className="-mt-2 text-xs leading-5 text-[#60716C]">Catálogo 1.0.0 del registro. No acredita disponibilidad por sede ni duración oficial; el servidor comprueba que la carrera y el ciclo estén activos.</p>
+        <PasswordField id="register-password" label="Contraseña" value={password} onChange={setPassword} show={showPassword} onToggle={() => setShowPassword(value => !value)} error={errors.password} autoComplete="new-password" maxLength={256} />
         <div className="-mt-2 rounded-xl bg-[#F7F7F2] px-4 py-3 text-xs text-[#60716C]">
-          <span className={`inline-flex items-center gap-1.5 font-semibold ${password.length >= 8 ? 'text-[#237A57]' : ''}`}>
+          <span className={`inline-flex items-center gap-1.5 font-semibold ${[...password].length >= 8 ? 'text-[#237A57]' : ''}`}>
             <Icons.Check s={13} /> Mínimo 8 caracteres
           </span>
         </div>
-        <PasswordField id="register-confirm" label="Confirmar contraseña" value={confirmPassword} onChange={setConfirmPassword} show={showConfirm} onToggle={() => setShowConfirm(value => !value)} error={errors.confirm} autoComplete="new-password" />
+        <PasswordField id="register-confirm" label="Confirmar contraseña" value={confirmPassword} onChange={setConfirmPassword} show={showConfirm} onToggle={() => setShowConfirm(value => !value)} error={errors.confirm} autoComplete="new-password" maxLength={256} />
 
         <div>
           <div className="flex items-start gap-3">
@@ -152,8 +154,9 @@ function RegisterForm({ onSwitch, service, localPreview, onVerifyEmail }: { onSw
         </div>
         {errors.general && <div tabIndex={-1} data-registration-error role="alert" className="rounded-xl border border-[#E8C2C2] bg-[#FFF3F0] px-4 py-3 text-sm font-semibold text-[#B54747]">{errors.general}</div>}
         </fieldset>
-        <button type="submit" disabled={loading} className="w-full min-h-12 rounded-xl bg-[#24685F] text-white font-bold hover:bg-[#1D5149] disabled:opacity-55 flex items-center justify-center gap-2">
-          {loading && <Icons.Loader s={16} />} {loading ? 'Creando cuenta…' : 'Crear cuenta de estudiante'}
+        {retrySeconds > 0 && <p role="status" className="text-sm text-[#725D3B]">Puedes volver a enviar el registro en {retrySeconds} segundos. No se enviará automáticamente.</p>}
+        <button type="submit" disabled={loading || retrySeconds > 0} className="w-full min-h-12 rounded-xl bg-[#24685F] text-white font-bold hover:bg-[#1D5149] disabled:opacity-55 flex items-center justify-center gap-2">
+          {loading && <Icons.Loader s={16} />} {loading ? 'Creando cuenta…' : retrySeconds > 0 ? 'Espera para reintentar' : 'Crear cuenta de estudiante'}
         </button>
       </form>
 
