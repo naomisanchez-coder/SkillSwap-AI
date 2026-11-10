@@ -44,7 +44,7 @@ Los mensajes y códigos de aplicación son públicos; no incluir SQL, trazas, ru
 }
 ```
 
-`fields` es opcional y solo contiene campos públicos de validación; nunca reproduce valores sensibles. El middleware actual de Etapa 0 todavía no implementa este esquema para autenticación.
+`fields` es opcional y solo contiene campos públicos de validación; nunca reproduce valores sensibles. La infraestructura 1.3A implementa este esquema mediante PublicError con códigos y mensajes curados; los endpoints de autenticación siguen propuestos. Los errores genéricos del driver nunca se serializan. El 404 y las respuestas de salud conservan su formato anterior. Códigos específicos como EMAIL_ALREADY_REGISTERED se incorporarán con su caso de uso aprobado; no están implementados por este cambio.
 
 | HTTP | Uso propuesto |
 | --- | --- |

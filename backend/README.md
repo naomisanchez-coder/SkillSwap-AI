@@ -15,7 +15,7 @@ La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servi
 - Persistencia: MySQL 8.4 mediante `mysql2/promise`.
 - Organización prevista: monolito modular con rutas, controladores, servicios y repositorios. Las capas de negocio aún no existen.
 
-`src/app.js` crea la aplicación sin abrir puertos. `src/server.js` administra el servidor HTTP y el cierre del pool. La configuración se concentra en `src/config/`. El pool actual expone comprobación de disponibilidad y cierre; una interfaz transaccional para servicios futuros queda pendiente.
+`src/app.js` crea la aplicación sin abrir puertos. `src/server.js` administra el servidor HTTP y el cierre del pool. La configuración se concentra en `src/config/`. El pool expone comprobación de disponibilidad, cierre, ejecución parametrizada y transacciones sobre una misma conexión. Las capas de negocio y repositorios de autenticación se incorporarán en el siguiente incremento.
 
 ## Tecnologías y versiones
 
@@ -55,12 +55,16 @@ backend/
 │   ├── config/
 │   │   ├── db.js
 │   │   └── env.js
+│   ├── errors/
+│   │   └── PublicError.js
 │   ├── middleware/
 │   │   └── errorHandler.js
 │   └── routes/
 │       └── health.routes.js
 ├── tests/
 │   ├── .gitkeep
+│   ├── database.test.js
+│   ├── errors.test.js
 │   ├── health.test.js
 │   └── migrations.test.js
 └── uploads/              # Local, ignorado; sin funcionalidad de carga
@@ -253,6 +257,46 @@ La integración verifica versión, destino, permisos directos, esquema vacío/hi
 
 La prueba de fallo del ejecutor sin MySQL demuestra detención antes del historial; no equivale a comprobar un fallo DDL real del servidor. La integración real de este incremento pasó; esto no valida automáticamente futuras modificaciones del SQL. No hacer commit ni push si falta alguna verificación obligatoria.
 
+## Incremento 1.3A: persistencia transaccional y errores públicos
+
+Infraestructura transversal implementada y validada con una cuenta solo DML del esquema aislado, sin endpoints nuevos de autenticación ni cambios a las migraciones. `createDatabase()` conserva `check()` y `close()` y añade:
+
+- `execute(sql, values = [])`: usa sentencias preparadas de mysql2, devolviendo `[rows, fields]`. Los valores se enlazan por separado; los identificadores deben pertenecer al código de repositorio, no a entradas del usuario.
+- `transaction(async (tx) => ...)`: reserva una conexión, inicia transacción, entrega `tx.execute()`, confirma al resolver y revierte al rechazar. Devuelve el resultado del callback y libera la conexión. No exponer el pool ni manejar HTTP desde esta capa.
+
+Solo se admiten sentencias de datos que comiencen por SELECT, INSERT, UPDATE o DELETE. El API no es un ejecutor de DDL: rechaza comandos de control transaccional y no sustituye al migrador. Los callbacks deben esperar todas sus operaciones y usar exclusivamente `tx.execute()` para participar en la misma transacción. No hay transacciones anidadas, savepoints ni reintentos automáticos.
+
+Cada checkout espera `SET SESSION time_zone = '+00:00'`; el driver usa `timezone: 'Z'` para serializar/leer fechas JavaScript de forma coherente. Escribir fechas desde servicios en UTC; presentar zona local corresponde a la UI. No cambiar la zona global del servidor.
+
+Errores al iniciar o inicializar sesión descartan la conexión. Un fallo de callback intenta rollback y conserva el error original. Si rollback falla, se descarta la conexión en vez de devolver una sesión de estado incierto al pool. Un fallo de commit también descarta y no se reintenta: el resultado puede ser incierto si se perdió la confirmación de MySQL. La idempotencia de negocio deberá resolverse en los servicios futuros.
+
+`src/errors/PublicError.js` define mensajes públicos curados para VALIDATION_ERROR (422), CONFLICT (409), UNAUTHORIZED (401), FORBIDDEN (403), RATE_LIMITED (429) y SERVICE_UNAVAILABLE (503). Solo VALIDATION_ERROR admite `fields`, con mensajes de validación sin valores enviados por el cliente. No construir campos a partir de errores del driver. Los mensajes, código y estado públicos son controlados; un error desconocido produce 500 genérico. El middleware reconoce además JSON inválido (400), cuerpo excesivo (413) y codificaciones no soportadas (415).
+
+Los errores del middleware usan `{error:{code,message,fields?}}`. Se conservan exactamente las respuestas de ambos endpoints de salud y el 404 existente. Esta mejora no implementa registro, autorización ni sesiones.
+
+### Validación de 1.3A
+
+Pruebas unitarias: enlace separado de parámetros, UTC, una conexión por transacción, commit/rollback, cierre del scope, liberación y descarte ante fallos, preservación del error original, TLS y contrato HTTP sin detalles internos. Las pruebas HTTP usan servidores efímeros.
+
+La integración de persistencia requiere la cuenta **solo DML** `skillswap_test_app`, diferente de root, skillswap_migrator y skillswap_app. No usar credenciales de migraciones para validar operaciones del runtime. Configurar localmente las variables siguientes, sin secretos en Git ni en comandos persistentes:
+
+| Variable | Valor o requisito |
+| --- | --- |
+| `DATABASE_TEST_DB` | Exactamente `skillswap_ai_test_auth` |
+| `DATABASE_TEST_USER` | `skillswap_test_app`, sin privilegios globales operativos, roles activos ni DDL, limitada al esquema aislado |
+| `DATABASE_TEST_PASSWORD` | Contraseña local |
+
+La cuenta necesita SELECT, INSERT, UPDATE y DELETE en el esquema aislado. La prueba confirma una transacción de solo lectura mediante COMMIT. Las escrituras sintéticas con UUID propio terminan siempre en rollback, tanto ante un error de negocio como ante un error SQL; no se ejecuta limpieza mediante DELETE ni se conservan fixtures. No crea tablas ni toca registros de la base principal. Comprueba también roundtrip de fecha UTC y parámetros como datos.
+
+Con estas variables cargadas de forma local, ejecutar `node --test tests/database.test.js`. Sin ellas se informa SKIP; eso no demuestra funcionamiento transaccional real. La suite de migraciones usa otras variables y una cuenta distinta: no habilitarla en un entorno que prohíba credenciales administrativas. Para una configuración privada que utilice las claves DB_HOST, DB_PORT, DB_NAME, DB_USER y DB_PASSWORD, validar primero el destino exacto 127.0.0.1:3306, skillswap_ai_test_auth y skillswap_test_app. Después mapear en memoria DB_NAME → DATABASE_TEST_DB, DB_USER → DATABASE_TEST_USER y DB_PASSWORD → DATABASE_TEST_PASSWORD al lanzar las pruebas. El archivo local `.env.test.local` se mantiene ignorado e intacto; el runtime de producción no cambia. No habilitar variables MIGRATION_TEST_* en esta ejecución DML.
+
 ## Próximos incrementos
 
 Pendientes de aprobación o implementación: decisiones del contrato, catálogo académico oficial, hash de contraseñas, registro institucional, envío real de correo, concesión inicial atómica y sesiones seguras. Este documento no autoriza ejecutar esos incrementos ni implementar recuperación de contraseña, reservas o funcionalidades de mentoría.
+
+
+### Resultado de validación de 1.3A
+
+Suite ejecutada con mapeo de entorno únicamente en memoria: 36 pruebas aprobadas y ninguna fallida. La integración real de persistencia pasó con skillswap_test_app@127.0.0.1 en skillswap_ai_test_auth, sin DDL ni datos sintéticos persistidos. Se verificaron COMMIT de solo lectura, rollback por error de negocio y rollback por error SQL, reutilización de conexiones, parámetros y fechas UTC.
+
+La integración de migraciones quedó omitida deliberadamente en esta ejecución para no utilizar la cuenta de migraciones; su validación de 1.2 permanece documentada. La suite HTTP conserva los cuerpos de salud y actualiza las expectativas del nuevo contrato del middleware. La validación 1.3A no requiere ni realiza escrituras en skillswap_ai.

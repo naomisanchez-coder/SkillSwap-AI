@@ -69,14 +69,14 @@ test('invalid JSON reaches centralized middleware', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{invalid',
     });
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), { status: 'error', message: 'Invalid JSON' });
+    assert.deepEqual(await response.json(), { error: { code: 'INVALID_JSON', message: 'El JSON enviado no es válido.' } });
   });
 });
 
 test('unexpected errors return a generic 500', () => {
   const response = {
     status(code) { assert.equal(code, 500); return this; },
-    json(body) { assert.deepEqual(body, { status: 'error', message: 'Internal server error' }); },
+    json(body) { assert.deepEqual(body, { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Error interno del servidor.' } }); },
   };
   errorHandler(new Error('private details'), {}, response, () => assert.fail());
 });
