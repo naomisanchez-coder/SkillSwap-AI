@@ -10,7 +10,7 @@ SkillSwap AI es un proyecto académico independiente, no una plataforma oficial 
 
 El registro trata nombres, apellidos, correo institucional, carrera, ciclo, contraseña protegida mediante hash y constancia de aceptación de términos y privacidad con versiones y fecha. Estos datos permiten crear el perfil académico, controlar integridad y preparar la autenticación. No almacenamos la contraseña en texto plano como parte del diseño implementado.
 
-Cuando las funciones correspondientes estén disponibles podrán tratarse datos de perfil, preferencias, habilidades, sesiones de mentoría y operaciones de créditos para facilitar el aprendizaje, gestionar reservas y validar actividades. La carrera y el área aportan contexto académico, sin restringir habilidades o mentores. No se implementan estadísticas administrativas en este incremento. No se presume autorización para publicidad ni finalidades incompatibles.
+Cuando las funciones correspondientes estén disponibles podrán tratarse datos de perfil, preferencias, habilidades, sesiones de mentoría y operaciones de créditos para facilitar el aprendizaje, gestionar reservas y validar actividades. La carrera aporta contexto académico, sin restringir habilidades o mentores. No se implementan estadísticas administrativas en este incremento. No se presume autorización para publicidad ni finalidades incompatibles.
 
 La verificación de correo comprobará el control de la dirección institucional. La autenticación y las sesiones deberán utilizar mecanismos seguros y controles de acceso. El registro actual no crea sesión ni realiza envíos de correo. No envíes datos personales ajenos o sensibles que no sean necesarios para la finalidad educativa.
 

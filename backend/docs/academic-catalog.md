@@ -1,8 +1,8 @@
 # Catálogo académico inicial 1.0.0
 
-Fuente de nombres: https://www.tecsup.edu.pe/segmento-joven/ (consulta 2026-11-09). Selección de 14 carreras aprobadas para SkillSwap AI, organizada en cinco áreas; no representa toda la oferta ni disponibilidad por sede. Los ciclos 1–6 son una configuración del prototipo y no certifican la duración oficial de cada carrera. La carrera no restringe las habilidades ni los mentores disponibles.
+Fuente de nombres: https://www.tecsup.edu.pe/segmento-joven/ (consulta 2026-11-09). Selección de 14 carreras aprobadas para SkillSwap AI, no representa toda la oferta ni disponibilidad por sede. Los ciclos 1–6 son una configuración del prototipo y no certifican la duración oficial de cada carrera. La carrera no restringe las habilidades ni los mentores disponibles.
 
-`database/catalogs/academic-1.0.0.json` conserva claves estables, UUID deterministas, nombres, áreas y ciclos. Schema 001 no contiene columna de área: se mantiene la asociación como metadato versionado sin alterar el esquema. Una futura persistencia/consulta por área requerirá un incremento independiente. No se implementan estadísticas.
+`database/catalogs/academic-1.0.0.json` conserva claves estables, UUID deterministas, nombres y ciclos, sin agrupaciones, columnas ni propiedades API de área, departamento o facultad. El formulario conserva únicamente career y cycle. No se altera el esquema ni se implementan estadísticas.
 
 El cargador `database/academic-catalog.js` utiliza una transacción DML y parámetros. Inserta únicamente filas faltantes; nunca sobrescribe nombres, IDs, estado activo ni ciclos existentes. Conflictos de identidad/nombre/ciclos abortan toda la operación. Una segunda aplicación no duplica datos. No es una migración DDL: no altera `001_auth_foundation.sql` ni `schema_migrations`.
 

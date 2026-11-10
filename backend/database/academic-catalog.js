@@ -1,16 +1,15 @@
 import { readFile } from 'node:fs/promises';
 
-// Area is versioned metadata: schema 001 stores only career and cycle.
+// Only careers and cycles from the existing schema; no academic grouping.
 export async function readAcademicCatalog() {
   const catalog = JSON.parse(await readFile(new URL('./catalogs/academic-1.0.0.json', import.meta.url), 'utf8'));
   const unique = (values) => new Set(values).size === values.length;
   if (catalog.version !== '1.0.0' || catalog.careers.length !== 14 ||
       JSON.stringify(catalog.cycles) !== '[1,2,3,4,5,6]' ||
-      !unique(catalog.areas.map((a) => a.code)) ||
       ['id', 'code', 'name'].some((key) => !unique(catalog.careers.map((c) => c[key]))) ||
       catalog.careers.some((c) => !/^[a-z0-9-]{1,50}$/.test(c.code) ||
         !/^[0-9a-f-]{36}$/.test(c.id) || !c.name || [...c.name].length > 150 ||
-        !catalog.areas.some((a) => a.code === c.area))) throw new Error('Invalid versioned catalog');
+        Object.keys(c).some((key) => !['id', 'code', 'name'].includes(key)))) throw new Error('Invalid versioned catalog');
   return catalog;
 }
 

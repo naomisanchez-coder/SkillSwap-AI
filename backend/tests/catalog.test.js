@@ -4,12 +4,12 @@ import { readAcademicCatalog, synchronizeAcademicCatalog } from '../database/aca
 import { createDatabase } from '../src/config/db.js';
 import { readFile } from 'node:fs/promises';
 
-test('approved academic catalog preserves stable identities, areas and prototype cycles', async () => {
+test('approved academic catalog preserves stable identities and prototype cycles without groupings', async () => {
   const catalog = await readAcademicCatalog();
   assert.equal(catalog.careers.length, 14);
-  assert.equal(catalog.areas.length, 5);
+  assert.equal(Object.hasOwn(catalog, 'areas'), false);
+  assert.ok(catalog.careers.every((career) => Object.keys(career).sort().join(',') === 'code,id,name'));
   assert.equal(catalog.careers[0].name, 'Diseño y Desarrollo de Software');
-  assert.equal(catalog.careers[0].area, 'tecnologia-digital');
   assert.deepEqual(catalog.cycles, [1, 2, 3, 4, 5, 6]);
   for (const name of ['terms', 'privacy']) {
     const text = await readFile(new URL(`../docs/legal/${name}-1.0.0.md`, import.meta.url), 'utf8');

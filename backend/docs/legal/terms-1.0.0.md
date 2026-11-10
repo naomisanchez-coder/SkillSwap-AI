@@ -10,7 +10,7 @@ Al registrarte debes proporcionar datos académicos correctos, aceptar expresame
 
 ## Aprendizaje y mentoría
 
-La cuenta se crea como estudiante. El acceso posterior al modo mentor utiliza el mismo perfil académico y requiere el proceso de revisión y aprobación de las habilidades que se ofrecerán. No concede funciones administrativas. La carrera y el área identifican el contexto académico; no limitan qué habilidades puedes aprender ni a qué mentores puedes solicitar apoyo. El catálogo seleccionado y los ciclos 1–6 son configuración inicial del prototipo y no certifican la duración ni disponibilidad de carreras por sede.
+La cuenta se crea como estudiante. El acceso posterior al modo mentor utiliza el mismo perfil académico y requiere el proceso de revisión y aprobación de las habilidades que se ofrecerán. No concede funciones administrativas. La carrera identifica el contexto académico; no limita qué habilidades puedes aprender ni a qué mentores puedes solicitar apoyo. El catálogo seleccionado y los ciclos 1–6 son configuración inicial del prototipo y no certifican la duración ni disponibilidad de carreras por sede.
 
 Las reservas, cancelaciones y confirmaciones de sesiones deberán realizarse mediante los mecanismos de la plataforma cuando estén implementados. No debe validarse una sesión que no ocurrió ni manipular sus registros. Las condiciones operativas de cancelación y resolución de desacuerdos se comunicarán antes de habilitar dichas funciones; este documento no fija plazos ni penalidades que no hayan sido aprobados.
 
