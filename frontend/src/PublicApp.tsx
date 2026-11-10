@@ -73,7 +73,6 @@ export default function PublicApp({ initialPage, catalogService = referenceCatal
         </aside>
       )}
       {page === 'login' && <LoginPage onBack={() => navigate('landing')} onRegister={() => navigate('register')}
-        onRecoveryPending={() => setPendingDestination('Recuperación de contraseña')}
         onAuthenticated={next => { acceptSession(next); navigate('landing') }} />}
       {page === 'register' && <RegisterPage onBack={() => navigate('landing')} onLogin={() => navigate('login')} />}
       {page === 'landing' && <LandingPage {...publicHeaderActions} mentors={catalog.mentors} />}

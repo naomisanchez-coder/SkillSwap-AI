@@ -1,5 +1,48 @@
 # SkillSwap AI — frontend
 
+## Interfaz de recuperación de contraseña
+
+Mapa: portada → **Iniciar sesión** → **¿Olvidaste tu contraseña?** →
+**Comprobar correo** → **Volver a iniciar sesión**. El logotipo y el enlace
+superior permiten volver a la portada. Se reutiliza `PasswordRecoveryForm` de
+`AuthPage.tsx` del Figma Make original, `AuthLayout`, `AuthField`, la fotografía,
+los iconos y las fuentes existentes. No se añaden dependencias.
+
+El formulario recibe el correo introducido en login, normaliza espacios exteriores
+y mayúsculas, valida el dominio exacto `@tecsup.edu.pe` mediante `academicCatalog`
+y limita la longitud a 254 caracteres. Conserva las reglas actuales del frontend
+y del prototipo, incluidos los formatos `sheila`, `sheila.diaz` y `sheila_diaz`.
+La validación solo comprueba formato; no indica que exista una cuenta.
+El resultado se retira al editar el correo. El retorno conserva el correo original
+de login, limpia la contraseña y devuelve el foco al botón que abrió el formulario.
+
+`PasswordRecoveryService` separa la presentación del futuro adaptador API. Su
+implementación actual devuelve únicamente `invalid` o `integration_pending`, sin
+peticiones HTTP, almacenamiento de direcciones, tokens ni envíos de correo. No se
+inventa un endpoint. Cuando Naomi entregue el contrato habrá que acordar ruta,
+payload, respuestas, protección frente a enumeración, límites de intentos y reglas
+de correo, y añadir entonces el adaptador y sus pruebas. La interfaz avisa antes y
+después de comprobar el correo que la integración está pendiente y no se envió un
+mensaje. No se implementa todavía un enlace de restablecimiento ni nueva contraseña.
+
+La pantalla funciona sin backend; la comprobación global de sesión existente puede
+mostrar su aviso de conexión independiente y no impide comprobar el formato.
+Para revisar con el servidor local, abrir `http://127.0.0.1:5175/`, salir primero si
+hay una vista privada abierta y seguir el mapa anterior. Con `npm run dev`, usar la
+URL que indique Vite. La recuperación no requiere una cuenta ni activar el acceso
+de prueba.
+
+Comprobaciones: build y lint correctos; recorrido automatizado en Chrome a 320×740,
+360×800, 390×844, 768×1024, 1024×768, 844×390, 1280×800 y 1440×900. Se revisaron
+correo vacío, malformado, personal, subdominio, dominio parecido, puntos consecutivos,
+los tres formatos institucionales, normalización, mensajes y su limpieza, Enter,
+Tab/Shift+Tab, foco al abrir/volver, retorno a portada, ausencia de desbordamiento,
+de peticiones de recuperación y de persistencia del correo. Sin errores JavaScript;
+capturas móvil y escritorio revisadas. Scripts y capturas temporales fuera de Git.
+Pendientes: envío real y contrato de Naomi, dispositivos físicos, otros navegadores
+y lector de pantalla. Figma MCP permite leer el código Make; no ofrece una captura
+directa de ese tipo de archivo.
+
 ## Cierre de sesión y catálogo compartido
 
 `App` separa la composición de desarrollo (`DevelopmentApp`) del acceso real y la
@@ -824,10 +867,11 @@ absoluta. El cliente no decide permisos ni interpreta la cookie para dar acceso.
 
 El acceso confirmado muestra una sección provisional con el usuario y rol devueltos
 por la API, el estado del perfil y los destinos privados pendientes. Se conserva
-la navegación pública. Paneles, onboarding y recuperación de contraseña
+la navegación pública. Paneles y onboarding conectados a la API
 solo muestran avisos de funcionalidad pendiente; no se llaman sus endpoints ni se
 simula una respuesta del servidor. Logout se implementa según el contrato descrito
-al comienzo de este documento. El registro sigue creando cuentas sin verificar y sin sesión.
+en este documento. Recuperación de contraseña dispone de la interfaz descrita arriba,
+pendiente de integración. El registro sigue creando cuentas sin verificar y sin sesión.
 
 ### Pruebas de login
 

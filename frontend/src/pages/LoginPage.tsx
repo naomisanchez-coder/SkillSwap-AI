@@ -3,13 +3,16 @@ import { AuthLayout } from '../components/AuthLayout';
 import { AuthField, PasswordField } from '../components/AuthFields';
 import { Icons } from '../components/icons';
 import { AuthError, login, type AuthSession } from '../services/auth';
+import PasswordRecoveryForm from './PasswordRecoveryForm';
 
 // Formulario y presentación de AuthPage.tsx del prototipo; acceso por la API real.
-export default function LoginPage({ onBack, onRegister, onRecoveryPending, onAuthenticated }: {
-  onBack: () => void; onRegister: () => void; onRecoveryPending: () => void;
+export default function LoginPage({ onBack, onRegister, onAuthenticated }: {
+  onBack: () => void; onRegister: () => void;
   onAuthenticated: (session: AuthSession) => void;
 }) {
   const [email, setEmail] = useState('');
+  const [recovering, setRecovering] = useState(false);
+  const recoveryButton = useRef<HTMLButtonElement>(null);
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -46,6 +49,13 @@ export default function LoginPage({ onBack, onRegister, onRecoveryPending, onAut
     }
   };
 
+  if (recovering) return <AuthLayout onBack={onBack}>
+    <PasswordRecoveryForm initialEmail={email} onBack={() => {
+      setRecovering(false);
+      requestAnimationFrame(() => recoveryButton.current?.focus());
+    }} />
+  </AuthLayout>;
+
   return (
     <AuthLayout onBack={onBack}>
       <div>
@@ -61,7 +71,7 @@ export default function LoginPage({ onBack, onRegister, onRecoveryPending, onAut
           <PasswordField id="login-password" label="Contraseña" value={password} onChange={setPassword}
             show={showPassword} onToggle={() => setShowPassword(value => !value)} error={errors.password} autoComplete="current-password" />
           <div className="text-right">
-            <button type="button" onClick={onRecoveryPending} className="min-h-10 text-sm font-bold text-[#24685F] hover:text-[#1D5149] disabled:opacity-55">¿Olvidaste tu contraseña?</button>
+            <button ref={recoveryButton} type="button" onClick={() => { setPassword(''); setShowPassword(false); setErrors({}); setRecovering(true); window.scrollTo({ top: 0, behavior: 'instant' }); }} className="min-h-10 text-sm font-bold text-[#24685F] hover:text-[#1D5149] disabled:opacity-55">¿Olvidaste tu contraseña?</button>
           </div>
           <label className="flex items-center gap-3 w-fit cursor-pointer">
             <input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)} className="w-4 h-4 accent-[#24685F]" />
