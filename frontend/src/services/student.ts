@@ -1,5 +1,6 @@
 import type { MentorProfileDetails, StudentDashboardSnapshot } from '../data/student';
-import type { BookingCommand, BookingContext, BookingDraft, BookingResult, ConfirmedBooking } from '../data/booking';
+import type { BookingCommand, BookingContext, BookingDraft, BookingResult, ConfirmedBooking, BookingLedger } from '../data/booking';
+import type { SessionAction } from '../data/sessionLifecycle';
 
 /** Contrato del panel: los datos de prueba se resuelven fuera de los componentes. */
 export interface StudentService {
@@ -12,4 +13,5 @@ export interface StudentService {
   getBookingDraft(): Promise<BookingDraft | null>;
   saveBookingDraft(draft: BookingDraft): Promise<void>;
   clearBookingDraft(): Promise<void>;
+  updateSession(action: SessionAction): Promise<BookingLedger>;
 }

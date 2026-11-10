@@ -4,13 +4,14 @@ import { Modal } from '../components/Modal';
 import { StudentShell, type StudentDestination } from '../components/AppShell';
 import type { PublicDestination } from '../components/PublicChrome';
 import type { StudentDashboardSnapshot } from '../data/student';
-import { hasCompletePreferences } from '../data/student';
+import { hasCompletePreferences, summarizeMentorReviews } from '../data/student';
 import { publicMentors } from '../data/publicMentors';
 import type { StudentService } from '../services/student';
 import type { ProfileService } from '../services/profile';
 import { emptyPreferences } from '../data/profileOptions';
 import { emptyDiscoveryFilters, type DiscoveryFilters } from '../data/discovery';
-import type { BookingDraft, BookingResult } from '../data/booking';
+import type { BookingDraft, BookingResult, BookingLedger } from '../data/booking';
+import { RecommendationAssistant } from '../components/RecommendationAssistant';
 import LandingPage from '../pages/LandingPage';
 import PublicExplorePage from '../pages/PublicExplorePage';
 import HowItWorksPage from '../pages/HowItWorksPage';
@@ -20,10 +21,12 @@ import StudentDashboardPage from '../pages/StudentDashboardPage';
 import RecommendationsPage from '../pages/RecommendationsPage';
 import MentorProfilePage from '../pages/MentorProfilePage';
 import BookingFlowPage from '../pages/BookingFlowPage';
+import SessionsHubPage from '../pages/SessionsHubPage';
+import CreditsHubPage from '../pages/CreditsHubPage';
 import { mockProfileService } from './profileMock';
 import { mockStudentService } from './studentMock';
 
-type Page = PublicDestination | 'profile-setup' | 'dashboard' | 'discover' | 'explore' | 'mentor' | 'booking' | 'loading';
+type Page = PublicDestination | 'profile-setup' | 'dashboard' | 'discover' | 'explore' | 'mentor' | 'booking' | 'sessions' | 'wallet' | 'loading';
 type MentorOrigin = Exclude<Page, 'mentor' | 'booking' | 'loading'>;
 /** Composición local independiente del acceso real. Los fixtures viven en los servicios. */
 export default function FrontendPreview({ onRealAccess, studentService = mockStudentService, profileService = mockProfileService }: {
@@ -49,7 +52,10 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
       if (!active) return;
       setSnapshot(next);
       if (hasCompletePreferences(next.state.profile) && draft) { setBookingDraft(draft); setMentorId(draft.mentorId); setPage('booking'); }
-      else setPage(hasCompletePreferences(next.state.profile) ? 'dashboard' : 'profile-setup');
+      else {
+        let saved = ''; try { saved = sessionStorage.getItem('skillswap:frontend:page') ?? ''; } catch { /* Navegación en memoria. */ }
+        setPage(hasCompletePreferences(next.state.profile) ? (saved === 'sessions' || saved === 'wallet' ? saved : 'dashboard') : 'profile-setup');
+      }
     }, () => { if (active) { setLoadError(true); setPage('profile-setup'); } });
     return () => { active = false; };
   }, [studentService, attempt]);
@@ -70,12 +76,13 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
   const navigate = (next: Page) => {
     setPending(null);
     setPage(next);
+    try { sessionStorage.setItem('skillswap:frontend:page', next); } catch { /* No afecta datos ni créditos. */ }
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const privateNavigate = (next: StudentDestination) => {
-    if (next === 'dashboard' || next === 'discover' || next === 'explore') navigate(next);
+    if (next === 'dashboard' || next === 'discover' || next === 'explore' || next === 'sessions' || next === 'wallet') navigate(next);
     else if (next === 'profile') navigate('profile-setup');
-    else setPending(({ sessions: 'Mis sesiones', wallet: 'Mis créditos', skills: 'Mis habilidades' })[next]);
+    else setPending('Mis habilidades');
   };
   const openMentor = (id: string) => {
     setMentorOrigin(page === 'mentor' || page === 'booking' || page === 'loading' ? 'dashboard' : page);
@@ -89,16 +96,25 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
     setBookingDraft(null);
     navigate('booking');
   };
-  const leaveBooking = async (destination: 'mentor' | 'dashboard') => {
+  const leaveBooking = async (destination: 'mentor' | 'dashboard' | 'sessions' | 'wallet') => {
     await studentService.clearBookingDraft();
     setBookingDraft(null);
     navigate(destination);
   };
   const confirmedBooking = (result: BookingResult) => {
-    setSnapshot(current => current && ({ ...current, state: { ...current.state, wallet: result.wallet,
-      sessions: [result.session, ...current.state.sessions.filter(item => item.id !== result.session.id)],
-      notifications: [...result.notifications.filter(item => !current.state.notifications.some(existing => existing.id === item.id)), ...current.state.notifications],
-    } }));
+    changedActivity(result.ledger);
+  };
+  const changedActivity = (ledger: BookingLedger) => {
+    setSnapshot(current => {
+      if (!current) return current;
+      const ratings = { ...current.state.mentorRatings };
+      const previous = current.state.activity?.reviews ?? [];
+      const reviews = [...ledger.reviews, ...(current.state.reviews ?? []).filter(item => !previous.some(old => old.id === item.id))];
+      for (const mentor of current.mentors) ratings[mentor.id] = summarizeMentorReviews(reviews, mentor.id);
+      const read = new Set(current.state.notifications.filter(item => item.read).map(item => item.id));
+      return { ...current, state: { ...current.state, activity: ledger, wallet: ledger.wallet, sessions: ledger.sessions, mentorRatings: ratings, reviews,
+        notifications: [...ledger.notifications.map(item => ({ ...item, read: read.has(item.id) })), ...current.state.notifications.filter(item => !ledger.notifications.some(next => next.id === item.id))] } };
+    });
   };
   const markRead = async (id: string) => {
     if (reading.current.has(id)) return;
@@ -126,20 +142,23 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
       if (snapshot) navigate('dashboard');
       else { setLoadError(false); setPage('loading'); setAttempt(current => current + 1); }
     }} />}
-    {(page === 'dashboard' || page === 'discover' || page === 'explore') && snapshot && <StudentShell active={page} userName={snapshot.state.profile.name} userPhoto={snapshot.state.profile.photo} credits={snapshot.state.wallet.available}
+    {(page === 'dashboard' || page === 'discover' || page === 'explore' || page === 'sessions' || page === 'wallet') && snapshot && <StudentShell active={page} userName={snapshot.state.profile.name} userPhoto={snapshot.state.profile.photo} credits={snapshot.state.wallet.available}
       notifications={snapshot.state.notifications.filter(item => item.userId === snapshot.state.profile.id)} onReadNotification={id => void markRead(id)}
       onNavigate={privateNavigate} onPublicHome={() => navigate('landing')} onLogout={() => setPending('Cerrar sesión')}
       teachingAction={{ label: 'Quiero ser mentor', onClick: () => setPending('Solicitud para compartir una habilidad') }}>
       {page === 'dashboard' && <StudentDashboardPage state={snapshot.state} mentors={snapshot.mentors} onExplore={() => navigate('explore')}
-        onDiscover={() => navigate('discover')} onSessions={() => setPending('Mis sesiones')} onWallet={() => setPending('Mis créditos')}
+        onDiscover={() => navigate('discover')} onSessions={() => navigate('sessions')} onWallet={() => navigate('wallet')}
         onMentorRequest={() => setPending('Solicitud para compartir una habilidad')} onMentor={openMentor} onEditPreferences={() => navigate('profile-setup')} />}
       {(page === 'discover' || page === 'explore') && <RecommendationsPage key={page} mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings}
         recommended={page === 'explore'} filters={filters} onFiltersChange={setFilters} onViewMentor={openMentor} onEditPreferences={() => navigate('profile-setup')} />}
+      {page === 'sessions' && snapshot.state.activity && <SessionsHubPage ledger={snapshot.state.activity} service={studentService} onChanged={changedActivity} onExplore={() => navigate('discover')} />}
+      {page === 'wallet' && snapshot.state.activity && <CreditsHubPage state={snapshot.state.activity} />}
+      {(page === 'sessions' || page === 'wallet') && <RecommendationAssistant mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings} onViewMentor={openMentor} />}
     </StudentShell>}
     {page === 'mentor' && snapshot && <MentorProfilePage key={mentorId} profile={snapshot.state.profile} mentorId={mentorId} service={studentService}
       onBack={() => { restoring.current = true; navigate(mentorOrigin); }} onBooking={() => void startBooking()} />}
     {page === 'booking' && snapshot && <BookingFlowPage key={mentorId} mentorId={mentorId} draft={bookingDraft} service={studentService} onConfirmed={confirmedBooking}
-      onBack={() => void leaveBooking('mentor')} onHome={() => void leaveBooking('dashboard')} onBuyCredits={() => setPending('Mis créditos')} onSessions={() => setPending('Mis sesiones')} />}
+      onBack={() => void leaveBooking('mentor')} onHome={() => void leaveBooking('dashboard')} onBuyCredits={() => void leaveBooking('wallet')} onSessions={() => void leaveBooking('sessions')} />}
     {page === 'landing' && <LandingPage {...actions} />}
     {page === 'public-explore' && <PublicExplorePage {...actions} mentors={publicMentors} searchQuery={publicQuery} onSearchChange={setPublicQuery} onPrivateExplore={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? 'explore' : 'profile-setup')} onMentor={openMentor} />}
     {page === 'how-it-works' && <HowItWorksPage {...actions} />}

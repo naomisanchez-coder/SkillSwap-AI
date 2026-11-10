@@ -1,5 +1,105 @@
 # SkillSwap AI — frontend
 
+## Mis sesiones y billetera
+
+Se trasladan las vistas estudiantiles de `SessionsHubPage.tsx` y `CreditsHubPage.tsx`
+del Make original. Se conservan colores, tarjetas, estados, costos de 5/10/15 créditos
+por 30/60/90 minutos, y el asistente y motor de recomendaciones sin cambiar sus pesos.
+Los diálogos reutilizan el componente nativo compartido: foco contenido, fondo inerte,
+Escape y retorno del foco. Las pestañas admiten flechas, Inicio y Fin; la valoración
+usa radios nativos. El historial de movimientos tiene desplazamiento horizontal propio.
+
+Mapa de navegación actualizado:
+
+- Perfil completado → panel → Explorar / Para ti → perfil del mentor → reserva.
+- Reserva confirmada → Mis sesiones / panel; saldo insuficiente → Mis créditos.
+- Menú, accesos del panel y notificaciones → Mis sesiones / Mis créditos.
+- Mis sesiones → detalle, cancelación, validación, reporte o valoración según estado.
+- Mis sesiones / Mis créditos → asistente → perfil del mentor → volver al origen.
+- Mi perfil → editar preferencias → panel. Las solicitudes para enseñar y logout
+  siguen mostrando un aviso de destino pendiente al seleccionarlos.
+
+Sesiones y billetera se restauran al recargar mediante `sessionStorage`; las reservas,
+confirmaciones, incidencias, reseñas y movimientos permanecen en `localStorage`.
+Se leen las reservas v1 existentes sin reiniciar el saldo ni eliminar datos anteriores.
+Reiniciar preferencias no elimina sesiones ni movimientos.
+
+`data/sessionLifecycle.ts` adapta las transiciones del prototipo. El mentor inicia y
+marca realizada una sesión; su confirmación guarda `performedAt`. El estudiante solo
+puede validar después, guardando `validatedAt`. Ambas fechas aparecen en las tarjetas
+y el detalle. Solo con ambas confirmaciones se descuenta el retenido, se contabiliza
+el utilizado y se acredita el 100 % al mentor. Los movimientos `:spent` y `:earning`
+son únicos. El historial de la sesión conserva fechas y participantes de cada acción.
+
+**Regla provisional pendiente de confirmación:** solo una reserva próxima puede
+cancelarse con **al menos 12 horas** de anticipación en `America/Lima` (incluye el
+límite exacto). Se devuelven todos los créditos retenidos, una sola vez, con referencia
+`:refund`. Con menos de 12 horas se bloquea la cancelación; se puede reportar una
+incidencia. La condición se explica en la tarjeta, el detalle y la confirmación, y
+el servicio la comprueba nuevamente al guardar. No se implementan penalizaciones
+ni devoluciones fuera de esa regla.
+
+Una discrepancia lleva a `review` y mantiene los créditos retenidos, sin valoración
+ni liquidación mientras exista una incidencia abierta. La revisión administrativa
+queda pendiente; no hay botones estudiantiles para resolverla. Se corrigió el ID fijo
+`INC-${sessionId}` del original: cada nuevo reporte lleva un UUID, incluso si una
+incidencia anterior fue cerrada sin ajuste. Una sesión completada admite una sola
+reseña, con 1–5 estrellas y comentario opcional de hasta 500 caracteres; actualiza
+el perfil del mentor y las recomendaciones.
+
+`StudentService.updateSession` es el contrato reemplazable por la API. La implementación
+de desarrollo guarda cada transición completa en una sola escritura, bajo la misma
+cola y Web Lock de las reservas. Si falla la escritura no cambia sesión, saldo,
+movimientos ni notificaciones, y el diálogo permite reintentar. Los datos persistidos
+se validan contra sus movimientos y saldos antes de aceptar otra operación; datos
+inconsistentes generan un error, nunca una reposición del saldo inicial. Los reintentos
+de cancelación y validación no repiten devoluciones ni transferencias. Las retenciones
+aplicadas y el movimiento utilizado no representan dos cargos.
+
+Para probar, inicia Vite con `VITE_ENABLE_FRONTEND_PREVIEW=true`, completa el perfil
+y reserva una mentoría. Abre **Mis sesiones**, revisa el detalle, cancela una reserva
+que cumpla el plazo y compara **Mis créditos** con el panel. Recarga cada pantalla.
+No se necesita backend. Los fixtures se limitan a desarrollo y no alteran el registro
+ni el login reales; no hay etiquetas técnicas en la interfaz del producto.
+
+Para probar estados del mentor sin añadir su pantalla, las herramientas de desarrollo
+pueden importar el fixture explícito (sustituye el ID por el de una reserva local):
+
+```js
+const { applyMentorFixture } = await import('/src/dev/studentMock.ts');
+await applyMentorFixture({ type: 'start', sessionId: 'ID-DE-RESERVA', mentorId: 'carlos' });
+await applyMentorFixture({ type: 'perform', sessionId: 'ID-DE-RESERVA', mentorId: 'carlos' });
+location.reload();
+```
+
+Después abre **Mis sesiones → Por validar** y confirma o reporta una discrepancia.
+`close-incident` es exclusivamente un fixture de cierre sin ajuste para probar reportes
+sucesivos; no está en `StudentService` ni se presenta como función administrativa.
+Estos fixtures no aplican reglas de inicio temporal de una futura pantalla del mentor.
+La API deberá validar identidad, roles, hora del servidor y las operaciones atómicas;
+los registros locales son datos de prueba, no una frontera de seguridad.
+
+`npm test` incluye las reservas, recomendaciones y regresiones del ciclo de sesión:
+12 horas ±1 ms, cancelación/reembolso repetidos, ambas confirmaciones, transferencia
+única, retención por discrepancia, IDs sucesivos, valoración única, fallos de escritura,
+recarga, compatibilidad v1 y datos corruptos. No se añaden dependencias. Las pruebas
+temporales del navegador se mantienen fuera del repositorio.
+
+Verificación de este incremento: build, lint, diff sin errores y 29 pruebas de Node.
+Chrome pasó en 320×740, 360×800, 390×844, 640×800, 768×1024, 844×390, 1024×768,
+1280×900 y 1440×900: menú, pestañas, teclado, diálogos, cancelación, recarga, billetera
+y asistente. Se comprobaron además el límite de 12 horas ±1 ms con reloj controlado,
+dos pestañas, ambas confirmaciones, fallos de guardado con reintento, reseña persistida
+y actualizada en el mentor, discrepancia, estados vacíos y notificaciones. El flujo
+previo de reservas pasó su regresión completa. Sin errores JavaScript ni llamadas API.
+La captura directa de Figma Make no está soportada por el conector; se reutilizó su
+código fuente. No se probaron dispositivos físicos ni lectores de pantalla.
+
+Pendientes: backend, pantalla del mentor, resolución administrativa y asignación de
+enlaces de videollamada. La vista estudiantil muestra **Enlace pendiente** sin inventar
+una reunión. Web Locks coordina pestañas en navegadores compatibles; la alternativa
+solo serializa dentro de una instancia. No se garantizan operaciones entre dispositivos.
+
 ## Reserva de mentoría
 
 Desde el perfil de un mentor, **Reservar sesión** abre los tres pasos de
@@ -40,8 +140,8 @@ pero no se puede garantizar restaurar la pantalla exacta.
 
 **Volver al panel** actualiza saldo, próxima sesión y notificaciones y cierra el
 borrador. Una recarga vuelve a leer los registros persistidos. **Ver mis sesiones**
-y **Ver mis créditos** siguen mostrando sus destinos pendientes: no se ha trasladado
-la gestión completa de sesiones, cancelaciones, validaciones, enlaces ni movimientos.
+y **Mis créditos** abren las vistas descritas arriba; los enlaces de reunión siguen
+pendientes de asignación.
 No se modificó backend ni autenticación; los datos de prueba siguen limitados a la
 configuración explícita de desarrollo y no muestran carteles técnicos en la interfaz.
 
@@ -74,7 +174,7 @@ Se reutilizan `RecommendationsPage.tsx` y `MentorProfilePage.tsx` de Figma Make:
 - Los filtros se conservan durante la navegación en memoria. Recargar mantiene el
   comportamiento por estado `page` del proyecto: vuelve al panel o al perfil inicial.
 - **Reservar sesión** abre el flujo local descrito arriba. No envía solicitudes a
-  una API ni integra todavía la gestión posterior de la sesión.
+  una API. La gestión posterior local se describe en Mis sesiones y billetera.
 
 `StudentService.getMentorProfile(id)` devuelve `MentorProfileDetails | null`. Un ID
 inexistente o un mentor no elegible muestra **Perfil no encontrado**, sin sustituirlo
@@ -116,8 +216,8 @@ Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y `npm run dev`:
   Permite habilidad, nivel, horario, revisión y hasta tres resultados; contempla errores
   de entrada y búsquedas sin coincidencias. Es el motor local del prototipo, sin un
   proveedor externo de IA.
-- Explorar, Para ti, perfiles de mentor y reservas están disponibles. Sesiones,
-  créditos, solicitudes de mentor y logout conservan destinos pendientes al pulsarlos.
+- Explorar, Para ti, perfiles de mentor, reservas, sesiones y créditos están disponibles.
+  Solicitudes de mentor y logout conservan destinos pendientes al pulsarlos.
 
 `src/services/student.ts` define `StudentService`; `src/dev/studentMock.ts` y
 `src/dev/mentorFixtures.ts` proporcionan los datos de prueba. La composición recibe

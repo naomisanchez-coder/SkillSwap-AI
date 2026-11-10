@@ -1,5 +1,6 @@
 import { validateProfileStep, type OnboardingPreferences } from './profileOptions';
 import type { Mentor } from './mentors';
+import type { BookingLedger } from './booking';
 
 // Subconjunto del modelo original necesario para el panel, sin migradores ni economía global.
 export type UserProfile = OnboardingPreferences & {
@@ -18,6 +19,8 @@ export type StudentDashboardData = {
   profile: UserProfile; wallet: WalletBalance; sessions: SessionRecord[];
   skillRequests: SkillRequest[]; notifications: NotificationRecord[];
   mentorRatings: Record<string, { average: number; count: number }>;
+  activity?: BookingLedger;
+  reviews?: ReviewRecord[];
 };
 export type StudentDashboardSnapshot = { state: StudentDashboardData; mentors: Mentor[] };
 export type ReviewRecord = {
@@ -25,6 +28,11 @@ export type ReviewRecord = {
   skill?: string; topic?: string; rating: number; comment: string; createdAt: string;
 };
 export type MentorProfileDetails = { mentor: Mentor; rating: { average: number; count: number }; reviews: ReviewRecord[] };
+
+export function summarizeMentorReviews(reviews: ReviewRecord[], mentorId: string) {
+  const items = reviews.filter(item => item.mentorId === mentorId);
+  return { average: items.length ? Math.round(items.reduce((sum, item) => sum + item.rating, 0) / items.length * 10) / 10 : 0, count: items.length };
+}
 
 export function hasCompletePreferences(profile: OnboardingPreferences): boolean {
   return [1, 2, 3, 4].every(step => validateProfileStep(profile, step) === null);

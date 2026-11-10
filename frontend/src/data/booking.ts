@@ -1,5 +1,5 @@
 import type { Mentor } from './mentors';
-import type { NotificationRecord, SessionRecord, WalletBalance } from './student';
+import type { NotificationRecord, ReviewRecord, SessionRecord, WalletBalance } from './student';
 import type { SessionDuration } from './creditConfig';
 import { intervalsOverlap, isSlotAvailable, parseTime } from './scheduling';
 
@@ -8,16 +8,23 @@ export type BookingDraft = BookingCommand & { step: 'schedule' | 'duration' | 'c
 export type ConfirmedBooking = SessionRecord & {
   learnerName: string; topic: string; credits: number; createdAt: string;
   reservedSlotKeys: string[]; meetingPlatform: null; meetingUrl: null;
+  performedAt?: string; validatedAt?: string; completedAt?: string; cancelledAt?: string;
+  cancellationReason?: string; refundStatus?: string; rated?: boolean;
+  rating?: number; reviewedAt?: string; history?: SessionEvent[];
 };
+export type SessionEvent = { id: string; at: string; label: string; actor: 'student' | 'mentor' | 'system' };
+export type IncidentCategory = 'mentor_absent' | 'student_absent' | 'connection' | 'not_held' | 'completion_dispute' | 'other';
+export type IncidentRecord = { id: string; sessionId: string; reporterId: string; category: IncidentCategory; reason: string; createdAt: string; status: 'open' | 'in_review' | 'closed'; resolvedAt?: string };
 export type BookingContext = {
   mentor: Mentor; studentId: string; userName: string; wallet: WalletBalance;
   sessions: SessionRecord[]; reservedSlots: string[];
 };
-export type BookingResult = { session: ConfirmedBooking; wallet: WalletBalance; notifications: NotificationRecord[] };
-export type CreditHold = { id: string; reference: string; sessionId: string; amount: number; status: 'pending'; type: 'hold'; createdAt: string };
+export type BookingResult = { session: ConfirmedBooking; wallet: WalletBalance; notifications: NotificationRecord[]; ledger: BookingLedger };
+export type CreditMovement = { id: string; reference: string; sessionId: string; amount: number; status: 'pending' | 'completed' | 'rejected'; type: 'hold' | 'refund' | 'spent' | 'earning'; createdAt: string; userId?: string };
 export type BookingLedger = {
   version: 1; studentId: string; wallet: WalletBalance; sessions: ConfirmedBooking[];
-  movements: CreditHold[]; notifications: NotificationRecord[];
+  movements: CreditMovement[]; notifications: NotificationRecord[];
+  incidents: IncidentRecord[]; reviews: ReviewRecord[]; mentorBalances: Record<string, number>;
 };
 
 export class BookingError extends Error {

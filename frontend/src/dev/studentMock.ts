@@ -1,5 +1,6 @@
 import { emptyPreferences } from '../data/profileOptions';
 import type { StudentDashboardData } from '../data/student';
+import { summarizeMentorReviews } from '../data/student';
 import type { StudentService } from '../services/student';
 import { mockProfileService } from './profileMock';
 import { mentors, reviewFixtures } from './mentorFixtures';
@@ -34,6 +35,7 @@ function readNotificationIds(): string[] {
   } catch { return []; }
 }
 export const mockStudentService: StudentService = {
+  async updateSession(action) { assertDevelopment(); return bookings.updateSession(action); },
   async getBookingContext(id) { assertDevelopment(); return bookings.getBookingContext(id); },
   async confirmBooking(command) { assertDevelopment(); return bookings.confirmBooking(command); },
   async getBooking(id) { assertDevelopment(); return bookings.getBooking(id); },
@@ -44,7 +46,9 @@ export const mockStudentService: StudentService = {
     assertDevelopment();
     const mentor = mentors.find(item => item.id === id);
     if (!mentor || !isEligibleMentor(mentor, studentFixture.profile.id)) return null;
-    return structuredClone({ mentor, rating: studentFixture.mentorRatings[id], reviews: reviewFixtures.filter(review => review.mentorId === id) });
+    const ledger = await bookings.getLedger();
+    const reviews = [...ledger.reviews, ...reviewFixtures].filter(review => review.mentorId === id);
+    return structuredClone({ mentor, rating: summarizeMentorReviews(reviews, id), reviews });
   },
   async getDashboard() {
     assertDevelopment();
@@ -52,6 +56,9 @@ export const mockStudentService: StudentService = {
     const readIds = readNotificationIds();
     const state = structuredClone(studentFixture);
     const ledger = await bookings.getLedger();
+    state.activity = ledger;
+    state.reviews = [...ledger.reviews, ...reviewFixtures];
+    state.mentorRatings = Object.fromEntries(mentors.map(mentor => [mentor.id, summarizeMentorReviews(state.reviews!, mentor.id)]));
     state.wallet = ledger.wallet;
     state.sessions = [...ledger.sessions, ...state.sessions];
     state.notifications = [...ledger.notifications, ...state.notifications];
@@ -66,3 +73,9 @@ export const mockStudentService: StudentService = {
     localStorage.setItem(studentActivityStorageKey, JSON.stringify([...new Set([...readNotificationIds(), id])]));
   },
 };
+
+/** Fixtures de acciones del mentor, sin botones ni acceso desde el servicio estudiantil. */
+export async function applyMentorFixture(action: import('../data/sessionLifecycle').MentorFixtureAction) {
+  assertDevelopment();
+  return bookings.applyMentorFixture(action);
+}
