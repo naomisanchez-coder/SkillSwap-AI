@@ -350,3 +350,11 @@ node scripts/verify-local.js
 El lanzador mapea el archivo privado .env.test.local en memoria y solo acepta skillswap_test_app en 127.0.0.1:3306/skillswap_ai_test_auth. No cambia la configuración del runtime ni archivos privados. Incluye pruebas unitarias, HTTP y persistencia real: consentimiento, hash real, duplicados concurrentes, catálogo inactivo/ambiguo, ciclo inválido, rollback del perfil y ausencia de sesiones/créditos. Los datos sintéticos y su limpieza se limitan a registros propios del esquema aislado. La prueba del catálogo carga/repite dentro de una transacción que termina en rollback. No habilita credenciales MIGRATION_TEST_* ni repite DDL.
 
 No se han implementado SMTP, verificación de correo, login, /me, logout ni perfil editable. No avanzar automáticamente a esos incrementos.
+
+## Incremento 1.4A: infraestructura de envío de verificación
+
+POST /api/auth/email/send-code está implementado con transporte SMTP sustituible, OTP criptográfico y HMAC ligado al desafío, transacción de emisión y límites persistidos. La red SMTP se ejecuta fuera de la transacción. La respuesta 202 es uniforme y no acredita recepción; sin SMTP habilitado responde 503. Registro 1.3B permanece compatible, sin correo automático.
+
+No hay proveedor, clave HMAC ni valores OTP activos configurados. La política concreta está pendiente de ratificación y no se fijaron defaults de producción. Consultar [email-delivery.md](docs/email-delivery.md) para variables locales obligatorias, pruebas, limitaciones de cola/límites por proceso y requisitos de entrega real. No se modifican archivos privados ni se envía correo a terceros durante las pruebas.
+
+Las pruebas reales de persistencia se limitan a skillswap_ai_test_auth con skillswap_test_app. Los transportes sustituidos no constituyen evidencia SMTP. Nodemailer 10.4.0 es la única dependencia incorporada; requiere Node >=20 y se usa con validación TLS, sin logs de contenido ni acceso a archivos/URLs. No se modificó la migración 001. Verificación de códigos, concesión de créditos, login y sesiones siguen pendientes.

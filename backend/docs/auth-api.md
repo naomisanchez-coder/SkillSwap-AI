@@ -1,6 +1,6 @@
 # Contratos de autenticación — SkillSwap AI
 
-**POST /api/auth/register implementado en 1.3B. Los demás endpoints de autenticación y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos.
+**POST /api/auth/register implementado en 1.3B. POST /api/auth/email/send-code implementado como infraestructura configurable 1.4A, sin entrega real validada. Los demás endpoints de autenticación y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos automáticamente.
 
 ## Fuentes y precedencia
 
@@ -130,7 +130,7 @@ No establece cookie de sesión. La decisión de disparar el primer envío de cor
 
 ## 2. Envío o reenvío de código
 
-**Estado: PROPUESTO, NO IMPLEMENTADO.**
+**Estado: INFRAESTRUCTURA IMPLEMENTADA en 1.4A; SMTP real y valores funcionales pendientes de configurar/aprobar.**
 
 **Método y ruta:** `POST /api/auth/email/send-code`.
 
@@ -146,7 +146,7 @@ No establece cookie de sesión. La decisión de disparar el primer envío de cor
 
 **Validación:** cadena normalizada y formato institucional; rechazar campos adicionales. No permitir usar el endpoint como envío de correo a destinatarios arbitrarios.
 
-### Respuesta propuesta: 202
+### Respuesta implementada cuando está configurado: 202
 
 ```json
 {
@@ -158,13 +158,15 @@ No establece cookie de sesión. La decisión de disparar el primer envío de cor
 
 Respuesta uniforme para cuentas inexistentes, verificadas o no elegibles, con identificadores indistinguibles en formato. El identificador no autoriza acceso. `202` significa aceptación, no recepción. Fallos generales del servicio pueden producir `503`, sin revelar existencia de cuentas mediante errores específicos de destinatario.
 
-**Autorización y seguridad:** público, sin sesión protegida. Código generado criptográficamente; persistir HMAC ligado al desafío con clave exclusiva del backend. No devolver códigos ni registrarlos. Limitar por IP/correo y controlar reenvíos atómicamente. Un reenvío invalida el desafío previo conforme a una política de entrega y reintento que deberá cerrarse.
+**Autorización y seguridad:** público, sin sesión protegida. Código generado criptográficamente; persistir HMAC ligado al desafío con clave exclusiva del backend. No devolver códigos ni registrarlos. Limitar por IP/correo y controlar reenvíos atómicamente. Un reenvío admitido revoca el desafío previo; un fallo SMTP revoca el nuevo sin restaurar el anterior. No hay reintento automático. La transacción termina antes de SMTP.
 
-Propuestas aún no aprobadas: seis dígitos, diez minutos de vigencia, cinco intentos por desafío y espera mínima de 60 segundos. Los límites agregados no deben reiniciarse por solicitar otro código.
+Valores aún pendientes de ratificación: seis dígitos, diez minutos de vigencia, cinco intentos por desafío, espera mínima de 60 segundos y cinco emisiones por hora. No hay defaults de producción; la configuración exige valores explícitos aprobados. Las pruebas usan esos valores como fixtures. Los límites acumulados cuentan también desafíos revocados, expirados o con fallo de entrega.
 
 **Errores:** `422 VALIDATION_ERROR`, `429` con `Retry-After`, `503` y errores comunes.
 
 **React:** pantalla de verificación y control de reenvío, pendientes de integración. No mostrar un código de demostración ni prometer recepción basándose solo en `202`.
+
+Implementación, configuración y limitaciones: [email-delivery.md](email-delivery.md). Sin proveedor SMTP habilitado el endpoint responde 503 uniforme, no 202 ficticio. Con configuración válida acepta en una cola acotada por proceso antes de consultar elegibilidad o realizar SMTP; 202 no demuestra creación de un desafío, envío ni recepción. El identificador no elegible es indistinguible en formato. La cola no es durable; no se implementó outbox ni verificación 1.4B.
 
 ## 3. Verificación de correo
 
