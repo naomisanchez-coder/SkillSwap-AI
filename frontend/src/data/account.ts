@@ -1,5 +1,6 @@
 import type { NotificationRecord, SkillRequest } from './student';
 import { ACTIVE_SKILLS } from './skillCatalog';
+import type { AdminAudit } from './admin';
 
 export type PersonalProfile = { name?: string; bio?: string; photoStorageId?: string };
 export type ApplicationReview = { id: string; status: SkillRequest['status']; at: string; comment?: string };
@@ -11,7 +12,7 @@ export type MentorSkillRequest = SkillRequest & {
 };
 export type ApplicationFields = Pick<MentorSkillRequest, 'skill' | 'level' | 'experience' | 'topics' | 'portfolio'>;
 export type ApplicationCommand = ApplicationFields & { id: string; submissionId: string; evidenceFile?: File; evidenceStorageId?: string };
-export type AccountData = { version: 1; userId: string; profile: PersonalProfile; requests: MentorSkillRequest[]; notifications: NotificationRecord[] };
+export type AccountData = { version: 1; userId: string; profile: PersonalProfile; requests: MentorSkillRequest[]; notifications: NotificationRecord[]; adminAuditLog?: AdminAudit[] };
 export const applicationStatuses = { pending: ['Pendiente', 'warning'], observation: ['En observación', 'warning'], approved: ['Aprobada', 'success'], rejected: ['Rechazada', 'danger'] } as const;
 export class AccountError extends Error {
   readonly code: string;

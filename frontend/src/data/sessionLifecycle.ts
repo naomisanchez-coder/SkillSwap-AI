@@ -2,6 +2,7 @@ import { BookingError, type BookingLedger, type ConfirmedBooking, type IncidentC
 import { dayNameFromISO, parseTime } from './scheduling';
 import { ACADEMIC_CREDIT_CONFIG } from './creditConfig';
 import { sessionMentorOwner, type MentorSessionAction } from './mentor';
+import { isOpenIncident } from './admin';
 
 // Regla referencial de Figma, pendiente de confirmación de producto.
 export const CANCELLATION_NOTICE_HOURS = 12;
@@ -31,15 +32,17 @@ export function transitionSession(source: BookingLedger, action: SessionAction |
   const at = now.toISOString();
   const event = (suffix: string, label: string, actor: 'student' | 'mentor' | 'system' = 'student') => {
     session.history ??= [{ id: `${session.id}:booked`, at: session.createdAt, label: 'Reserva confirmada', actor: 'system' }];
-    session.history.push({ id: `${session.id}:${suffix}`, at, label, actor });
+    const id = `${session.id}:${suffix}`;
+    session.history.push({ id: session.history.some(item => item.id === id) ? `${id}:${crypto.randomUUID()}` : id, at, label, actor });
   };
   const notify = (suffix: string, title: string, description: string) => {
+    if (ledger.notifications.some(item => item.id === `NOT-${session.id}-${suffix}`)) suffix += `-${crypto.randomUUID()}`;
     ledger.notifications.unshift({ id: `NOT-${session.id}-${suffix}`, userId: session.studentId, title, description, date: 'Ahora', read: false, target: 'sessions' });
     // Las reservas antiguas sin propietario explícito conservan sus referencias de notificación.
     if (session.mentorOwnerId) ledger.notifications.unshift({ id: `NOT-${session.id}-${suffix}-mentor`, userId: session.mentorOwnerId, title, description, date: 'Ahora', read: false, target: 'mentor-sessions' });
   };
   const hold = ledger.movements.find(item => item.reference === `${session.id}:hold`);
-  const openIncident = ledger.incidents.find(item => item.sessionId === session.id && item.status !== 'closed');
+  const openIncident = ledger.incidents.find(item => item.sessionId === session.id && isOpenIncident(item));
   const requireHold = () => { if (!hold || hold.status !== 'pending' || studentWallet.held < session.credits) fail('No pudimos verificar los créditos retenidos.'); };
   if (actor.role === 'mentor' && action.type !== 'report') {
     if ('mentorId' in action && action.mentorId !== session.mentorId) return fail('El mentor no corresponde a esta sesión.');
@@ -99,7 +102,7 @@ export function transitionSession(source: BookingLedger, action: SessionAction |
     session.status = 'review'; event(id, 'Incidencia enviada; pendiente de revisión administrativa', actor.role);
     notify(id, 'Sesión en revisión', 'Los créditos permanecen retenidos hasta la revisión administrativa.');
   } else if (action.type === 'rate') {
-    if (session.status !== 'completed' || !session.performedAt || !session.validatedAt || openIncident) return fail('Solo puedes valorar una sesión completada y validada.');
+    if (session.status !== 'completed' || (!session.adminResolution && (!session.performedAt || !session.validatedAt)) || openIncident) return fail('Solo puedes valorar una sesión completada y validada.');
     if (session.rated || ledger.reviews.some(item => item.sessionId === session.id)) return fail('Esta sesión ya tiene una valoración.');
     if (!Number.isInteger(action.rating) || action.rating < 1 || action.rating > 5 || action.comment.trim().length > ACADEMIC_CREDIT_CONFIG.reviewCommentMaxLength) return fail('Elige entre 1 y 5 estrellas y respeta el límite del comentario.');
     session.rated = true; session.rating = action.rating; session.reviewedAt = at;

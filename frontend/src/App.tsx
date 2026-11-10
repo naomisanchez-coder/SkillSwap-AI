@@ -10,11 +10,13 @@ import LoginPage from './pages/LoginPage'
 import { useAuthSession } from './hooks/useAuthSession'
 
 const DevelopmentPreview = import.meta.env.DEV ? lazy(() => import('./dev/FrontendPreview')) : null
+const AdminPreview = import.meta.env.DEV ? lazy(() => import('./dev/AdminPreview')) : null
 const previewEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_FRONTEND_PREVIEW === 'true'
 
 export default function App() {
   const [preview, setPreview] = useState(previewEnabled)
   const [realPage, setRealPage] = useState<'login' | 'register'>('login')
+  if (previewEnabled && AdminPreview && new URLSearchParams(location.search).get('view') === 'admin') return <Suspense fallback={<p role="status">Cargando…</p>}><AdminPreview /></Suspense>
   if (preview && DevelopmentPreview) return <Suspense fallback={<p role="status">Cargando…</p>}>
     <DevelopmentPreview onRealAccess={next => { setRealPage(next); setPreview(false) }} />
   </Suspense>

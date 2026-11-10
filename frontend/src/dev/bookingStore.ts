@@ -10,6 +10,8 @@ import { availabilityPreservesBookings, defaultMentorSettings, mentorOwnerId, no
 import type { MentorSkillRequest } from '../data/account';
 import type { WeeklyAvailability } from '../data/scheduling';
 import { ACTIVE_SKILLS } from '../data/skillCatalog';
+import { transitionAdmin } from '../data/adminLifecycle';
+import type { AdminActivityAction } from '../data/admin';
 
 export const bookingStorageKey = 'skillswap:frontend-demo:bookings:v1';
 export const bookingDraftKey = 'skillswap:frontend-demo:booking-route:v1';
@@ -25,6 +27,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
   let queue: Promise<unknown> = Promise.resolve();
   const participantInitials = Object.fromEntries(Object.entries(participants).map(([id, item]) => [id, { ...item.initialWallet }]));
   const invalidStorage = () => new BookingError('storage_invalid', 'No pudimos leer las reservas guardadas. No se modificó tu saldo.');
+  const requireActive = (ledger: BookingLedger, userId: string) => { if (ledger.suspendedUserIds?.includes(userId)) throw new BookingError('account_suspended', 'Esta cuenta está suspendida. Contacta a administración.'); };
   const read = (): BookingLedger => {
     let raw: string | null;
     try { raw = storage().getItem(bookingStorageKey); } catch { throw invalidStorage(); }
@@ -39,6 +42,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
   };
   const commit = async (command: BookingCommand, learnerName: string, studentId = identity.id): Promise<BookingResult> => {
     const ledger = read();
+    requireActive(ledger, studentId);
     const wallet = studentId === identity.id ? ledger.wallet : ledger.wallets?.[studentId];
     if (!wallet) throw new BookingError('invalid_request', 'No encontramos la billetera del estudiante.');
     if (!/^[a-zA-Z0-9-]{1,100}$/.test(command.id) || ![30, 60, 90].includes(command.duration)) throw new BookingError('invalid_request', 'La reserva no es válida. Revisa la selección.');
@@ -55,6 +59,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     const available = isSlotAvailable({ mentorId: mentor.id, date: command.date, time, duration: command.duration, availability: mentor.slots, sessions: ledger.sessions, reservedSlots });
     const start = parseTime(time);
     const owner = mentor.ownerUserId ?? mentorOwnerId(mentor.id);
+    requireActive(ledger, owner);
     const studentOverlap = ledger.sessions.some(item => item.status !== 'cancelled' && item.date === command.date
       && (item.studentId === studentId || sessionMentorOwner(item) === studentId || item.studentId === owner || sessionMentorOwner(item) === owner)
       && intervalsOverlap(start, start + command.duration, parseTime(item.time), parseTime(item.time) + item.duration));
@@ -94,6 +99,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
   };
   const apply = (action: SessionAction | MentorFixtureAction | MentorSessionAction, actor = { role: 'student' as 'student' | 'mentor', id: identity.id }) => serialized(() => {
     const previous = read();
+    requireActive(previous, actor.id);
     const next = transitionSession(previous, action, now(), actor);
     validateLedger(next, identity.id, initialWallet, participantInitials);
     if (next !== previous) {
@@ -103,6 +109,7 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     return structuredClone(next);
   });
   const requireApproval = async () => {
+    requireActive(read(), identity.id);
     const approved = (await getApprovedRequests()).filter(item => item.ownerUserId === identity.id && item.status === 'approved');
     if (!approved.length) throw new BookingError('mentor_unavailable', 'Necesitas una habilidad aprobada para acceder a la vista de mentor.');
     return approved;
@@ -114,6 +121,12 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
     return structuredClone(ledger);
   };
   return {
+    async updateAdmin(command: AdminActivityAction, knownUsers: string[]) {
+      return serialized(() => {
+        const previous = read(); const next = transitionAdmin(previous, command, knownUsers, now());
+        return next === previous ? structuredClone(previous) : persistSettings(next);
+      });
+    },
     async saveMentorAvailability(draft: WeeklyAvailability) {
       return serialized(async () => {
         await requireApproval(); const ledger = read(); const availability = normalizeAvailability(draft);

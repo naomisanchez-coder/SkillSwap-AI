@@ -6,6 +6,7 @@ const variants = {
   secondary: 'bg-[#DCEBDD] text-[#1D5149] hover:bg-[#CDE3D1]',
   outline: 'border border-[#CBD8CE] text-[#334A46] bg-white hover:border-[#34877A] hover:text-[#24685F]',
   ghost: 'text-[#60716C] hover:bg-[#F0F3ED] hover:text-[#182B2A]',
+  danger: 'bg-[#EF4444] text-white hover:bg-[#DC2626] shadow-sm',
 };
 
 export function Button({ variant = 'primary', size = 'md', full, icon, children, className = '', type = 'button', ...props }:

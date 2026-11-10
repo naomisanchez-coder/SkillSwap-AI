@@ -1,5 +1,6 @@
 import { validateProfileStep, type OnboardingPreferences } from '../data/profileOptions';
 import type { ProfileService } from '../services/profile';
+import { assertLocalAccountActive } from './accessPolicy';
 
 export const fictitiousStudent = { id: 'frontend-demo-student', name: 'Estudiante de prueba', career: 'Diseño y Desarrollo de Software', cycle: 3 };
 export const mockProfileStorageKey = 'skillswap:frontend-demo:profile:v1';
@@ -32,12 +33,14 @@ export const mockProfileService: ProfileService = {
   },
   async savePreferences(preferences) {
     assertDevelopment();
+    assertLocalAccountActive();
     const safePreferences = parsePreferences(preferences);
     localStorage.setItem(mockProfileStorageKey, JSON.stringify(safePreferences));
     return safePreferences;
   },
   async resetPreferences() {
     assertDevelopment();
+    assertLocalAccountActive();
     localStorage.removeItem(mockProfileStorageKey);
   },
 };

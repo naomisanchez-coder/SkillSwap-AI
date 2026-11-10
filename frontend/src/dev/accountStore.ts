@@ -1,5 +1,6 @@
 import { AccountError, applicationStatuses, normalizeApplication, normalizePersonalProfile, type AccountData, type ApplicationCommand, type PersonalProfile } from '../data/account';
 import type { AccountService } from '../services/account';
+import { auditRecord, validateAudit, type SkillDecision } from '../data/admin';
 
 export const accountStorageKey = 'skillswap:frontend-demo:account:v1';
 export type AccountFiles = {
@@ -27,6 +28,7 @@ export function createLocalAccountStore({ storage, files, identity, now = () => 
         if (item.history.some(event => !event || !Object.hasOwn(applicationStatuses, event.status) || typeof event.id !== 'string' || !Number.isFinite(Date.parse(event.at)))) throw new Error();
       }
       if (new Set(value.notifications.map(item => item.id)).size !== value.notifications.length || value.notifications.some(item => item.userId !== identity.id || item.target !== 'skills')) throw new Error();
+      validateAudit(value.adminAuditLog);
       return value;
     } catch { throw new AccountError('storage_invalid', 'No pudimos recuperar el perfil o las solicitudes guardadas en este navegador. No se borraron tus datos. Vuelve a intentarlo.'); }
   };
@@ -98,6 +100,24 @@ export function createLocalAccountStore({ storage, files, identity, now = () => 
     },
   };
   return { ...service,
+    async decideSkill(command: SkillDecision) {
+      return serialized(() => {
+        const account = read(); const request = account.requests.find(item => item.id === command.id);
+        const comment = typeof command.comment === 'string' ? command.comment.trim() : '';
+        if (!request || request.submissionId !== command.submissionId || !/^[a-zA-Z0-9-]{1,100}$/.test(command.decisionId) || !['approved', 'rejected'].includes(command.status) || (command.status === 'rejected' && !comment) || comment.length > 2000) throw new AccountError('validation', 'La revisión no es válida o la solicitud cambió. Actualiza la vista.');
+        const previous = request.history.find(item => item.id === command.decisionId);
+        if (previous) {
+          if (previous.status !== command.status || previous.comment !== comment) throw new AccountError('id_conflict', 'Esta decisión ya corresponde a otros datos.');
+          return structuredClone(account);
+        }
+        if (request.status !== 'pending') throw new AccountError('validation', 'La solicitud ya tiene una decisión. Actualiza la vista.');
+        const at = now(); request.status = command.status; request.adminComment = comment; request.reviewedAt = at.toISOString();
+        request.history.push({ id: command.decisionId, status: command.status, at: at.toISOString(), comment });
+        account.adminAuditLog = [auditRecord(command.status === 'approved' ? 'skill_approved' : 'skill_rejected', 'request', request.id, `${request.skill}: ${command.status === 'approved' ? 'Habilidad aprobada' : comment}`, at, command.decisionId), ...(account.adminAuditLog ?? [])];
+        account.notifications.unshift({ id: `NOT-${command.decisionId}-review`, userId: request.ownerUserId, title: command.status === 'approved' ? 'Solicitud aprobada' : 'Solicitud rechazada', description: `${request.skill}. ${comment || 'Ya puedes configurar tu oferta.'}`, date: 'Ahora', read: false, target: 'skills' });
+        return write(account);
+      });
+    },
     /** Fixture administrativo explícito; no forma parte de AccountService ni ofrece controles de revisión al estudiante. */
     async reviewFixture(id: string, status: 'observation' | 'rejected' | 'approved', comment: string) {
       return serialized(() => {

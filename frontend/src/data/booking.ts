@@ -3,6 +3,7 @@ import type { NotificationRecord, ReviewRecord, SessionRecord, WalletBalance } f
 import type { SessionDuration } from './creditConfig';
 import { intervalsOverlap, isSlotAvailable, parseTime } from './scheduling';
 import type { MentorSettings } from './mentor';
+import type { AdminAudit, IncidentResolution } from './admin';
 
 export type BookingCommand = { id: string; mentorId: string; date: string; time: string; duration: SessionDuration };
 export type BookingDraft = BookingCommand & { step: 'schedule' | 'duration' | 'confirm' | 'success' };
@@ -13,10 +14,11 @@ export type ConfirmedBooking = SessionRecord & {
   cancellationReason?: string; refundStatus?: string; rated?: boolean;
   rating?: number; reviewedAt?: string; history?: SessionEvent[];
   mentorOwnerId?: string; offerRequestId?: string;
+  adminResolution?: { incidentId: string; at: string; adminId: string };
 };
 export type SessionEvent = { id: string; at: string; label: string; actor: 'student' | 'mentor' | 'system' };
 export type IncidentCategory = 'mentor_absent' | 'student_absent' | 'connection' | 'not_held' | 'completion_dispute' | 'other';
-export type IncidentRecord = { id: string; sessionId: string; reporterId: string; category: IncidentCategory; reason: string; createdAt: string; status: 'open' | 'in_review' | 'closed'; resolvedAt?: string };
+export type IncidentRecord = { id: string; sessionId: string; reporterId: string; category: IncidentCategory; reason: string; createdAt: string; status: 'open' | 'in_review' | 'closed' | 'resolved'; resolvedAt?: string; resolution?: IncidentResolution; resolutionComment?: string; resolvedBy?: string };
 export type BookingContext = {
   mentor: Mentor; studentId: string; userName: string; wallet: WalletBalance;
   sessions: SessionRecord[]; reservedSlots: string[];
@@ -29,6 +31,8 @@ export type BookingLedger = {
   incidents: IncidentRecord[]; reviews: ReviewRecord[]; mentorBalances: Record<string, number>;
   wallets?: Record<string, WalletBalance>;
   mentorSettings?: Record<string, MentorSettings>;
+  suspendedUserIds?: string[];
+  adminAuditLog?: AdminAudit[];
 };
 
 export class BookingError extends Error {

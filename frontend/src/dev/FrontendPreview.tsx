@@ -12,6 +12,7 @@ import type { StudentService } from '../services/student';
 import type { ProfileService } from '../services/profile';
 import type { AccountService } from '../services/account';
 import { AccountError, type AccountData } from '../data/account';
+import { BookingError } from '../data/booking';
 import { useStoredFile } from '../hooks/useStoredFile';
 import { emptyPreferences } from '../data/profileOptions';
 import { emptyDiscoveryFilters, type DiscoveryFilters } from '../data/discovery';
@@ -63,6 +64,10 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
   const restoring = useRef(false);
   const reading = useRef(new Set<string>());
   useEffect(() => {
+    const refresh = (event: StorageEvent) => { if (event.key === 'skillswap:frontend-demo:account:v1' || event.key === 'skillswap:frontend-demo:bookings:v1') { setLoadError(false); setAttempt(value => value + 1); } };
+    window.addEventListener('storage', refresh); return () => window.removeEventListener('storage', refresh);
+  }, []);
+  useEffect(() => {
     let active = true;
     Promise.all([studentService.getDashboard(), studentService.getBookingDraft()]).then(([next, draft]) => {
       if (!active) return;
@@ -73,7 +78,7 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
         const mentorApproved = next.state.account?.requests.some(item => item.status === 'approved' && item.ownerUserId === next.state.profile.id);
         setPage(hasCompletePreferences(next.state.profile) ? (isMentorPage(saved) ? (mentorApproved ? saved : 'skills') : saved === 'sessions' || saved === 'wallet' || saved === 'profile' || saved === 'skills' ? saved : saved === 'mentor-application' ? 'skills' : 'dashboard') : 'profile-setup');
       }
-    }, error => { if (active) { setLoadErrorMessage(error instanceof AccountError ? error.message : 'No pudimos cargar tu panel. Comprueba que el navegador permita almacenamiento local y vuelve a intentarlo.'); setLoadError(true); setPage('profile-setup'); } });
+    }, error => { if (active) { setLoadErrorMessage(error instanceof AccountError || error instanceof BookingError ? error.message : 'No pudimos cargar tu panel. Comprueba que el navegador permita almacenamiento local y vuelve a intentarlo.'); setLoadError(true); setPage('profile-setup'); } });
     return () => { active = false; };
   }, [studentService, attempt]);
   useEffect(() => {
@@ -193,7 +198,7 @@ export default function FrontendPreview({ onRealAccess, studentService = mockStu
       {page === 'mentor-application' && <MentorApplicationPage key={applicationKey} initialRequest={snapshot.state.account?.requests.find(item => item.id === editingRequestId)} existingRequests={snapshot.state.account?.requests ?? []} service={accountService} onChanged={changedAccount} onBack={() => navigate('skills')} />}
       {(page === 'sessions' || page === 'wallet') && <RecommendationAssistant mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings} onViewMentor={openMentor} />}
     </StudentShell>}
-    {isMentorPage(page) && snapshot && <MentorArea active={Object.entries(mentorPages).find(([, value]) => value === page)![0] as MentorDestination} service={mentorService} studentService={studentService} accountService={accountService}
+    {isMentorPage(page) && snapshot && <MentorArea key={attempt} active={Object.entries(mentorPages).find(([, value]) => value === page)![0] as MentorDestination} service={mentorService} studentService={studentService} accountService={accountService}
       profile={snapshot.state.profile} photo={photo} notifications={snapshot.state.notifications} onReadNotification={id => void markRead(id)} onNavigate={next => navigate(mentorPages[next])}
       onStudentMode={() => void studentMode()} onLedger={changedActivity} onAccount={changedAccount} onEditPreferences={() => editPreferences('mentor-account')} onApplication={() => openApplication()} onLogout={() => setPending('Cerrar sesión')} />}
     {page === 'mentor' && snapshot && <MentorProfilePage key={mentorId} profile={snapshot.state.profile} mentorId={mentorId} service={studentService}

@@ -14,6 +14,6 @@ export const localActivity = createLocalBookingStore({
   async getMentors(ledger) {
     const account = await mockAccountService.getAccount();
     const own = publishedMentors(account, ledger, { name: account.profile.name ?? localIdentity.name, bio: account.profile.bio ?? '' });
-    return [...structuredClone(mentors), ...own];
+    return [...structuredClone(mentors), ...own].map(item => ({ ...item, active: item.active && !ledger.suspendedUserIds?.includes(item.ownerUserId ?? `mentor-${item.id}`) }));
   },
 });

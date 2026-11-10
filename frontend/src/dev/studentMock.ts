@@ -8,6 +8,7 @@ import { isEligibleMentor } from '../data/recommendations';
 import { ACADEMIC_CREDIT_CONFIG } from '../data/creditConfig';
 import { localActivity } from './localActivity';
 import { mockAccountService } from './accountMock';
+import { BookingError } from '../data/booking';
 
 export const studentActivityStorageKey = 'skillswap:frontend-demo:student:v1';
 // Fixtures referenciales del prototipo. No otorgan créditos ni modifican cuentas reales.
@@ -61,6 +62,7 @@ export const mockStudentService: StudentService = {
     state.skillRequests = [...account.requests, ...state.skillRequests];
     const ledger = await bookings.getLedger();
     state.activity = ledger;
+    if (ledger.suspendedUserIds?.includes(state.profile.id)) throw new BookingError('account_suspended', 'Esta cuenta está suspendida. Contacta a administración.');
     state.reviews = [...ledger.reviews, ...reviewFixtures];
     const catalog = await bookings.getMentorCatalog();
     state.mentorRatings = Object.fromEntries(catalog.map(mentor => [mentor.id, summarizeMentorReviews(state.reviews!, mentor.id)]));

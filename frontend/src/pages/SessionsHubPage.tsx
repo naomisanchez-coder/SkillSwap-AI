@@ -5,6 +5,7 @@ import { SessionModal } from '../components/SessionModal';
 import { Icons } from '../components/icons';
 import type { BookingLedger, ConfirmedBooking, IncidentCategory } from '../data/booking';
 import { BookingError } from '../data/booking';
+import { isOpenIncident } from '../data/admin';
 import { canCancelSession, type SessionAction } from '../data/sessionLifecycle';
 import { formatSessionSchedule } from '../data/scheduling';
 import type { StudentService } from '../services/student';
@@ -48,7 +49,7 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
     } catch (caught) { setError(caught instanceof BookingError ? caught.message : 'No pudimos guardar el cambio. Vuelve a intentarlo.'); }
     finally { inFlight.current = false; setBusy(false); }
   };
-  const confirmations = (session: ConfirmedBooking) => <div className="mt-2 space-y-1 text-xs text-[#52645F]"><p><strong>Confirmación del mentor</strong> · {confirmationLabel(session.performedAt)}</p><p><strong>Confirmación del estudiante</strong> · {confirmationLabel(session.validatedAt)}</p></div>;
+  const confirmations = (session: ConfirmedBooking) => <div className="mt-2 space-y-1 text-xs text-[#52645F]"><p><strong>Confirmación del mentor</strong> · {confirmationLabel(session.performedAt)}</p><p><strong>Confirmación del estudiante</strong> · {confirmationLabel(session.validatedAt)}</p>{session.adminResolution && <p className="font-semibold">Créditos liberados por resolución administrativa el {new Date(session.adminResolution.at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}.</p>}</div>;
   return <main className="max-w-[1080px] mx-auto px-4 md:px-8 py-8 md:py-12 text-[#182B2A]">
     <section className="rounded-[24px] bg-[#DCEBDD] border border-[#C9D8CC] p-5 sm:p-7 md:p-9">
       <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#24685F]">{mentorAction ? 'Mentorías asignadas' : 'Tu aprendizaje'}</p>
@@ -67,7 +68,7 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
     </div>
     <div id="session-list" role="tabpanel" aria-labelledby={`session-tab-${tab}`} tabIndex={0} className="mt-4 space-y-4">
       {!filtered.length ? <EmptyState icon={<Icons.Calendar s={28} />} title="No tienes sesiones en este estado" description="Cuando haya actividad aparecerá aquí con sus detalles y acciones disponibles." action={tab === 'upcoming' ? (mentorAction ? 'Volver al panel' : 'Explorar mentores') : undefined} onAction={onExplore} /> : filtered.map(session => {
-        const incident = ledger.incidents.find(item => item.sessionId === session.id && item.status !== 'closed');
+        const incident = ledger.incidents.find(item => item.sessionId === session.id && isOpenIncident(item));
         return <article key={session.id} data-session-id={session.id} className="rounded-[20px] border border-[#E2E8E0] bg-white p-5 shadow-sm">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
             <Avatar name={mentorAction ? session.learnerName : session.mentorName} size="lg" />
@@ -104,7 +105,7 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
         {confirmations(selected)}
         <h3 className="mt-5 font-bold">Historial de la sesión</h3>
         <ol className="mt-3 space-y-3 text-sm">{(selected.history ?? [{ id: `${selected.id}:booked`, at: selected.createdAt, label: 'Reserva confirmada', actor: 'system' }]).map(item => <li key={item.id}><p>{item.label}</p><time className="text-xs text-[#60716C]" dateTime={item.at}>{new Date(item.at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}</time></li>)}</ol>
-        {ledger.incidents.filter(item => item.sessionId === selected.id).map(item => <div key={item.id} className="mt-4 rounded-xl bg-[#FFF4D6] p-3 text-sm break-words"><p className="font-semibold">{item.status === 'closed' ? 'Incidencia cerrada' : 'Pendiente de revisión administrativa'}</p><p>{item.reason}</p><p className="mt-1 text-xs">{item.id}</p></div>)}
+        {ledger.incidents.filter(item => item.sessionId === selected.id).map(item => <div key={item.id} className="mt-4 rounded-xl bg-[#FFF4D6] p-3 text-sm break-words"><p className="font-semibold">{item.status === 'resolved' ? 'Incidencia resuelta' : item.status === 'closed' ? 'Incidencia cerrada' : 'Pendiente de revisión administrativa'}</p><p>{item.reason}</p>{item.resolutionComment && <p className="mt-2">Resolución: {item.resolutionComment} · {item.resolvedBy}</p>}<p className="mt-1 text-xs">{item.id}</p></div>)}
         {!mentorAction && selected.status === 'upcoming' && <p className="mt-5 rounded-xl bg-[#F7F7F2] p-4 text-sm">Puedes cancelar con devolución hasta 12 horas antes de la sesión. Pasado ese plazo, puedes reportar una incidencia.</p>}
       </>}
       {dialog.type === 'cancel' && <><p className="text-sm leading-6 text-[#60716C]">Se cancelará la sesión de {selected.skill} con {selected.mentorName}. Puedes cancelar reservas próximas con al menos 12 horas de anticipación. Los {selected.credits} créditos retenidos se devolverán una sola vez a tu saldo disponible.</p><div className="mt-6 flex flex-col-reverse sm:flex-row justify-end gap-2"><Button disabled={busy} variant="outline" onClick={close}>Conservar reserva</Button><Button disabled={busy} onClick={() => void submit({ type: 'cancel', sessionId: selected.id })}>{busy ? 'Guardando…' : 'Confirmar cancelación'}</Button></div></>}

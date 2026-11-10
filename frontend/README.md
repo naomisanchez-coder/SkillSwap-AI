@@ -1,5 +1,114 @@
 # SkillSwap AI — frontend
 
+## Administración
+
+Se adapta `AdminOperationsPage.tsx` de Figma Make: resumen, solicitudes, usuarios,
+sesiones, incidencias, créditos y cuenta/auditoría. Se conservan tarjetas, colores,
+filtros, tablas y la confirmación de las decisiones. El rechazo utiliza el **campo
+de texto obligatorio de observaciones** comprobado en el original, con máximo de
+2000 caracteres; no se introducen opciones de rechazo inventadas.
+
+### Acceso y mapa de navegación
+
+Con `VITE_ENABLE_FRONTEND_PREVIEW=true` y Vite en desarrollo:
+
+1. Abrir `http://127.0.0.1:5175/?view=admin` (ajustar el puerto al indicado por Vite).
+2. Seleccionar **Acceder a administración** con la cuenta de prueba
+   `admin@example.test`. No requiere contraseña ni utiliza el login real.
+3. Navegar por **Resumen**, **Solicitudes de mentor**, **Usuarios**, **Sesiones**,
+   **Incidencias**, **Créditos académicos** y **Mi cuenta**.
+4. Abrir la URL sin `?view=admin` en otra pestaña para revisar los mismos datos
+   desde el estudiante y mentor. Las escrituras en otra pestaña actualizan las vistas.
+5. **Cerrar sesión** en administración retira solo este acceso de desarrollo.
+   La recarga conserva el acceso y sección mientras no se cierre.
+
+Este acceso está separado de `POST /auth/login`, sus cookies y CSRF. Se excluye
+de la compilación de producción. El guardado de acceso en sessionStorage **no es
+seguridad ni concede permisos reales**: durante la integración, el backend deberá
+comprobar el rol administrador y el estado de la cuenta en cada endpoint protegido,
+gestionar la sesión real y proteger decisiones/archivos con autorización y CSRF.
+
+`AdminService` separa la pantalla de `dev/adminMock.ts`; este reutiliza los almacenes
+de cuentas y actividad. Los datos de prueba comprenden la cuenta de Alex, Elena,
+Diego y los mentores del catálogo. No se leen usuarios ni documentos de una API.
+No se añadieron dependencias ni se modificaron archivos del backend.
+
+### Decisiones y persistencia
+
+- Solicitudes → **Revisar**: nombre, datos declarados, PDF íntegro guardado en
+  IndexedDB, historial y observaciones. **Abrir PDF en otra pestaña** recupera un
+  Blob validado; si falta o falla, informa el problema y permite reintentar. Los
+  archivos permanecen en este navegador y origen; no se presentan como compartidos.
+- Rechazo → observación obligatoria → **Confirmar**. El estudiante consulta la
+  observación en **Mis habilidades**, puede corregir y reenviar conservando el ID
+  y el historial. Aprobación → habilidad habilitada → entrada al panel del mentor;
+  la oferta continúa pausada hasta que el mentor la configure y publique.
+- Cada decisión verifica que la solicitud siga pendiente y pertenezca al envío
+  revisado. Una revisión obsoleta no sobrescribe un reenvío ni otra decisión.
+- Usuarios → detalle → suspensión/reactivación explícita con confirmación. Se
+  conserva la actividad y el dinero retenido. La suspensión bloquea las acciones
+  locales de esa cuenta y retira sus ofertas de nuevas reservas; reactivar no crea
+  reservas ni altera movimientos. No hay consulta ni edición de contraseñas.
+- Sesiones y créditos → consulta de estados, participantes, saldos y movimientos
+  con referencias estables. Los detalles de sesiones se abren con botones accesibles.
+- Incidencias → tomar para revisión → resolver con motivo obligatorio:
+  **devolver créditos**, **liberar al mentor** o **cerrar sin ajuste**.
+- **Mi cuenta** → auditoría de aprobaciones, rechazos, suspensiones, reactivaciones,
+  revisiones y resoluciones, con administrador, fecha, entidad y motivo. El detalle
+  de solicitud también muestra el historial de decisiones y observaciones previas.
+
+Se reutilizan las tres resoluciones originales de `sessionLifecycle.ts`. La devolución
+administrativa cancela la sesión y retorna la retención completa una sola vez,
+con referencia `:incident-refund`; no depende del límite de cancelación voluntaria
+de 12 horas. La liberación administrativa aplica el 100 % al mentor y liquida la
+retención una sola vez. Es una **resolución explícita de una discrepancia**, adicional
+al recorrido normal de doble confirmación; se registra como `adminResolution`,
+sin inventar `performedAt` ni `validatedAt`. Las vistas muestran esa resolución.
+Cerrar sin ajuste conserva los créditos retenidos y devuelve la sesión a
+`validation` si el mentor ya confirmó, o a `upcoming` en caso contrario, como Make.
+La cancelación voluntaria de 12 horas permanece provisional y sin cambios.
+
+Las decisiones sobre una solicitud, su historial, notificación y auditoría se escriben
+juntas en el registro de cuenta. Las resoluciones, saldos de ambas partes, movimientos,
+incidencia, notificaciones y auditoría se escriben juntas en el ledger. Un error de
+escritura conserva el registro anterior, muestra el error y permite reintentar.
+La UI no cierra la confirmación ni informa éxito antes de guardar. Si falla una
+lectura posterior, **Actualizar datos** permite consultar el resultado persistido.
+No hay una transacción común entre ambos registros, pero cada acción administrativa
+afecta un único registro; la API deberá aportar transacciones e idempotencia reales.
+
+Web Locks coordina las pestañas compatibles y la cola alternativa coordina una instancia.
+Los reintentos con la misma decisión no duplican auditoría ni ajustes; una decisión
+contraria sobre una incidencia resuelta se rechaza. Se conservan los datos v1 previos.
+
+Correcciones al trasladar el original: además de los UUID por incidencia, las
+notificaciones y eventos de resolución usan la incidencia concreta. Reiniciar una
+sesión después de un cierre sin ajuste genera eventos/notificaciones distintos,
+sin colisiones con un inicio anterior. La devolución registra su fecha y la
+liberación administrativa conserva su procedencia, compatibles con la validación
+del ledger y las vistas existentes. Los modales y menú móvil reutilizan el diálogo
+nativo compartido: foco contenido, fondo inerte, Escape y retorno del foco.
+
+Pruebas automatizadas: **56**, incluidas decisiones, observaciones, revisión obsoleta,
+persistencia, PDF, suspensión, las tres resoluciones, incidencias sucesivas,
+concurrencia, fallos de guardado y regresiones de todos los flujos anteriores.
+Chrome: recorrido completo en 320×740, 360×800, 390×844, 640×800, 768×1024,
+844×390, 1024×768, 1280×900 y 1440×900. Se verificaron apertura del PDF en otra
+pestaña y su contenido, rechazo y consulta de observaciones, corrección y aprobación,
+entrada al mentor, suspensión/reactivación, incidencias sucesivas, devolución,
+liberación, auditoría y recarga. Menú móvil y modales: Tab/Shift+Tab contenidos,
+Escape, retorno del foco y selección con teclado. Sin desbordamiento global,
+errores JavaScript ni llamadas a la API; capturas revisadas de celular y tablet.
+También se comprobaron errores de escritura visibles sin cerrar el diálogo ni
+guardar cambios parciales, reintento, PDF ausente y recuperación posterior, fallo
+de lectura y recuperación de la administración, y liberación a la billetera del
+mentor desde dos pestañas con 20 reintentos: un único ingreso y una sola decisión.
+Se inspeccionó la vista de escritorio y se comprobó que el build de producción no
+contiene el acceso administrativo de prueba.
+Los scripts y capturas del navegador se mantienen fuera del repositorio.
+Pendientes: permisos y transacciones en API, almacenamiento compartido de archivos,
+dispositivos físicos, otros navegadores y lector de pantalla.
+
 ## Vista del mentor
 
 Se reutilizan las vistas originales de `AccountMentorPages.tsx` y la navegación de
@@ -100,7 +209,7 @@ location.reload();
 Los fixtures usan a Elena y Diego con billeteras separadas; repetir una confirmación
 no transfiere otra vez. Las acciones externas por consola requieren recargar la vista.
 No se añadieron dependencias, controles administrativos ni llamadas al backend.
-Administración, conexión API y enlaces de videollamada siguen pendientes; estos
+Conexión API y enlaces de videollamada siguen pendientes; estos
 últimos se muestran como **Enlace pendiente**, sin presentar una reunión inexistente.
 
 Validación: **47 pruebas automatizadas**, build, lint y revisión de diferencias.
@@ -133,7 +242,7 @@ Mapa de navegación actualizado:
 - **En observación** o **Rechazada** → corregir y reenviar con el mismo ID.
   Se conservan las observaciones anteriores en el historial; vuelve a **Pendiente**.
 - Una habilidad aprobada habilita la vista del mentor descrita arriba. La aprobación
-  administrativa y logout siguen pendientes; una solicitud pendiente no habilita ofertas.
+  administrativa real y logout siguen pendientes; una solicitud pendiente no habilita ofertas.
 
 `AccountService` separa los componentes de `dev/accountMock.ts` y
 `dev/accountStore.ts`. Los cambios personales y solicitudes se guardan en
@@ -261,7 +370,7 @@ ni devoluciones fuera de esa regla.
 
 Una discrepancia lleva a `review` y mantiene los créditos retenidos, sin valoración
 ni liquidación mientras exista una incidencia abierta. La revisión administrativa
-queda pendiente; no hay botones estudiantiles para resolverla. Se corrigió el ID fijo
+se abre desde la vista de administración; no hay botones estudiantiles para resolverla. Se corrigió el ID fijo
 `INC-${sessionId}` del original: cada nuevo reporte lleva un UUID, incluso si una
 incidencia anterior fue cerrada sin ajuste. Una sesión completada admite una sola
 reseña, con 1–5 estrellas y comentario opcional de hasta 500 caracteres; actualiza
@@ -315,7 +424,7 @@ previo de reservas pasó su regresión completa. Sin errores JavaScript ni llama
 La captura directa de Figma Make no está soportada por el conector; se reutilizó su
 código fuente. No se probaron dispositivos físicos ni lectores de pantalla.
 
-Pendientes: backend, pantalla del mentor, resolución administrativa y asignación de
+Pendientes: backend y asignación de
 enlaces de videollamada. La vista estudiantil muestra **Enlace pendiente** sin inventar
 una reunión. Web Locks coordina pestañas en navegadores compatibles; la alternativa
 solo serializa dentro de una instancia. No se garantizan operaciones entre dispositivos.
