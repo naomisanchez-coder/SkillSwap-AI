@@ -54,7 +54,7 @@ export function transitionAdmin(source: BookingLedger, command: AdminActivityAct
   session.history ??= [{ id: `${session.id}:booked`, at: session.createdAt, label: 'Reserva confirmada', actor: 'system' }];
   session.history.push({ id: `${incident.id}:resolved`, at, label: `Resolución administrativa: ${command.resolution} · ${comment}`, actor: 'system' });
   const detail = `${command.resolution === 'refund' ? 'Devolución al estudiante' : command.resolution === 'release' ? 'Liberación al mentor' : 'Cierre sin ajuste'}: ${comment}`;
-  for (const [id, target, suffix] of [[session.studentId, 'sessions', 'student'], [sessionMentorOwner(session), 'mentor-sessions', 'mentor']] as const) next.notifications.unshift({ id: `NOT-${incident.id}-resolved-${suffix}`, userId: id, title: 'Incidencia resuelta', description: detail, date: 'Ahora', read: false, target });
+  for (const [id, target, suffix] of [[session.studentId, 'sessions', 'student'], [sessionMentorOwner(session), 'mentor-sessions', 'mentor']] as const) next.notifications.unshift({ id: `NOT-${incident.id}-resolved-${suffix}`, userId: id, title: 'Incidencia resuelta', description: detail, date: 'Ahora', read: false, target, sessionId: session.id });
   audit('incident_resolved', 'incident', incident.id, detail);
   return next;
 }

@@ -43,9 +43,9 @@ export function transitionSession(source: BookingLedger, action: SessionAction |
   };
   const notify = (suffix: string, title: string, description: string) => {
     if (ledger.notifications.some(item => item.id === `NOT-${session.id}-${suffix}`)) suffix += `-${crypto.randomUUID()}`;
-    ledger.notifications.unshift({ id: `NOT-${session.id}-${suffix}`, userId: session.studentId, title, description, date: 'Ahora', read: false, target: 'sessions' });
+    ledger.notifications.unshift({ id: `NOT-${session.id}-${suffix}`, userId: session.studentId, title, description, date: 'Ahora', read: false, target: 'sessions', sessionId: session.id });
     // Las reservas antiguas sin propietario explícito conservan sus referencias de notificación.
-    if (session.mentorOwnerId) ledger.notifications.unshift({ id: `NOT-${session.id}-${suffix}-mentor`, userId: session.mentorOwnerId, title, description, date: 'Ahora', read: false, target: 'mentor-sessions' });
+    if (session.mentorOwnerId) ledger.notifications.unshift({ id: `NOT-${session.id}-${suffix}-mentor`, userId: session.mentorOwnerId, title, description, date: 'Ahora', read: false, target: 'mentor-sessions', sessionId: session.id });
   };
   const hold = ledger.movements.find(item => item.reference === `${session.id}:hold`);
   const openIncident = ledger.incidents.find(item => item.sessionId === session.id && isOpenIncident(item));

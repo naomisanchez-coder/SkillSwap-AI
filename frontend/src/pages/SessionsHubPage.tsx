@@ -19,9 +19,10 @@ const confirmationLabel = (timestamp?: string) => timestamp ? `Confirmada el ${n
 type Dialog = { type: 'detail' | 'cancel' | 'validate' | 'report' | 'rate' | 'perform'; id: string };
 
 /** Vista estudiantil adaptada de SessionsHubPage.tsx de Figma Make. */
-export default function SessionsHubPage({ ledger, service, onChanged, onExplore, mentorAction }: { ledger: BookingLedger; service: StudentService; onChanged: (ledger: BookingLedger) => void; onExplore: () => void; mentorAction?: (action: MentorSessionAction) => Promise<BookingLedger> }) {
-  const [tab, setTab] = useState<SessionStatus>('upcoming');
-  const [dialog, setDialog] = useState<Dialog | null>(null);
+export default function SessionsHubPage({ ledger, service, onChanged, onExplore, mentorAction, initialSessionId }: { ledger: BookingLedger; service: StudentService; onChanged: (ledger: BookingLedger) => void; onExplore: () => void; mentorAction?: (action: MentorSessionAction) => Promise<BookingLedger>; initialSessionId?: string }) {
+  const initialSession = ledger.sessions.find(session => session.id === initialSessionId && (mentorAction ? sessionMentorOwner(session) === ledger.studentId : session.studentId === ledger.studentId));
+  const [tab, setTab] = useState<SessionStatus>(initialSession?.status ?? 'upcoming');
+  const [dialog, setDialog] = useState<Dialog | null>(initialSession ? { type: 'detail', id: initialSession.id } : null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
@@ -38,7 +39,7 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
   const filtered = ownSessions.filter(session => session.status === tab);
   const selected = ownSessions.find(session => session.id === dialog?.id);
   const open = (type: Dialog['type'], id: string) => { setError(''); setReason(''); setCategory('connection'); setRating(0); setComment(''); setDialog({ type, id }); };
-  const close = () => { if (!inFlight.current) { setDialog(null); setError(''); } };
+  const close = () => { if (!inFlight.current) { setDialog(null); setError(''); if (initialSessionId) requestAnimationFrame(() => heading.current?.focus()); } };
   const submit = async (action: SessionAction | MentorSessionAction) => {
     if (inFlight.current) return;
     inFlight.current = true; setBusy(true); setError('');

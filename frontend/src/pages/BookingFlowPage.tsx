@@ -8,6 +8,7 @@ import { academicSessionCost as sessionCost, type SessionDuration } from '../dat
 import { isEligibleMentor } from '../data/recommendations';
 import { dayNameFromISO, formatSessionDate, formatSessionTime, getNextAvailableDates } from '../data/scheduling';
 import type { StudentService } from '../services/student';
+import { bookingReceiptMessage } from '../data/bookingReceipt';
 
 type Step = 'schedule' | 'duration' | 'confirm' | 'success';
 type Actions = { onBack: () => void; onBuyCredits: () => void; onSessions: () => void; onHome: () => void };
@@ -22,7 +23,8 @@ function BookingSuccess({ session, onSessions, onHome }: { session: ConfirmedBoo
         <section className="w-full max-w-2xl rounded-[24px] border border-[#E2E8E0] bg-white p-8 md:p-12 text-center shadow-sm">
           <div className="w-16 h-16 mx-auto rounded-full bg-[#DCEBDD] text-[#24685F] flex items-center justify-center"><Icons.Check s={30} /></div>
           <h1 ref={heading} tabIndex={-1} className="mt-5 text-3xl font-extrabold">{session.status === 'cancelled' ? 'Reserva cancelada' : session.status === 'completed' ? 'Sesión completada' : 'Reserva confirmada'}</h1>
-          <p className="mt-3 text-[#60716C]">{session.status === 'cancelled' ? 'Los créditos se devolvieron a tu saldo disponible.' : session.status === 'completed' ? 'Ambos participantes confirmaron y los créditos se liberaron al mentor.' : session.status === 'review' ? 'La sesión está pendiente de revisión administrativa. Los créditos siguen retenidos.' : 'Los créditos quedaron retenidos y tu horario está reservado.'}</p>
+          <p className="mt-3 break-words text-[#60716C]">{bookingReceiptMessage(session)}</p>
+          {session.adminResolution && <p className="mt-2 text-sm text-[#60716C]">Decisión del {new Date(session.adminResolution.at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}.</p>}
           <div className="mt-6 rounded-2xl bg-[#F7F7F2] p-5 text-left">
             <p className="font-bold">{session.skill} con {session.mentorName}</p>
             <p className="mt-2 text-sm text-[#60716C]">{formattedDate} · {formattedTime} · {session.duration} minutos</p>

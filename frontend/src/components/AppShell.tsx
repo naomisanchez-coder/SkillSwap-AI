@@ -43,7 +43,7 @@ export function StudentShell({
   onLogout,
   children,
   mentorView,
-  onMentorSessions,
+  onOpenNotification,
 }: {
   active: StudentDestination;
   userName: string;
@@ -57,7 +57,7 @@ export function StudentShell({
   onLogout: () => void;
   children: React.ReactNode;
   mentorView?: { active: MentorDestination; onNavigate: (page: MentorDestination) => void };
-  onMentorSessions?: () => void;
+  onOpenNotification: (item: NotificationRecord) => void;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -73,7 +73,6 @@ export function StudentShell({
     skills: ['Mis habilidades', 'Organiza lo que quieres aprender y enseñar.'],
     profile: ['Mi perfil', 'Actualiza tu información y preferencias de aprendizaje.'],
   };
-  const safeDestinations = new Set<StudentDestination>(items.map(([key]) => key));
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -178,12 +177,10 @@ export function StudentShell({
                 ) : notifications.map(item => (
                   <button
                     key={item.id}
+                    data-notification-id={item.id}
                     onClick={() => {
                       onReadNotification(item.id);
-                      const target = item.target as StudentDestination;
-                      if (mentorView) mentorView.onNavigate('sessions');
-                      else if (item.target === 'mentor-sessions' && onMentorSessions) onMentorSessions();
-                      else onNavigate(safeDestinations.has(target) ? target : 'dashboard');
+                      onOpenNotification(item);
                       setNotificationOpen(false);
                     }}
                     className={`w-full text-left p-4 border-b border-[#EEF1EC] hover:bg-[#F7F7F2] ${item.read ? '' : 'bg-[#EEF5EF]'}`}
@@ -207,10 +204,10 @@ export function StudentShell({
 }
 
 /** MentorShell de Figma sobre la navegación accesible compartida. */
-export function MentorShell({ active, userName, userPhoto, notifications, onReadNotification, onNavigate, onStudentMode, onLogout, children }: {
+export function MentorShell({ active, userName, userPhoto, notifications, onReadNotification, onOpenNotification, onNavigate, onStudentMode, onPublicHome, onLogout, children }: {
   active: MentorDestination; userName: string; userPhoto?: string; notifications: NotificationRecord[]; onReadNotification: (id: string) => void;
-  onNavigate: (page: MentorDestination) => void; onStudentMode: () => void; onLogout: () => void; children: React.ReactNode;
+  onOpenNotification: (item: NotificationRecord) => void; onPublicHome: () => void; onNavigate: (page: MentorDestination) => void; onStudentMode: () => void; onLogout: () => void; children: React.ReactNode;
 }) {
   return <StudentShell active="dashboard" userName={userName} userPhoto={userPhoto} credits={0} notifications={notifications} onReadNotification={onReadNotification}
-    onNavigate={() => onStudentMode()} onPublicHome={onStudentMode} onLogout={onLogout} teachingAction={{ label: 'Volver a modo estudiante', onClick: onStudentMode }} mentorView={{ active, onNavigate }}>{children}</StudentShell>;
+    onOpenNotification={onOpenNotification} onNavigate={() => onStudentMode()} onPublicHome={onPublicHome} onLogout={onLogout} teachingAction={{ label: 'Volver a modo estudiante', onClick: onStudentMode }} mentorView={{ active, onNavigate }}>{children}</StudentShell>;
 }

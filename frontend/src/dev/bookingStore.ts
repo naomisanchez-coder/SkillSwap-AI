@@ -80,8 +80,8 @@ export function createLocalBookingStore({ storage, routeStorage, getMentors, ide
       wallets: studentId === identity.id ? ledger.wallets : { ...ledger.wallets, [studentId]: { ...wallet, available: wallet.available - credits, held: wallet.held + credits } },
       sessions: [session, ...ledger.sessions],
       movements: [{ id: `MOV-${session.id}-hold`, reference: `${session.id}:hold`, sessionId: session.id, type: 'hold', amount: -credits, status: 'pending', createdAt, userId: studentId }, ...ledger.movements],
-      notifications: [{ id: `NOT-${session.id}-booked-student`, userId: studentId, title: 'Reserva confirmada', description: `${session.skill} con ${session.mentorName} · ${formatSessionSchedule(session.date, session.time)}`, date: 'Ahora', read: false, target: 'sessions' },
-        ...(mentor.ownerUserId ? [{ id: `NOT-${session.id}-booked-mentor`, userId: mentor.ownerUserId, title: 'Nueva reserva', description: `${learnerName} reservó una sesión de ${session.skill}.`, date: 'Ahora', read: false, target: 'mentor-sessions' }] : []), ...ledger.notifications],
+      notifications: [{ id: `NOT-${session.id}-booked-student`, userId: studentId, title: 'Reserva confirmada', description: `${session.skill} con ${session.mentorName} · ${formatSessionSchedule(session.date, session.time)}`, date: 'Ahora', read: false, target: 'sessions', sessionId: session.id },
+        ...(mentor.ownerUserId ? [{ id: `NOT-${session.id}-booked-mentor`, userId: mentor.ownerUserId, title: 'Nueva reserva', description: `${learnerName} reservó una sesión de ${session.skill}.`, date: 'Ahora', read: false, target: 'mentor-sessions', sessionId: session.id }] : []), ...ledger.notifications],
     };
     validateLedger(next, identity.id, initialWallet, participantInitials);
     try { storage().setItem(bookingStorageKey, JSON.stringify(next)); }

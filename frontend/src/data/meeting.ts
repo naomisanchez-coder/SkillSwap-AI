@@ -51,7 +51,7 @@ export function assignMeetingToSession(state: BookingLedger, input: {
     } : item),
     notifications: [{ id: `NOT-${session.id}-meeting-link-${id}`, userId: session.studentId,
       title: updated ? 'Enlace de sesión actualizado' : 'Enlace de sesión disponible',
-      description: `${meetingPlatformLabel(input.platform)} ya está disponible para tu sesión de ${session.skill}.`, date: 'Ahora', read: false, target: 'sessions',
+      description: `${meetingPlatformLabel(input.platform)} ya está disponible para tu sesión de ${session.skill}.`, date: 'Ahora', read: false, target: 'sessions', sessionId: session.id,
     }, ...state.notifications],
   };
 }

@@ -1,5 +1,51 @@
 # SkillSwap AI — frontend
 
+## Correcciones de navegación, comprobantes y notificaciones
+
+Mapa actualizado:
+
+- Mentor → **Ir al Home** → portada pública. Se conserva el acceso y la actividad;
+  no equivale a logout. Recargar mantiene la portada. **Volver a modo estudiante**
+  continúa abriendo el panel estudiantil como antes.
+- Notificación de sesión → **Mis sesiones / Reservas recibidas** → pestaña de su
+  **estado actual** → detalle de esa sesión. Un aviso antiguo de reserva puede abrir
+  ahora **Completadas**, **Canceladas** o **En revisión**, según el registro vigente.
+- Notificación de solicitud → **Mis habilidades → Detalle de solicitud**, con estado,
+  PDF, observación e historial actuales. La presentación reutiliza el contenido de
+  las tarjetas existentes. Se puede corregir desde el detalle cuando el estado lo admite.
+- Comprobante de sesión completada → mensaje de **doble confirmación** únicamente
+  si constan ambas fechas; con `adminResolution`, muestra **decisión administrativa**,
+  referencia de incidencia y fecha en America/Lima. La prioridad es la decisión
+  administrativa, incluso si existe una confirmación parcial. No cambia créditos
+  ni reglas de liquidación.
+
+Las nuevas notificaciones incluyen `sessionId` o `requestId` opcionales en el
+contrato tipado. La navegación resuelve propiedad, rol habilitado y entidad vigente
+antes de abrirla. Las notificaciones v1 anteriores conservan sus IDs y se relacionan
+con sesiones, incidencias e historial de solicitudes; no se interpretan títulos ni
+descripciones para decidir el destino. Las referencias ausentes, ambiguas o ajenas
+muestran un aviso en vez de abrir otro registro. No se borran datos ni se migra el
+almacenamiento. La futura API deberá suministrar las referencias de entidad y aplicar
+sus permisos efectivos en servidor.
+
+La selección del detalle es transitoria y puede abrirse de nuevo desde el mismo
+aviso, aunque ya esté leído o ya estemos en el listado. Cerrar con Escape devuelve
+el foco al encabezado del destino. El modal compartido incluye los elementos
+`summary` del historial en su recorrido Tab/Shift+Tab. Se conserva la persistencia
+de lectura y su manejo de errores. La selección no crea rutas URL ni nuevos permisos.
+
+Comprobación: build, lint, `git diff --check` y **71 pruebas automatizadas**.
+Las cinco nuevas pruebas cubren el motivo del comprobante, estados, destinatarios,
+roles, solicitudes reenviadas, referencias antiguas y referencias inválidas.
+Chrome con backend apagado a 390×844, 768×1024, 844×390 y 1440×900: Home y recarga,
+conservación de acceso/saldo, avisos repetidos, estado actual del estudiante y mentor,
+solicitud rechazada con observación/PDF, referencias antiguas tras recargar y ambos
+tipos de comprobante. Revisión adicional móvil/escritorio de referencia inexistente
+y teclado del historial de solicitud. Sin desbordamiento horizontal, llamadas API ni
+errores JavaScript; capturas revisadas. Scripts/capturas temporales fuera del repo.
+Sin dependencias nuevas. Pendientes de verificar: API real, dispositivos físicos,
+otros navegadores y lector de pantalla.
+
 ## Enlaces externos de las sesiones
 
 Mapa: **Modo mentor → Reservas recibidas → Ver detalle → Enlace virtual**.

@@ -32,7 +32,7 @@ export function Modal({ labelledBy, onClose, children }: {
         if (event.key !== 'Tab') return;
         const dialog = event.currentTarget;
         const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
-          'button, a[href], input, select, textarea, [tabindex]',
+          'button, a[href], input, select, textarea, summary, [tabindex]',
         )).filter(element => element.tabIndex >= 0
           && !element.matches(':disabled') && !element.closest('[inert]')
           && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');

@@ -16,7 +16,7 @@ export type SessionRecord = {
   mentorOwnerId?: string;
 };
 export type SkillRequest = { id: string; ownerUserId: string; status: 'pending' | 'observation' | 'approved' | 'rejected' };
-export type NotificationRecord = { id: string; userId: string; title: string; description: string; date: string; read: boolean; target: string };
+export type NotificationRecord = { id: string; userId: string; title: string; description: string; date: string; read: boolean; target: string; sessionId?: string; requestId?: string };
 export type StudentDashboardData = {
   profile: UserProfile; wallet: WalletBalance; sessions: SessionRecord[];
   skillRequests: SkillRequest[]; notifications: NotificationRecord[];

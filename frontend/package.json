@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --import ./tests/typescript-loader.mjs --test tests/recommendations.test.ts tests/booking.test.ts tests/sessionLifecycle.test.ts tests/account.test.ts tests/mentor.test.ts tests/admin.test.ts tests/catalogLogout.test.ts",
+    "test": "node --import ./tests/typescript-loader.mjs --test tests/recommendations.test.ts tests/booking.test.ts tests/sessionLifecycle.test.ts tests/account.test.ts tests/mentor.test.ts tests/admin.test.ts tests/catalogLogout.test.ts tests/notificationNavigation.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

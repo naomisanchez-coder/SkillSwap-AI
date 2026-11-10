@@ -96,7 +96,7 @@ export function createLocalAccountStore({ storage, files, identity, now = () => 
             requestedAt: at, status: 'pending' as const, submissionId: command.submissionId, submissionSignature: signature,
             history: [...(existing?.history ?? []), { id: `SUB-${command.submissionId}`, status: 'pending' as const, at }],
           };
-          return write({ ...account, requests: [request, ...account.requests.filter(item => item.id !== command.id)], notifications: [{ id: `NOT-${command.submissionId}-skill`, userId: identity.id, title: 'Solicitud recibida', description: `${fields.skill} está pendiente de revisión.`, date: 'Ahora', read: false, target: 'skills' }, ...account.notifications] });
+          return write({ ...account, requests: [request, ...account.requests.filter(item => item.id !== command.id)], notifications: [{ id: `NOT-${command.submissionId}-skill`, userId: identity.id, title: 'Solicitud recibida', description: `${fields.skill} está pendiente de revisión.`, date: 'Ahora', read: false, target: 'skills', requestId: request.id }, ...account.notifications] });
         } catch (error) { if (newId) await compensate(() => files.removeEvidence(newId!)); throw error; }
       });
     },
@@ -116,7 +116,7 @@ export function createLocalAccountStore({ storage, files, identity, now = () => 
         const at = now(); request.status = command.status; request.adminComment = comment; request.reviewedAt = at.toISOString();
         request.history.push({ id: command.decisionId, status: command.status, at: at.toISOString(), comment });
         account.adminAuditLog = [auditRecord(command.status === 'approved' ? 'skill_approved' : 'skill_rejected', 'request', request.id, `${request.skill}: ${command.status === 'approved' ? 'Habilidad aprobada' : comment}`, at, command.decisionId), ...(account.adminAuditLog ?? [])];
-        account.notifications.unshift({ id: `NOT-${command.decisionId}-review`, userId: request.ownerUserId, title: command.status === 'approved' ? 'Solicitud aprobada' : 'Solicitud rechazada', description: `${request.skill}. ${comment || 'Ya puedes configurar tu oferta.'}`, date: 'Ahora', read: false, target: 'skills' });
+        account.notifications.unshift({ id: `NOT-${command.decisionId}-review`, userId: request.ownerUserId, title: command.status === 'approved' ? 'Solicitud aprobada' : 'Solicitud rechazada', description: `${request.skill}. ${comment || 'Ya puedes configurar tu oferta.'}`, date: 'Ahora', read: false, target: 'skills', requestId: request.id });
         return write(account);
       });
     },

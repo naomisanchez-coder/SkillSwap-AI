@@ -5,7 +5,8 @@ import { StudentShell, type StudentDestination, type MentorDestination } from '.
 import { MentorArea } from '../components/MentorArea';
 import type { MentorService } from '../services/mentor';
 import type { PublicDestination } from '../components/PublicChrome';
-import type { StudentDashboardSnapshot } from '../data/student';
+import type { StudentDashboardSnapshot, NotificationRecord } from '../data/student';
+import { notificationDestination } from '../data/notificationNavigation';
 import { hasCompletePreferences, summarizeMentorReviews } from '../data/student';
 import { useCatalog } from '../hooks/useCatalog';
 import { mockCatalogService } from './catalogMock';
@@ -55,6 +56,9 @@ export default function FrontendPreview({ onRealAccess, onLogout, studentService
   const [attempt, setAttempt] = useState(0);
   const [pending, setPending] = useState<string | null>(null);
   const [notificationError, setNotificationError] = useState(false);
+  const [notificationTargetError, setNotificationTargetError] = useState(false);
+  const [notificationSelection, setNotificationSelection] = useState<{ type: 'session' | 'request'; id: string; key: number } | null>(null);
+  const notificationSequence = useRef(0);
   const [filters, setFilters] = useState<DiscoveryFilters>(emptyDiscoveryFilters);
   const [publicQuery, setPublicQuery] = useState('');
   const [mentorId, setMentorId] = useState('');
@@ -100,6 +104,7 @@ export default function FrontendPreview({ onRealAccess, onLogout, studentService
     return () => cancelAnimationFrame(frame);
   }, [page, mentorOrigin]);
   const navigate = (next: Page) => {
+    setNotificationSelection(null); setNotificationTargetError(false);
     setPending(null);
     setPage(next);
     try { sessionStorage.setItem('skillswap:frontend:page', next); } catch { /* No afecta datos ni créditos. */ }
@@ -109,6 +114,14 @@ export default function FrontendPreview({ onRealAccess, onLogout, studentService
     navigate(next);
   };
   const mentorApproved = Boolean(snapshot?.state.account?.requests.some(item => item.status === 'approved' && item.ownerUserId === snapshot.state.profile.id));
+  const openNotification = (item: NotificationRecord) => {
+    if (!snapshot) return;
+    const destination = notificationDestination(item, snapshot.state.profile.id, snapshot.state.activity, snapshot.state.account?.requests ?? [], mentorApproved);
+    if (destination.type === 'unavailable') { setNotificationTargetError(true); return; }
+    if (destination.type === 'page') { navigate(destination.page); return; }
+    navigate(destination.type === 'request' ? 'skills' : destination.role === 'mentor' ? 'mentor-sessions' : 'sessions');
+    setNotificationSelection({ type: destination.type, id: destination.id, key: ++notificationSequence.current });
+  };
   const openMentorMode = (destination: MentorDestination = 'mentor-dashboard') => { if (mentorApproved) navigate(mentorPages[destination]); else navigate('skills'); };
   const studentMode = async () => {
     try { const next = await studentService.getDashboard(); setSnapshot(next); navigate(hasCompletePreferences(next.state.profile) ? 'dashboard' : 'profile-setup'); }
@@ -179,6 +192,7 @@ export default function FrontendPreview({ onRealAccess, onLogout, studentService
   return <>
     {logoutError && <aside role="alert" className="p-4 text-[#B54747]">{logoutError}<Button variant="outline" onClick={logout}>Reintentar cierre</Button></aside>}
     {catalog.error && <aside role="alert" className="p-4 text-[#B54747]">No pudimos actualizar el catálogo.<Button variant="outline" onClick={catalog.retry}>Reintentar catálogo</Button></aside>}
+    {notificationTargetError && <aside role="alert" className="p-4 text-[#B54747]">No encontramos la sesión o solicitud de esta notificación disponible para tu cuenta.<Button variant="ghost" onClick={() => setNotificationTargetError(false)}>Entendido</Button></aside>}
     {page === 'loading' && <p role="status" className="p-6">Cargando tu espacio de aprendizaje…</p>}
     {loadError && <aside role="alert" className="border-b border-[#E8C2C2] bg-[#FFF3F0] p-4 text-[#B54747]">{loadErrorMessage} <Button variant="outline" onClick={() => { setLoadError(false); setPage('loading'); setAttempt(current => current + 1); }}>Reintentar</Button></aside>}
     {page === 'profile-setup' && !loadError && <ProfileSetupPage service={profileService} startEditing backLabel={preferencesOrigin === 'profile' || preferencesOrigin === 'mentor-account' ? 'Volver al perfil' : preferencesOrigin === 'skills' ? 'Volver a mis habilidades' : 'Volver al inicio'} onReset={() => setSnapshot(current => current && ({ ...current, state: { ...current.state, profile: { ...current.state.profile, ...emptyPreferences() } } }))} onBack={() => navigate(snapshot && hasCompletePreferences(snapshot.state.profile) ? preferencesOrigin : 'landing')} onComplete={preferences => {
@@ -190,22 +204,23 @@ export default function FrontendPreview({ onRealAccess, onLogout, studentService
     {(page === 'dashboard' || page === 'discover' || page === 'explore' || page === 'sessions' || page === 'wallet' || page === 'profile' || page === 'skills' || page === 'mentor-application') && snapshot && <StudentShell active={page === 'mentor-application' ? 'skills' : page} userName={snapshot.state.profile.name} userPhoto={photo.url || snapshot.state.profile.photo} credits={snapshot.state.wallet.available}
       notifications={snapshot.state.notifications.filter(item => item.userId === snapshot.state.profile.id)} onReadNotification={id => void markRead(id)}
       onNavigate={privateNavigate} onPublicHome={() => navigate('landing')} onLogout={logout}
-      onMentorSessions={() => openMentorMode('sessions')}
+      onOpenNotification={openNotification}
       teachingAction={mentorApproved ? { label: 'Ir al panel de mentor', onClick: () => openMentorMode() } : { label: 'Quiero ser mentor', onClick: () => openApplication() }}>
       {page === 'dashboard' && <StudentDashboardPage state={snapshot.state} mentors={snapshot.mentors} onExplore={() => navigate('explore')}
         onDiscover={() => navigate('discover')} onSessions={() => navigate('sessions')} onWallet={() => navigate('wallet')}
         onMentorRequest={() => openApplication()} onMentorMode={mentorApproved ? () => openMentorMode() : undefined} onMentor={openMentor} onEditPreferences={() => editPreferences()} />}
       {(page === 'discover' || page === 'explore') && <RecommendationsPage key={page} mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings}
         recommended={page === 'explore'} filters={filters} onFiltersChange={setFilters} onViewMentor={openMentor} onEditPreferences={() => editPreferences()} />}
-      {page === 'sessions' && snapshot.state.activity && <SessionsHubPage ledger={snapshot.state.activity} service={studentService} onChanged={changedActivity} onExplore={() => navigate('discover')} />}
+      {page === 'sessions' && snapshot.state.activity && <SessionsHubPage key={notificationSelection?.key ?? 'list'} initialSessionId={notificationSelection?.type === 'session' ? notificationSelection.id : undefined} ledger={snapshot.state.activity} service={studentService} onChanged={changedActivity} onExplore={() => navigate('discover')} />}
       {page === 'wallet' && snapshot.state.activity && <CreditsHubPage state={snapshot.state.activity} />}
       {page === 'profile' && <ProfilePage profile={snapshot.state.profile} photo={photo} service={accountService} onChanged={changedAccount} onEditPreferences={() => editPreferences('profile')} onLogout={logout} />}
-      {page === 'skills' && <SkillsPage profile={snapshot.state.profile} requests={snapshot.state.account?.requests ?? []} service={accountService} onNew={() => openApplication()} onEdit={openApplication} onEditPreferences={() => editPreferences('skills')} />}
+      {page === 'skills' && <SkillsPage key={notificationSelection?.key ?? 'list'} initialRequestId={notificationSelection?.type === 'request' ? notificationSelection.id : undefined} profile={snapshot.state.profile} requests={snapshot.state.account?.requests ?? []} service={accountService} onNew={() => openApplication()} onEdit={openApplication} onEditPreferences={() => editPreferences('skills')} />}
       {page === 'mentor-application' && <MentorApplicationPage key={applicationKey} initialRequest={snapshot.state.account?.requests.find(item => item.id === editingRequestId)} existingRequests={snapshot.state.account?.requests ?? []} service={accountService} onChanged={changedAccount} onBack={() => navigate('skills')} />}
       {(page === 'sessions' || page === 'wallet') && <RecommendationAssistant mentors={snapshot.mentors} profile={snapshot.state.profile} ratings={snapshot.state.mentorRatings} onViewMentor={openMentor} />}
     </StudentShell>}
     {isMentorPage(page) && snapshot && <MentorArea key={attempt} active={Object.entries(mentorPages).find(([, value]) => value === page)![0] as MentorDestination} service={mentorService} studentService={studentService} accountService={accountService}
-      profile={snapshot.state.profile} photo={photo} notifications={snapshot.state.notifications} onReadNotification={id => void markRead(id)} onNavigate={next => navigate(mentorPages[next])}
+      profile={snapshot.state.profile} photo={photo} notifications={snapshot.state.notifications} onReadNotification={id => void markRead(id)} onOpenNotification={openNotification} sessionSelection={notificationSelection?.type === 'session' ? notificationSelection : undefined} onNavigate={next => navigate(mentorPages[next])}
+      onPublicHome={() => navigate('landing')}
       onStudentMode={() => void studentMode()} onLedger={changedActivity} onAccount={changedAccount} onEditPreferences={() => editPreferences('mentor-account')} onApplication={() => openApplication()} onLogout={logout} />}
     {page === 'mentor' && snapshot && <MentorProfilePage key={mentorId} profile={snapshot.state.profile} mentorId={mentorId} service={studentService}
       onBack={() => { restoring.current = true; navigate(mentorOrigin); }} onBooking={() => void startBooking()} />}
