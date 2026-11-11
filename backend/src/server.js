@@ -31,6 +31,8 @@ import { createMentorRepository } from './modules/student/mentor.repository.js';
 import { createMentorService } from './modules/student/mentor.service.js';
 import { createExploreRepository } from './modules/student/explore.repository.js';
 import { createExploreService } from './modules/student/explore.service.js';
+import { createBookingRepository } from './modules/student/booking.repository.js';
+import { createBookingService } from './modules/student/booking.service.js';
 
 let database;
 let emailService;
@@ -41,6 +43,7 @@ let recoveryService;
 let studentService;
 let mentorService;
 let exploreService;
+let bookingService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -116,8 +119,12 @@ try {
       onCleanupFailure(event) { console.warn(`private_storage: ${event}`); },
     });
   exploreService = createExploreService(createExploreRepository(database));
+  const [bookingMigration] = await database.execute(
+    "SELECT 1 present FROM schema_migrations WHERE version='007_sessions_booking_credits' LIMIT 1", []);
+  if (bookingMigration.length === 1) bookingService = createBookingService(createBookingRepository(database));
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
-    loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService, trustProxyHops }));
+    loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService,
+    bookingService, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);

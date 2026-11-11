@@ -5,13 +5,15 @@ import { createStudentController } from './student.controller.js';
 import { createMentorController } from './mentor.controller.js';
 import { parseMultipart } from '../../middleware/multipart.js';
 import { createExploreController } from './explore.controller.js';
+import { createBookingController } from './booking.controller.js';
 
 export function createStudentRouter({ origins, sessionService, studentService,
-  mentorService, exploreService, cookie = { name: 'skillswap_session' } }) {
+  mentorService, exploreService, bookingService, cookie = { name: 'skillswap_session' } }) {
   const router = Router();
   const controller = studentService ? createStudentController(studentService) : null;
   const mentor = mentorService ? createMentorController(mentorService) : null;
   const explore = exploreService ? createExploreController(exploreService) : null;
+  const booking = bookingService ? createBookingController(bookingService) : null;
   const authenticate = async (request, response, next) => {
     try {
       if (!sessionService || !controller) throw new PublicError('SERVICE_UNAVAILABLE');
@@ -36,6 +38,7 @@ export function createStudentRouter({ origins, sessionService, studentService,
     ? next() : next(new PublicError('UNSUPPORTED_MEDIA_TYPE'));
   const mentorAvailable = (request, response, next) => mentor ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
   const exploreAvailable = (request, response, next) => explore ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
+  const bookingAvailable = (request, response, next) => booking ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
   router.use(authenticate);
   router.get('/profile', controller?.profile ?? (() => {}));
   router.patch('/profile', mutation, json, controller?.updateProfile ?? (() => {}));
@@ -66,5 +69,20 @@ export function createStudentRouter({ origins, sessionService, studentService,
   router.get('/explore/mentors', exploreAvailable, explore?.mentors ?? (() => {}));
   router.get('/explore/mentors/:mentorId', exploreAvailable, explore?.mentor ?? (() => {}));
   router.get('/recommendations', exploreAvailable, explore?.recommendations ?? (() => {}));
+  router.get('/explore/mentors/:mentorId/availability', bookingAvailable, booking?.publicAvailability ?? (() => {}));
+  router.get('/mentor/offers', bookingAvailable, booking?.offers ?? (() => {}));
+  router.put('/mentor/offers/:skillId', bookingAvailable, mutation, json, booking?.setOffer ?? (() => {}));
+  router.get('/mentor/availability', bookingAvailable, booking?.availability ?? (() => {}));
+  router.put('/mentor/availability', bookingAvailable, mutation, json, booking?.replaceAvailability ?? (() => {}));
+  router.post('/bookings', bookingAvailable, mutation, json, booking?.book ?? (() => {}));
+  router.get('/sessions', bookingAvailable, booking?.sessions ?? (() => {}));
+  router.get('/sessions/:sessionId', bookingAvailable, booking?.session ?? (() => {}));
+  router.put('/sessions/:sessionId/meeting-link', bookingAvailable, mutation, json, booking?.setMeeting ?? (() => {}));
+  router.post('/sessions/:sessionId/start', bookingAvailable, mutation, json, booking?.start ?? (() => {}));
+  router.post('/sessions/:sessionId/performed', bookingAvailable, mutation, json, booking?.performed ?? (() => {}));
+  router.post('/sessions/:sessionId/validate', bookingAvailable, mutation, json, booking?.validate ?? (() => {}));
+  router.post('/sessions/:sessionId/cancel', bookingAvailable, mutation, json, booking?.cancel ?? (() => {}));
+  router.post('/sessions/:sessionId/reviews', bookingAvailable, mutation, json, booking?.review ?? (() => {}));
+  router.get('/session-credits', bookingAvailable, booking?.credits ?? (() => {}));
   return router;
 }
