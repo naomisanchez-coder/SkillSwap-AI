@@ -5,7 +5,7 @@ import { createHealthRouter } from './routes/health.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 export function createApp({ database, origins, emailService, verificationService, loginService, sessionService,
-  cookie, trustProxyHops = 0 }) {
+  cookie, recoveryService, trustProxyHops = 0 }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', trustProxyHops === 0 ? false : trustProxyHops);
@@ -14,7 +14,7 @@ export function createApp({ database, origins, emailService, verificationService
   app.use(express.json({ limit: '100kb' }));
   app.use('/api/health', createHealthRouter(database));
   app.use('/api/auth', createAuthRouter(database, origins, emailService, verificationService,
-    loginService, sessionService, cookie));
+    loginService, sessionService, cookie, recoveryService));
   app.use((request, response) => {
     response.status(404).json({ status: 'error', message: 'Not found' });
   });

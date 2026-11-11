@@ -18,12 +18,18 @@ import { createSessionProtection } from './modules/auth/session-security.js';
 import { createSessionRepository } from './modules/auth/session.repository.js';
 import { createSessionService } from './modules/auth/session.service.js';
 import { createLoginService } from './modules/auth/login.service.js';
+import { readPasswordRecoveryConfig } from './config/password-recovery.js';
+import { createPasswordRecoveryProtection, createPasswordRecoveryRateIdentifiers } from './modules/auth/password-recovery.js';
+import { createPasswordRecoveryRateRepository } from './modules/auth/password-recovery-rate.repository.js';
+import { createPasswordRecoveryRepository } from './modules/auth/password-recovery.repository.js';
+import { createPasswordRecoveryService } from './modules/auth/password-recovery.service.js';
 
 let database;
 let emailService;
 let verificationService;
 let loginService;
 let sessionService;
+let recoveryService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -36,6 +42,7 @@ async function shutdown(code = 0) {
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
     await emailService?.close();
+    await recoveryService?.close();
     await database?.close();
     process.exitCode = code;
   } catch {
@@ -60,6 +67,21 @@ try {
   }
   if (otp) verificationService = createEmailVerificationService(
     createEmailVerificationRepository(database), createCodeProtection(otp.protection));
+  const recoveryConfigured = Boolean(process.env.PASSWORD_RECOVERY_HMAC_KEY_HEX ||
+    process.env.PASSWORD_RECOVERY_RATE_HMAC_KEY_HEX || process.env.PASSWORD_RECOVERY_HMAC_KEY_VERSION);
+  const recovery = recoveryConfigured ? readPasswordRecoveryConfig(process.env) : undefined;
+  if (smtp && recovery) {
+    recoveryService = createPasswordRecoveryService({
+      repository: createPasswordRecoveryRepository(database),
+      rateRepository: createPasswordRecoveryRateRepository(database, recovery.policy),
+      identifiers: createPasswordRecoveryRateIdentifiers(recovery.rateKey),
+      protection: createPasswordRecoveryProtection({ keyHex: recovery.challengeKey,
+        keyVersion: recovery.keyVersion }),
+      mailer: createSmtpMailer(smtp),
+      policy: recovery.policy,
+      onEvent(event) { console.info(`password_recovery: ${event}`); },
+    });
+  }
   const loginConfigured = Boolean(process.env.LOGIN_RATE_HMAC_KEY_HEX || process.env.SESSION_CSRF_KEY_HEX);
   let trustProxyHops = 0;
   let cookie;
@@ -77,7 +99,7 @@ try {
       rememberMaxAge: sessionSecurity.policy.remembered.absoluteSeconds * 1000 };
   }
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
-    loginService, sessionService, cookie, trustProxyHops }));
+    loginService, sessionService, cookie, recoveryService, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);

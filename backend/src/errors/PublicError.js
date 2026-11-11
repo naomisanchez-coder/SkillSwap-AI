@@ -4,6 +4,7 @@ const definitions = Object.freeze({
   CONFLICT: [409, 'La operación entra en conflicto con el estado actual.'],
   EMAIL_ALREADY_REGISTERED: [409, 'El correo ya está registrado.'],
   VERIFICATION_INVALID: [422, 'El código de verificación no es válido o ya no está disponible.'],
+  RECOVERY_INVALID: [422, 'El código de recuperación no es válido o ya no está disponible.'],
   INVALID_CREDENTIALS: [401, 'El correo o la contraseña no son válidos.'],
   SESSION_REQUIRED: [401, 'Inicia sesión para continuar.'],
   EMAIL_NOT_VERIFIED: [403, 'Verifica tu correo antes de iniciar sesión.'],

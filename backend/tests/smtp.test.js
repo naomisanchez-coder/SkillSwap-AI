@@ -51,3 +51,20 @@ test('implicit TLS is selected on 465 and every enabled OTP setting is explicit'
   assert.equal(readOtpConfig(source).policy.maxAttempts,5);
   assert.equal(readOtpConfig(source).protection.digits,6);
 });
+test('recovery and password-change messages use private text-only transport contracts', async () => {
+  const sent = [];
+  const mailer = createSmtpMailer(readEmailConfig(env()), { createTransport: () => ({
+    async sendMail(input) { sent.push(input); return { accepted: [input.to], rejected: [] }; }, close() {},
+  }) });
+  const recovery = message();
+  await mailer.sendPasswordRecovery(recovery);
+  await mailer.sendPasswordChanged({ to: recovery.to });
+  assert.equal(sent.length, 2);
+  assert.ok(sent[0].text.includes(recovery.code));
+  assert.equal(sent[1].text.includes(recovery.code), false);
+  assert.equal(sent.every(item => item.html === undefined && item.attachments === undefined), true);
+  await assert.rejects(mailer.sendPasswordRecovery({ ...recovery, code: '12345' }),
+    /Invalid recovery message/);
+  await assert.rejects(mailer.sendPasswordChanged({ to: 'bad\r\n@example.invalid' }),
+    /Invalid password change message/);
+});

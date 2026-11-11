@@ -7,10 +7,11 @@ import { validateEmailRequest } from './email.service.js';
 import { validateVerificationRequest } from './email-verification.service.js';
 import { createRegistrationLimiter } from './registration.limiter.js';
 
-export function createAuthRouter(database, origins, emailService, verificationService, loginService, sessionService, cookie) {
+export function createAuthRouter(database, origins, emailService, verificationService, loginService, sessionService,
+  cookie, recoveryService) {
   const router = Router();
   const controller = createAuthController(createAuthService(createAuthRepository(database)), emailService,
-    verificationService, loginService, sessionService, cookie);
+    verificationService, loginService, sessionService, cookie, recoveryService);
   const browserOrigin = (request, response, next) => {
     response.set('Cache-Control', 'no-store');
     if (request.get('origin') && !origins.includes(request.get('origin'))) return next(new PublicError('FORBIDDEN'));
@@ -53,5 +54,13 @@ export function createAuthRouter(database, origins, emailService, verificationSe
     next();
   }, controller.logout);
   router.get('/me', browserOrigin, controller.me);
+  const publicMutation = (request, response, next) => {
+    if (!request.is('application/json')) return next(new PublicError('UNSUPPORTED_MEDIA_TYPE'));
+    if (request.get('x-csrf-protection') !== '1') return next(new PublicError('CSRF_INVALID'));
+    next();
+  };
+  router.post('/password-recovery/request', browserOrigin, publicMutation,
+    controller.requestPasswordRecovery);
+  router.post('/password-recovery/reset', browserOrigin, publicMutation, controller.resetPassword);
   return router;
 }
