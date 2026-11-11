@@ -22,6 +22,21 @@ Las claves HMAC de login, CSRF y recuperación deben generarse como valores hexa
 3. Confirmar el permiso `ALTER` exacto sobre `skillswap_ai_demo.email_verifications`.
 4. Ejecutar preflight y aplicar hasta `008_mentor_skill_levels`.
 5. Cargar el catálogo académico aprobado y luego los catálogos de habilidades/niveles `DEMO_ONLY` mediante `skillswap_demo_app`.
+6. Comprobar y preparar los tres mentores persistentes mediante el procedimiento explícito:
+
+```sh
+node scripts/demo-mentors.js --check .env.demo.local
+DEMO_MENTORS_ALLOW_WRITE=yes node scripts/demo-mentors.js --apply .env.demo.local
+node scripts/demo-mentors.js --check .env.demo.local
+```
+
+El cargador solo admite la pareja exacta `skillswap_ai_demo`/`skillswap_demo_app`. Registra las cuentas mediante el servicio institucional, verifica códigos con un transporte sustituible que no envía correo, concede los créditos iniciales por la transacción oficial, almacena avatares y certificados sintéticos en el almacenamiento privado, y utiliza los servicios ADMIN para revisar documentos, aprobar y asignar niveles. No crea un estudiante visor ni sustituye el registro/OTP normal de la demostración. Repetirlo sobre un estado completo no duplica datos; cualquier estado parcial o conflictivo se rechaza.
+
+La comprobación operativa crea un estudiante temporal mediante registro y OTP sustituido, abre una sesión real, consulta los endpoints HTTP de Explorar y recomendaciones, reserva, comprueba la retención, cancela concurrentemente y comprueba el reembolso. El bloque `finally` elimina únicamente ese estudiante y sus registros identificados; conserva catálogos y mentores:
+
+```sh
+DEMO_VERIFY_ALLOW_WRITE=yes node scripts/verify-demo.js .env.demo.local
+```
 6. Provisionar los tres mentores con el procedimiento privilegiado auditado, archivos sintéticos privados, solicitudes ADMIN, ofertas, niveles y disponibilidad.
 
 No se debe ejecutar ningún paso si la identidad, el destino, el historial o los permisos difieren. La configuración por sí sola no demuestra que las migraciones o datos se hayan aplicado.
