@@ -7,8 +7,9 @@ import mysql from 'mysql2/promise';
 const version = '001_auth_foundation';
 const otpMigration = '002_otp_delivery_safety';
 const loginMigration = '003_login_rate_limits';
-export const latestMigration = '004_password_recovery';
-const versions = [version, otpMigration, loginMigration, latestMigration];
+const recoveryMigration = '004_password_recovery';
+export const latestMigration = '005_student_profile';
+const versions = [version, otpMigration, loginMigration, recoveryMigration, latestMigration];
 const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth']);
 const expectedTables = ['schema_migrations', 'careers', 'career_cycles', 'users',
   'student_profiles', 'email_verifications', 'auth_sessions', 'credit_transactions'].sort();
@@ -43,11 +44,12 @@ export async function readMigration(selected = version) {
   const created = statements.filter(s => s.startsWith('CREATE TABLE '));
   const tables = selected === version ? expectedTables : selected === otpMigration ? ['otp_request_limits'] :
     selected === loginMigration ? ['login_rate_limits'] :
-      ['password_recovery_challenges', 'password_recovery_limits'];
+      selected === recoveryMigration ? ['password_recovery_challenges', 'password_recovery_limits'] :
+        ['student_interests', 'student_profile_details'];
   ensure(JSON.stringify(created.map(s => s.match(/^CREATE TABLE ([a-z_]+) /)?.[1]).sort()) === JSON.stringify(tables), 'MIGRATION_TABLES_INVALID');
   const alter = "ALTER TABLE email_verifications\n  DROP CHECK chk_verifications_status,\n  ADD CONSTRAINT chk_verifications_status CHECK (status IN ('SENDING', 'PENDING', 'CONSUMED', 'REVOKED', 'EXPIRED', 'EXHAUSTED')),\n  ALTER COLUMN status SET DEFAULT 'SENDING'";
   const lengths = { [version]: expectedTables.length + 3, [otpMigration]: 5,
-    [loginMigration]: 4, [latestMigration]: 5 };
+    [loginMigration]: 4, [recoveryMigration]: 5, [latestMigration]: 5 };
   ensure(statements.length === lengths[selected], 'MIGRATION_FORMAT_INVALID');
   ensure(statements.every(s => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s) || (selected === otpMigration && s === alter)), 'MIGRATION_FORMAT_INVALID');
   const checksum = createHash('sha256').update(bytes).digest('hex');
@@ -55,7 +57,8 @@ export async function readMigration(selected = version) {
     [version]: 'a544084c180a8c8ce701bd506bc98819d4e433b61460b1b20b7dbe4f0e1061c8',
     [otpMigration]: 'bd3cdf30528264baad434993caf1c0334a64bb6ca4d71bcc6518cc3b7d974c8e',
     [loginMigration]: '46866a4e7d745276542b1276445b40bc5424ae9667716f864d562d05693eebc2',
-    [latestMigration]: '7de62a5ab27fc01dc59155908be5eb3fbe1fd73bb6c3f3a7327caddd67c8abba',
+    [recoveryMigration]: '7de62a5ab27fc01dc59155908be5eb3fbe1fd73bb6c3f3a7327caddd67c8abba',
+    [latestMigration]: 'adf668d8ef24c9b9cc21808f7c46491fd608182c36170325dc2cd682faadf4dd',
   };
   ensure(checksum === immutable[selected], 'MIGRATION_IMMUTABLE_CHECKSUM');
   return { version: selected, checksum, statements };
@@ -156,13 +159,14 @@ async function inspect(connection, config, migrations) {
   checkMigrationPrivileges(grants, config.database, instance.partialRevokes, {
     requireAlter: pending.some(item => item.version === otpMigration),
     allowAlter: migrations.some(item => item.version === otpMigration),
-    requireReferences: pending.some(item => [version, latestMigration].includes(item.version)),
+    requireReferences: pending.some(item => [version, recoveryMigration, latestMigration].includes(item.version)),
   });
   if (!objects.length) return 0;
   const applied = migrations.slice(0, history.length);
   const tables = [...expectedTables, ...(history.length > 1 ? ['otp_request_limits'] : []),
     ...(history.length > 2 ? ['login_rate_limits'] : []),
-    ...(history.length > 3 ? ['password_recovery_challenges', 'password_recovery_limits'] : [])].sort();
+    ...(history.length > 3 ? ['password_recovery_challenges', 'password_recovery_limits'] : []),
+    ...(history.length > 4 ? ['student_interests', 'student_profile_details'] : [])].sort();
   ensure(JSON.stringify(objects.map((o) => o.name).sort()) === JSON.stringify(tables) &&
     objects.every((o) => o.type === 'BASE TABLE' && o.engine === 'InnoDB'), 'MIGRATION_PARTIAL_OR_FOREIGN_SCHEMA');
   await checkStructure(connection, config.database, { statements: applied.flatMap(m => m.statements) });

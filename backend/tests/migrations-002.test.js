@@ -52,10 +52,10 @@ test('002 privilege check requires exact table ALTER; schema/global/excess right
 });
 test('unit-only runner inspects all pending migrations without DDL',async()=>{
  const f=fake();const result=await runMigration(f.connection,config,{through:latestMigration});
- assert.deepEqual(result.migrations.map(m=>m.state),['pending','pending','pending','pending']);assert.equal(result.applied,false);
+ assert.deepEqual(result.migrations.map(m=>m.state),all.map(()=> 'pending'));assert.equal(result.applied,false);
  assert.ok(f.state.commands.every(s=>/^(SELECT|SHOW)/.test(s)));
 });
-test('unit-only runner applies ordered 001/002/003/004 and a second run repeats none',async()=>{
+test('unit-only runner applies every ordered migration and a second run repeats none',async()=>{
  const f=fake();const opts={through:latestMigration,apply:true,allowDdl:true};
  assert.equal((await runMigration(f.connection,config,opts)).applied,true);
  assert.deepEqual(f.state.history,all.map(m=>({version:m.version,checksum:m.checksum})));
@@ -63,10 +63,10 @@ test('unit-only runner applies ordered 001/002/003/004 and a second run repeats 
  assert.equal((await runMigration(f.connection,config,opts)).applied,false);
  assert.equal(f.state.commands.filter(s=>/^CREATE |^ALTER |^INSERT INTO schema_migrations/.test(s)).length,before);
 });
-test('unit-only runner upgrades applied 001 through 004 without recreating prior tables',async()=>{
+test('unit-only runner upgrades applied 001 through latest without recreating prior tables',async()=>{
  const f=fake(1);assert.equal((await runMigration(f.connection,config,{through:latestMigration,apply:true,allowDdl:true})).applied,true);
- assert.equal(f.state.commands.filter(s=>s.startsWith('CREATE TABLE')).length,4);
- assert.equal(f.state.commands.filter(s=>s.startsWith('INSERT INTO schema_migrations')).length,3);
+ assert.equal(f.state.commands.filter(s=>s.startsWith('CREATE TABLE')).length,6);
+ assert.equal(f.state.commands.filter(s=>s.startsWith('INSERT INTO schema_migrations')).length,4);
 });
 test('unit-only failed ALTER leaves visible partial state, no 002 record and no automatic cleanup/retry',async()=>{
  const f=fake(1);f.state.fail='ALTER TABLE';
