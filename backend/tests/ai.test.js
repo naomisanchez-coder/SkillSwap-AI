@@ -152,7 +152,7 @@ test('Gemini diagnostics classify success, invalid response, transport and timeo
   });
   assert.equal(await success.respond({ instructions: 'hidden', input: [] }), 'safe answer');
   assert.deepEqual(events, [{ provider: 'gemini', model: 'gemini-project-model',
-    operation: 'generateContent', outcome: 'success', category: 'SUCCESS', status: 200, durationMs: 5 }]);
+    candidateCount: 1, operation: 'generateContent', outcome: 'success', category: 'SUCCESS', status: 200, durationMs: 5 }]);
 
   for (const [expected, fetchImpl] of [
     ['INVALID_RESPONSE', async () => ({ ok: true, status: 200, async json() { return { candidates: [] }; } })],
