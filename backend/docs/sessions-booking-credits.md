@@ -2,7 +2,7 @@
 
 ## Estado y decisiones confirmadas
 
-La migración `007_sessions_booking_credits.sql` está aplicada y validada en `skillswap_ai_test_auth`; permanece pendiente en `skillswap_ai`. Mientras el esquema de ejecución no contenga `007_sessions_booking_credits`, el servidor no compone este módulo y sus rutas responden `503 SERVICE_UNAVAILABLE`; las rutas ya publicadas continúan funcionando.
+La migración `007_sessions_booking_credits.sql` está aplicada y validada en `skillswap_ai_test_auth` y `skillswap_ai`. Mientras un esquema de ejecución no contenga `007_sessions_booking_credits`, el servidor no compone este módulo y sus rutas responden `503 SERVICE_UNAVAILABLE`; las rutas ya publicadas continúan funcionando.
 
 El flujo funcional confirmado por Figma es:
 
@@ -16,7 +16,7 @@ El flujo funcional confirmado por Figma es:
 - No se permite reservar consigo mismo ni superponer sesiones activas de ninguno de los participantes.
 - La agenda semanal usa `America/Lima`; cada sesión debe comenzar y terminar el mismo día local.
 
-La política de cancelación permanece pendiente. Aunque el modelo reserva un estado económico para un futuro reembolso, el endpoint de cancelación responde `409 CANCELLATION_POLICY_PENDING` y no modifica datos. No se implementan penalizaciones, plazo de cancelación, ausencia, reprogramación, compra de créditos ni pagos monetarios.
+La cancelación está permitida únicamente mientras la sesión permanezca `UPCOMING` y la hora MySQL sea anterior a su inicio. Cualquiera de los dos participantes puede cancelarla. La misma transacción inserta un único `SESSION_REFUND` por el costo completo, cambia la retención a `REFUNDED`, la sesión a `CANCELLED` y registra el evento. Reintentos y solicitudes concurrentes devuelven el estado cancelado sin duplicar créditos. No se implementan penalizaciones, ausencia, reprogramación, compra de créditos ni pagos monetarios.
 
 ## Modelo preparado
 
@@ -57,6 +57,8 @@ Todas las rutas exigen una sesión `STUDENT`; las mutaciones además exigen orig
 - `POST /api/student/sessions/:sessionId/cancel` (bloqueado hasta aprobar política)
 - `POST /api/student/sessions/:sessionId/reviews`
 - `GET /api/student/session-credits`
+- `GET /api/student/dashboard`: añade próximas sesiones, completadas, progreso derivado y los movimientos recientes.
+- `GET /api/student/credits`: conserva paginación y añade `total`, `held` y `available` al saldo contable.
 
 El cliente aporta una `requestId` UUID estable por intención de reserva. No aporta costo, estado económico, estudiante ni mentor. Las lecturas filtran siempre por el participante autenticado y no exponen certificados, notas administrativas o datos privados.
 
@@ -64,6 +66,6 @@ El cliente aporta una `requestId` UUID estable por intención de reserva. No apo
 
 El checksum aplicado es `aafc96679930a69496175c1904e2a240e412c28e75181a1a4f558cd14bd1c6c6`. El postcheck confirmó seis tablas InnoDB, 15 claves foráneas, 18 restricciones CHECK habilitadas, índices, historial e idempotencia. Las integraciones usan `skillswap_test_app` y comprobaron tarifas, saldo insuficiente, intervalos solapados, reintento por clave, concurrencia con inicios idénticos, transiciones, permisos, liquidación única, valoración y limpieza selectiva. Ninguna prueba de escritura se ejecutó en `skillswap_ai`.
 
-La propuesta de cancelar únicamente una sesión `UPCOMING`, con reembolso total y sin penalización, es compatible con el modelo: `CANCELLED`, `REFUNDED`, `refund_transaction_id` y el evento `CANCELLED` ya están definidos. Su operación deberá insertar un movimiento positivo único para el estudiante y actualizar retención, sesión y evento en una transacción. No se activa hasta aprobar expresamente esa regla.
+La cancelación `UPCOMING`, el reembolso completo, el rechazo después del inicio y la idempotencia fueron comprobados con solicitudes concurrentes reales. El progreso del dashboard cuenta únicamente sesiones `COMPLETED`; no usa reservas, cancelaciones ni estados intermedios.
 
-La disponibilidad podrá alimentar el 25 % del ranking de recomendaciones después de aplicar 007 también en el entorno que sirve la aplicación y poblar datos reales. La calidad (10 %) requiere sesiones completadas y valoraciones reales. El nivel por habilidad continúa sin modelo confirmado; no debe inferirse del texto de onboarding.
+La disponibilidad podrá alimentar el 25 % del ranking de recomendaciones después de poblar datos reales. La calidad (10 %) requiere sesiones completadas y valoraciones reales. El nivel por habilidad continúa sin modelo confirmado; no debe inferirse del texto de onboarding.

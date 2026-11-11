@@ -390,8 +390,8 @@ El migrador reconoce 001→002→003 y 003 fue validada primero en `skillswap_ai
 
 Los endpoints `POST /api/auth/password-recovery/request` y `POST /api/auth/password-recovery/reset` usan HMAC, scrypt, límites persistentes, estados `SENDING → PENDING`, consumo único y revocación de sesiones. Las pruebas usan transporte SMTP sustituible y datos sintéticos aislados. Configuración, contratos y diferencia visual pendiente de integración: [password-recovery.md](docs/password-recovery.md).
 
-## Incremento 1.10: reservas y sesiones (preparado, sin DDL)
+## Incremento 1.10: reservas y sesiones
 
-La migración incremental `007_sessions_booking_credits.sql` y el módulo por capas están preparados. 007 está aplicada y validada en `skillswap_ai_test_auth`, pero permanece pendiente en `skillswap_ai`; por seguridad, el servidor deja las nuevas rutas en `503 SERVICE_UNAVAILABLE` en cualquier esquema sin el registro de migración. Se conservan las tarifas 30/5, 60/10 y 90/15, retenciones transaccionales, liquidación al validar y una valoración por sesión completada.
+La migración incremental `007_sessions_booking_credits.sql` está aplicada y validada en `skillswap_ai_test_auth` y `skillswap_ai`. Por seguridad, el servidor deja las nuevas rutas en `503 SERVICE_UNAVAILABLE` en cualquier esquema sin el registro de migración. Se conservan las tarifas 30/5, 60/10 y 90/15, retenciones transaccionales, liquidación al validar y una valoración por sesión completada.
 
-La cancelación está bloqueada hasta aprobar plazo y efecto económico. Las pruebas MySQL aisladas comprobaron estructura, concurrencia, conflictos, rollback, idempotencia y movimientos; no autorizan aplicar 007 en la principal. Contratos y decisiones: [sessions-booking-credits.md](docs/sessions-booking-credits.md).
+La cancelación de una sesión `UPCOMING` antes de su inicio devuelve el 100 % de la retención, sin penalización; después de iniciar se rechaza. Dashboard, Mis sesiones y créditos exponen estados, participantes públicos, progreso completado, retenciones y movimientos sin fuentes contables paralelas. Contratos y decisiones: [sessions-booking-credits.md](docs/sessions-booking-credits.md).
