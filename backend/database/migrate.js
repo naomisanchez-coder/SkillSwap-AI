@@ -9,8 +9,9 @@ const otpMigration = '002_otp_delivery_safety';
 const loginMigration = '003_login_rate_limits';
 const recoveryMigration = '004_password_recovery';
 const profileMigration = '005_student_profile';
-export const latestMigration = '006_mentor_skills_files';
-const versions = [version, otpMigration, loginMigration, recoveryMigration, profileMigration, latestMigration];
+const mentorMigration = '006_mentor_skills_files';
+export const latestMigration = '007_sessions_booking_credits';
+const versions = [version, otpMigration, loginMigration, recoveryMigration, profileMigration, mentorMigration, latestMigration];
 const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth']);
 const expectedTables = ['schema_migrations', 'careers', 'career_cycles', 'users',
   'student_profiles', 'email_verifications', 'auth_sessions', 'credit_transactions'].sort();
@@ -47,12 +48,15 @@ export async function readMigration(selected = version) {
     selected === loginMigration ? ['login_rate_limits'] :
       selected === recoveryMigration ? ['password_recovery_challenges', 'password_recovery_limits'] :
         selected === profileMigration ? ['student_interests', 'student_profile_details'] :
-          ['mentor_application_documents', 'mentor_application_events', 'mentor_applications', 'private_files',
-            'skill_catalog', 'student_profile_photos', 'student_skills'];
+          selected === mentorMigration ? ['mentor_application_documents', 'mentor_application_events',
+            'mentor_applications', 'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'] :
+            ['mentor_availability', 'mentor_offers', 'mentoring_session_events', 'mentoring_sessions',
+              'session_credit_holds', 'session_reviews'];
   ensure(JSON.stringify(created.map(s => s.match(/^CREATE TABLE ([a-z_]+) /)?.[1]).sort()) === JSON.stringify(tables), 'MIGRATION_TABLES_INVALID');
   const alter = "ALTER TABLE email_verifications\n  DROP CHECK chk_verifications_status,\n  ADD CONSTRAINT chk_verifications_status CHECK (status IN ('SENDING', 'PENDING', 'CONSUMED', 'REVOKED', 'EXPIRED', 'EXHAUSTED')),\n  ALTER COLUMN status SET DEFAULT 'SENDING'";
   const lengths = { [version]: expectedTables.length + 3, [otpMigration]: 5,
-    [loginMigration]: 4, [recoveryMigration]: 5, [profileMigration]: 5, [latestMigration]: 10 };
+    [loginMigration]: 4, [recoveryMigration]: 5, [profileMigration]: 5,
+    [mentorMigration]: 10, [latestMigration]: 9 };
   ensure(statements.length === lengths[selected], 'MIGRATION_FORMAT_INVALID');
   ensure(statements.every(s => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s) || (selected === otpMigration && s === alter)), 'MIGRATION_FORMAT_INVALID');
   const checksum = createHash('sha256').update(bytes).digest('hex');
@@ -62,7 +66,8 @@ export async function readMigration(selected = version) {
     [loginMigration]: '46866a4e7d745276542b1276445b40bc5424ae9667716f864d562d05693eebc2',
     [recoveryMigration]: '7de62a5ab27fc01dc59155908be5eb3fbe1fd73bb6c3f3a7327caddd67c8abba',
     [profileMigration]: 'adf668d8ef24c9b9cc21808f7c46491fd608182c36170325dc2cd682faadf4dd',
-    [latestMigration]: '8494f88eec39e615ec44b14e2970f6c017479ab00d2e6769d4a2e39fda8aede3',
+    [mentorMigration]: '8494f88eec39e615ec44b14e2970f6c017479ab00d2e6769d4a2e39fda8aede3',
+    [latestMigration]: 'aafc96679930a69496175c1904e2a240e412c28e75181a1a4f558cd14bd1c6c6',
   };
   ensure(checksum === immutable[selected], 'MIGRATION_IMMUTABLE_CHECKSUM');
   return { version: selected, checksum, statements };
@@ -172,7 +177,9 @@ async function inspect(connection, config, migrations) {
     ...(history.length > 3 ? ['password_recovery_challenges', 'password_recovery_limits'] : []),
     ...(history.length > 4 ? ['student_interests', 'student_profile_details'] : []),
     ...(history.length > 5 ? ['mentor_application_documents', 'mentor_application_events', 'mentor_applications',
-      'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'] : [])].sort();
+      'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'] : []),
+    ...(history.length > 6 ? ['mentor_availability', 'mentor_offers', 'mentoring_session_events',
+      'mentoring_sessions', 'session_credit_holds', 'session_reviews'] : [])].sort();
   ensure(JSON.stringify(objects.map((o) => o.name).sort()) === JSON.stringify(tables) &&
     objects.every((o) => o.type === 'BASE TABLE' && o.engine === 'InnoDB'), 'MIGRATION_PARTIAL_OR_FOREIGN_SCHEMA');
   await checkStructure(connection, config.database, { statements: applied.flatMap(m => m.statements) });
@@ -209,7 +216,7 @@ async function checkStructure(connection, database, migration) {
   ensure(checks.every((c) => c.enforced === 'YES'), 'MIGRATION_CHECK_DISABLED');
   for (const statement of migration.statements.filter((s) => s.startsWith('CREATE TABLE '))) {
     const table = statement.match(/^CREATE TABLE ([a-z_]+) /)[1];
-    const expected = [...statement.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT UNSIGNED|INT|BOOLEAN)/gm)];
+    const expected = [...statement.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|TIME|TINYINT UNSIGNED|SMALLINT UNSIGNED|INT UNSIGNED|INT|BOOLEAN)/gm)];
     const actual = columns.filter((c) => c.t === table);
     ensure(actual.length === expected.length, 'MIGRATION_COLUMNS_MISMATCH');
     expected.forEach((match, index) => {

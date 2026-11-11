@@ -1,12 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { latestMigration, parseMigrationArguments, readMigration, readMigrations } from '../database/migrate.js';
+import { parseMigrationArguments, readMigration, readMigrations } from '../database/migrate.js';
 
 const checksum = '8494f88eec39e615ec44b14e2970f6c017479ab00d2e6769d4a2e39fda8aede3';
 
 test('006 is additive, checksummed and ordered after the five immutable migrations', async () => {
-  assert.equal(latestMigration, '006_mentor_skills_files');
-  const migrations = await readMigrations(latestMigration);
+  const migrations = await readMigrations('006_mentor_skills_files');
   assert.deepEqual(migrations.map(item => item.version), ['001_auth_foundation',
     '002_otp_delivery_safety', '003_login_rate_limits', '004_password_recovery',
     '005_student_profile', '006_mentor_skills_files']);

@@ -30,7 +30,7 @@ function fake(initial=0){
   if(sql.includes('COLUMN_DEFAULT'))return [[{value:state.altered?'SENDING':'PENDING'}]];
   if(sql.includes('CHECK_CLAUSE'))return [[{clause:state.altered?"status in ('SENDING','PENDING','CONSUMED','REVOKED','EXPIRED','EXHAUSTED')":"status in ('PENDING','CONSUMED','REVOKED','EXPIRED','EXHAUSTED')"}]];
   const statements=creations.filter(s=>state.tables.has(s.match(/^CREATE TABLE ([a-z_]+)/)[1]));
-  if(sql.includes('information_schema.COLUMNS'))return [statements.flatMap(s=>[...s.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT UNSIGNED|INT|BOOLEAN)/gm)].map(m=>({t:s.match(/^CREATE TABLE ([a-z_]+)/)[1],c:m[1],type:m[2].toLowerCase().replace('boolean','tinyint(1)')})))];
+  if(sql.includes('information_schema.COLUMNS'))return [statements.flatMap(s=>[...s.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|TIME|TINYINT UNSIGNED|SMALLINT UNSIGNED|INT UNSIGNED|INT|BOOLEAN)/gm)].map(m=>({t:s.match(/^CREATE TABLE ([a-z_]+)/)[1],c:m[1],type:m[2].toLowerCase().replace('boolean','tinyint(1)')})))];
   if(sql.includes("CONSTRAINT_TYPE = 'CHECK'"))return [statements.flatMap(s=>[...s.matchAll(/CONSTRAINT ([a-z_]+) CHECK/g)].map(m=>({name:m[1],enforced:'YES'})))];
   if(sql.includes('information_schema.TABLE_CONSTRAINTS'))return [statements.flatMap(s=>['PRIMARY',...[...s.matchAll(/(?:CONSTRAINT|UNIQUE KEY) ([a-z_]+)/g)].map(m=>m[1])].map(name=>({t:s.match(/^CREATE TABLE ([a-z_]+)/)[1],name})))];
   throw Error('Unexpected unit-only migration query');
