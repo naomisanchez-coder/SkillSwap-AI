@@ -389,3 +389,9 @@ El migrador reconoce 001→002→003 y 003 fue validada primero en `skillswap_ai
 `004_password_recovery.sql` añade dos tablas independientes para límites pseudónimos EMAIL/IP y desafíos de recuperación. Conserva 001–003 y no contiene `ALTER`, `DROP` ni datos demo. Fue aplicada, inspeccionada y repetida de forma idempotente exclusivamente en `skillswap_ai_test_auth`; sigue pendiente en `skillswap_ai`.
 
 Los endpoints `POST /api/auth/password-recovery/request` y `POST /api/auth/password-recovery/reset` usan HMAC, scrypt, límites persistentes, estados `SENDING → PENDING`, consumo único y revocación de sesiones. Las pruebas usan transporte SMTP sustituible y datos sintéticos aislados. Configuración, contratos y diferencia visual pendiente de integración: [password-recovery.md](docs/password-recovery.md).
+
+## Incremento 1.10: reservas y sesiones (preparado, sin DDL)
+
+La migración incremental `007_sessions_booking_credits.sql` y el módulo por capas están preparados. No se ha aplicado 007 en `skillswap_ai_test_auth` ni en `skillswap_ai`; por seguridad, el servidor deja las nuevas rutas en `503 SERVICE_UNAVAILABLE` hasta encontrar el registro de migración. Se conservan las tarifas 30/5, 60/10 y 90/15, retenciones transaccionales, liquidación al validar y una valoración por sesión completada.
+
+La cancelación está bloqueada hasta aprobar plazo y efecto económico. Las pruebas MySQL reales de concurrencia, conflictos, rollback y movimientos quedan pendientes de aplicar 007 primero en el esquema aislado. Contratos y decisiones: [sessions-booking-credits.md](docs/sessions-booking-credits.md).
