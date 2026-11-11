@@ -396,3 +396,9 @@ Los endpoints `POST /api/auth/password-recovery/request` y `POST /api/auth/passw
 La migración incremental `007_sessions_booking_credits.sql` está aplicada y validada en `skillswap_ai_test_auth` y `skillswap_ai`. Por seguridad, el servidor deja las nuevas rutas en `503 SERVICE_UNAVAILABLE` en cualquier esquema sin el registro de migración. Se conservan las tarifas 30/5, 60/10 y 90/15, retenciones transaccionales, liquidación al validar y una valoración por sesión completada.
 
 La cancelación de una sesión `UPCOMING` antes de su inicio devuelve el 100 % de la retención, sin penalización; después de iniciar se rechaza. Dashboard, Mis sesiones y créditos exponen estados, participantes públicos, progreso completado, retenciones y movimientos sin fuentes contables paralelas. Contratos y decisiones: [sessions-booking-credits.md](docs/sessions-booking-credits.md).
+
+## Incremento 1.12: catálogo y recomendaciones
+
+Explorar publica únicamente ofertas activas respaldadas por solicitudes `APPROVED`. Para ti conserva los pesos 45/20/25/10 y ya calcula habilidad, disponibilidad futura efectiva y calidad basada en valoraciones de sesiones completadas, sin renormalizar componentes ausentes. El nivel por habilidad continúa pendiente porque el nivel general del onboarding no acredita dominio; la migración 008 está preparada pero no aplicada y no contiene semillas.
+
+No existe todavía un catálogo autorizado de habilidades/categorías. El importador versionado queda preparado en modo de inspección y aplicación explícita, sin sobrescrituras ni datos inventados. Contrato y limitaciones: [explore-recommendations.md](docs/explore-recommendations.md).
