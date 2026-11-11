@@ -65,8 +65,9 @@ test('unit-only runner applies every ordered migration and a second run repeats 
 });
 test('unit-only runner upgrades applied 001 through latest without recreating prior tables',async()=>{
  const f=fake(1);assert.equal((await runMigration(f.connection,config,{through:latestMigration,apply:true,allowDdl:true})).applied,true);
- assert.equal(f.state.commands.filter(s=>s.startsWith('CREATE TABLE')).length,6);
- assert.equal(f.state.commands.filter(s=>s.startsWith('INSERT INTO schema_migrations')).length,4);
+ assert.equal(f.state.commands.filter(s=>s.startsWith('CREATE TABLE')).length,
+  all.slice(1).flatMap(m=>m.statements).filter(s=>s.startsWith('CREATE TABLE')).length);
+ assert.equal(f.state.commands.filter(s=>s.startsWith('INSERT INTO schema_migrations')).length,all.length-1);
 });
 test('unit-only failed ALTER leaves visible partial state, no 002 record and no automatic cleanup/retry',async()=>{
  const f=fake(1);f.state.fail='ALTER TABLE';

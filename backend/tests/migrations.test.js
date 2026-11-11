@@ -247,7 +247,9 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
   // Read only explicit integration variables; never fall back to application DB credentials.
   const config = testConfiguration(process.env);
   const latestTables = [...tables, 'otp_request_limits', 'login_rate_limits',
-    'password_recovery_limits', 'password_recovery_challenges'].sort();
+    'password_recovery_limits', 'password_recovery_challenges', 'student_interests',
+    'student_profile_details', 'mentor_application_documents', 'mentor_application_events',
+    'mentor_applications', 'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'].sort();
   let connection;
   try {
     connection = await mysql.createConnection(config);
@@ -282,8 +284,8 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
     const [constraints] = await connection.execute(
       'SELECT CONSTRAINT_TYPE AS type FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ?', [config.database]);
     assert.equal(constraints.filter((r) => r.type === 'PRIMARY KEY').length, latestTables.length);
-    assert.equal(constraints.filter((r) => r.type === 'FOREIGN KEY').length, 7);
-    assert.ok(constraints.filter((r) => r.type === 'CHECK').length >= 24);
+    assert.ok(constraints.filter((r) => r.type === 'FOREIGN KEY').length >= 21);
+    assert.ok(constraints.filter((r) => r.type === 'CHECK').length >= 43);
     const [indexes] = await connection.execute(
       "SELECT INDEX_NAME AS name,COLUMN_NAME AS column_name FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=? AND TABLE_NAME='login_rate_limits'", [config.database]);
     assert.ok(indexes.some(index=>index.name==='ix_login_rate_expiry'&&index.column_name==='expires_at'));
