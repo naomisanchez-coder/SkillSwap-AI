@@ -112,6 +112,64 @@ test('Gemini quota, invalid responses and timeouts use provider-neutral errors',
     error => error instanceof AiProviderError && error.kind === 'TIMEOUT' && !error.message.includes('private'));
 });
 
+test('Gemini diagnostics classify remote failures without leaking requests or credentials', async () => {
+  const geminiConfig = { ...config, provider: 'gemini', model: 'gemini-project-model' };
+  const cases = [
+    { status: 400, category: 'BAD_REQUEST', kind: 'UNAVAILABLE' },
+    { status: 403, category: 'FORBIDDEN', kind: 'UNAVAILABLE' },
+    { status: 429, category: 'LIMITED', kind: 'LIMITED' },
+    { status: 503, category: 'UPSTREAM', kind: 'UNAVAILABLE' },
+  ];
+  for (const value of cases) {
+    const events = [];
+    let calls = 0;
+    const client = createGeminiGenerateContentClient(geminiConfig, {
+      fetchImpl: async () => { calls++; return { ok: false, status: value.status }; },
+      now: (() => { let current = 100; return () => current += 7; })(),
+      onDiagnostic: event => events.push(event),
+    });
+    await assert.rejects(client.respond({ instructions: 'private instructions',
+      input: [{ role: 'user', content: 'private prompt' }] }),
+    error => error instanceof AiProviderError && error.kind === value.kind);
+    assert.equal(calls, 1);
+    assert.deepEqual(events, [{ provider: 'gemini', model: 'gemini-project-model',
+      operation: 'generateContent', outcome: 'error', category: value.category,
+      status: value.status, durationMs: 7 }]);
+    assert.doesNotMatch(JSON.stringify(events), /secret|private|prompt|instructions|generativelanguage/i);
+  }
+});
+
+test('Gemini diagnostics classify success, invalid response, transport and timeout safely', async () => {
+  const geminiConfig = { ...config, provider: 'gemini', model: 'gemini-project-model' };
+  const events = [];
+  const success = createGeminiGenerateContentClient(geminiConfig, {
+    fetchImpl: async () => ({ ok: true, status: 200, async json() { return {
+      candidates: [{ content: { parts: [{ text: 'safe answer' }] } }],
+    }; } }),
+    now: (() => { let current = 0; return () => current += 5; })(),
+    onDiagnostic: event => events.push(event),
+  });
+  assert.equal(await success.respond({ instructions: 'hidden', input: [] }), 'safe answer');
+  assert.deepEqual(events, [{ provider: 'gemini', model: 'gemini-project-model',
+    operation: 'generateContent', outcome: 'success', category: 'SUCCESS', status: 200, durationMs: 5 }]);
+
+  for (const [expected, fetchImpl] of [
+    ['INVALID_RESPONSE', async () => ({ ok: true, status: 200, async json() { return { candidates: [] }; } })],
+    ['TRANSPORT', async () => { throw new Error('private network detail'); }],
+    ['TIMEOUT', async (_url, options) => new Promise((resolve, reject) => options.signal.addEventListener(
+      'abort', () => reject(Object.assign(new Error('private timeout detail'), { name: 'AbortError' }))))],
+  ]) {
+    const captured = [];
+    const client = createGeminiGenerateContentClient({ ...geminiConfig, timeoutMs: 5 }, {
+      fetchImpl, onDiagnostic: event => captured.push(event),
+    });
+    await assert.rejects(client.respond({ instructions: 'hidden', input: [] }), AiProviderError);
+    assert.equal(captured.length, 1);
+    assert.equal(captured[0].category, expected);
+    assert.doesNotMatch(JSON.stringify(captured), /private|hidden|network detail|timeout detail/i);
+  }
+});
+
 test('chat validation accepts only a short user/assistant history', () => {
   assert.deepEqual(validateAiChat({ message: ' ¿Cómo aprendo Python? ', history: [
     { role: 'user', content: 'Quiero empezar' }, { role: 'assistant', content: 'Define una meta' },
