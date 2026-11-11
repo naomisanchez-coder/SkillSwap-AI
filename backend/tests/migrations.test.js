@@ -246,7 +246,8 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
 }, async (t) => {
   // Read only explicit integration variables; never fall back to application DB credentials.
   const config = testConfiguration(process.env);
-  const latestTables = [...tables, 'otp_request_limits', 'login_rate_limits'].sort();
+  const latestTables = [...tables, 'otp_request_limits', 'login_rate_limits',
+    'password_recovery_limits', 'password_recovery_challenges'].sort();
   let connection;
   try {
     connection = await mysql.createConnection(config);
@@ -273,6 +274,8 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
     assert.equal(columns.find((c) => c.t === 'users' && c.c === 'created_at').type, 'datetime');
     assert.equal(columns.find((c) => c.t === 'email_verifications' && c.c === 'code_hmac').type, 'varbinary');
     assert.equal(columns.find((c) => c.t === 'login_rate_limits' && c.c === 'identifier_hmac').type, 'varbinary');
+    assert.equal(columns.find((c) => c.t === 'password_recovery_limits' && c.c === 'identifier_hmac').type, 'varbinary');
+    assert.equal(columns.find((c) => c.t === 'password_recovery_challenges' && c.c === 'code_hmac').type, 'varbinary');
     assert.ok(!columns.some((column) =>
       (column.t === 'users' && ['password', 'confirm_password'].includes(column.c)) ||
       (column.t === 'email_verifications' && column.c === 'code')));
