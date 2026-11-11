@@ -24,7 +24,7 @@ function apiBase(value: string | undefined) {
   return base!;
 }
 async function requestSession(path: 'login' | 'me', signal: AbortSignal, input?: { email: string; password: string; remember: boolean }): Promise<AuthSession> {
-  const base = apiBase(import.meta.env.VITE_API_URL);
+  const base = apiBase(import.meta.env.VITE_API_URL || 'http://localhost:4000/api');
   let response: Response;
   let body: unknown;
   try {
@@ -41,7 +41,7 @@ async function requestSession(path: 'login' | 'me', signal: AbortSignal, input?:
   if (!response.ok) {
     let message = 'No fue posible completar la operación de acceso. Inténtalo más tarde.';
     if (response.status === 401) message = path === 'login' ? 'Correo o contraseña incorrectos.' : 'La sesión ya no está disponible. Inicia sesión nuevamente.';
-    if (response.status === 403 && code === 'EMAIL_NOT_VERIFIED') message = 'Tu correo sigue sin verificar. El envío y la verificación de correo todavía requieren integración; aún no puedes acceder.';
+    if (response.status === 403 && code === 'EMAIL_NOT_VERIFIED') message = 'Tu correo sigue sin verificar. Completa la verificación antes de acceder.';
     if (response.status === 403 && code === 'ACCOUNT_SUSPENDED') message = 'Tu cuenta está suspendida. Contacta al equipo del proyecto.';
     if (response.status === 403 && ['CSRF_INVALID', 'ORIGIN_NOT_ALLOWED'].includes(code)) message = 'No se pudo autorizar la solicitud de acceso. Revisa la dirección de la aplicación con el equipo del proyecto.';
     if (response.status === 429) {
