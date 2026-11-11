@@ -6,7 +6,7 @@ SkillSwap AI es una plataforma académica para el intercambio de habilidades ent
 
 La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. El incremento 1.1 añadió documentación. El incremento 1.2 incorpora el esquema relacional, un ejecutor seguro y pruebas reales. La migración fue validada en `skillswap_ai_test_auth` y aplicada con autorización explícita a la base principal de desarrollo `skillswap_ai`.
 
-**Registro 1.3B, envío 1.4A, verificación/crédito inicial 1.4B, autenticación 1.5 y recuperación 1.5B están implementados.** Las migraciones 001–004 existen en ambas bases. La migración 005 de perfil/onboarding fue aplicada y validada únicamente en `skillswap_ai_test_auth`; continúa pendiente de autorización separada para `skillswap_ai`. Los contratos de autenticación están en [docs/auth-api.md](docs/auth-api.md) y el alcance estudiantil en [docs/student-profile.md](docs/student-profile.md).
+**Registro 1.3B, envío 1.4A, verificación/crédito inicial 1.4B, autenticación 1.5, recuperación 1.5B y perfil 1.6 están implementados.** Las migraciones 001–005 existen en ambas bases. El incremento 1.7 conecta las lecturas reales de Inicio y Mis créditos; reservas, sesiones, retenciones y recomendaciones siguen pendientes. Los contratos están en [docs/auth-api.md](docs/auth-api.md), [docs/student-profile.md](docs/student-profile.md) y [docs/student-dashboard.md](docs/student-dashboard.md).
 
 ## Arquitectura
 

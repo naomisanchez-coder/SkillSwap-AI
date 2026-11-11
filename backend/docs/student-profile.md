@@ -2,7 +2,7 @@
 
 ## Estado
 
-La migración `005_student_profile` fue aplicada y validada exclusivamente en `skillswap_ai_test_auth`. El historial aislado conserva 001–005 y una segunda ejecución confirmó idempotencia. La base principal conserva 001–004: aplicar 005 allí requiere autorización separada. Mientras las tablas nuevas no existan en el esquema utilizado por Express, las rutas fallan de forma cerrada; autenticación y salud no cambian.
+La migración `005_student_profile` fue aplicada en ambas bases y validada funcionalmente en `skillswap_ai_test_auth`. Los historiales conservan 001–005 y las segundas ejecuciones confirmaron idempotencia. Las pruebas de escritura permanecen limitadas al esquema aislado; autenticación y salud no cambian.
 
 La validación aislada ejecutó las cinco rutas mediante Express, sesiones persistidas y `skillswap_test_app`. Comprobó propiedad derivada de sesión, rechazo de ADMIN, CSRF, campos privilegiados, persistencia, dos actualizaciones concurrentes coherentes y rollback real ante un conflicto de unicidad. Las fixtures identificadas se eliminaron sin limpiezas generales.
 

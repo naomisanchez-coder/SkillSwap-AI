@@ -386,7 +386,9 @@ La validación React inspeccionada permitía usuarios sin punto y alias: deberá
 
 Los accesos demo, códigos fijos, roles en Web Storage y variables Vite con credenciales no forman parte de la autenticación funcional. Las pruebas y datos ficticios deben quedar aislados de cuentas reales.
 
-Los contratos de perfil y onboarding preparados en 1.6 se documentan en [student-profile.md](student-profile.md). La migración 005 y las rutas HTTP fueron validadas con MySQL real en `skillswap_ai_test_auth`; su uso en la base principal requiere una autorización separada para aplicar 005 en `skillswap_ai`. Reservas, aprobación de mentores, liquidación de sesiones y panel administrativo continúan fuera de este incremento.
+Los contratos de perfil y onboarding preparados en 1.6 se documentan en [student-profile.md](student-profile.md). La migración 005 está aplicada en ambas bases y las rutas HTTP fueron validadas con MySQL real en el esquema aislado. Reservas, aprobación de mentores, liquidación de sesiones y panel administrativo continúan fuera de este incremento.
+
+Los contratos de solo lectura para Inicio y Mis créditos se documentan en [student-dashboard.md](student-dashboard.md). El saldo se deriva exclusivamente del libro `credit_transactions`; no existe una API para editarlo desde el cliente.
 
 
 ## Persistencia implementada en el incremento 1.2
