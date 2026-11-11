@@ -103,7 +103,7 @@ export function ProfilePage({ profile, photo, service, onChanged, onEditPreferen
 
 export function MentorApplicationPage({ initialRequest, existingRequests, service, onChanged, onBack }: { initialRequest?: MentorSkillRequest; existingRequests: MentorSkillRequest[]; service: AccountService; onChanged: (account: AccountData) => void; onBack: () => void }) {
   const integration = useContext(IntegrationContext);
-  const [skillOptions, setSkillOptions] = useState(ACTIVE_SKILLS.map(item => item.name));
+  const [skillOptions, setSkillOptions] = useState<string[]>(integration ? [] : ACTIVE_SKILLS.map(item => item.name));
   const [detailsAvailable, setDetailsAvailable] = useState<boolean | null>(integration ? null : true);
   useEffect(() => { let active = true; if (integration) service.getApplicationRequirements?.().then(result => { if (active) setDetailsAvailable(result.available); }, () => { if (active) setDetailsAvailable(false); }); return () => { active = false; }; }, [integration, service]);
   const [catalogError, setCatalogError] = useState('');
