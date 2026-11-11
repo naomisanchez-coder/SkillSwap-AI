@@ -37,14 +37,16 @@ test('student service always scopes reads and mutations to the authenticated ide
     async updateOwn(id, patch) { calls.push(['update', id, patch]); return { ...profile, ...patch, onboardingComplete: true }; },
     async catalog() { calls.push(['catalog']); return [{ code: 'software', name: 'Software', cycles: [1, 2] }]; },
     async creditsOwn(id, page) { calls.push(['credits', id, page]); return { balance: 20, totalTransactions: 1,
-      transactions: [], pagination: { limit: page.limit, nextCursor: null } }; },
+      total: 20, held: 0, available: 20, transactions: [], pagination: { limit: page.limit, nextCursor: null } }; },
+    async dashboardOwn(id) { calls.push(['dashboard', id]); return { upcoming: [], completed: [],
+      progress: { completedSessions: 0, completedMinutes: 0, reviewedSessions: 0 } }; },
   });
   assert.equal((await service.profile('session-user')).onboardingComplete, true);
   assert.equal((await service.completeOnboarding('session-user', { interests: ['Python'],
     level: 'Intermedio', schedule: 'Tardes' })).complete, true);
   assert.deepEqual(await service.catalog(), { careers: [{ code: 'software', name: 'Software', cycles: [1, 2] }] });
   assert.equal((await service.credits('session-user', {})).balance, 20);
-  assert.equal((await service.dashboard('session-user', {})).credits.balance, 20);
+  assert.equal((await service.dashboard('session-user', {})).credits.available, 20);
   assert.ok(calls.filter(call => call[0] === 'credits').every(call => call[1] === 'session-user'));
 });
 

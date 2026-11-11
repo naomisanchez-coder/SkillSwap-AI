@@ -2,7 +2,6 @@
 const definitions = Object.freeze({
   VALIDATION_ERROR: [422, 'Revisa los datos enviados.'],
   CONFLICT: [409, 'La operación entra en conflicto con el estado actual.'],
-  CANCELLATION_POLICY_PENDING: [409, 'La política de cancelación aún no está habilitada.'],
   EMAIL_ALREADY_REGISTERED: [409, 'El correo ya está registrado.'],
   VERIFICATION_INVALID: [422, 'El código de verificación no es válido o ya no está disponible.'],
   RECOVERY_INVALID: [422, 'El código de recuperación no es válido o ya no está disponible.'],

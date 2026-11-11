@@ -20,7 +20,7 @@ async function withApp({ booking = true } = {}, work) {
     async publicAvailability(id) { calls.push(['availability', id]); return { timezone: 'America/Lima', slots: [], busy: [] }; },
     async createBooking(id, body) { calls.push(['book', id, body]); return { id: 'session-id', creditCost: 5 }; },
     async sessions(id, query) { calls.push(['sessions', id, query]); return []; },
-    async cancel() { throw new PublicError('CANCELLATION_POLICY_PENDING'); },
+    async cancel(id, sessionId) { calls.push(['cancel', id, sessionId]); return { id: sessionId, status: 'CANCELLED' }; },
     async credits(id) { calls.push(['credits', id]); return { total: 20, held: 5, available: 15 }; },
   } : undefined;
   const app = createApp({ database: { check: async () => {} }, origins: ['http://localhost:5173'],
@@ -56,13 +56,13 @@ test('booking mutations require JSON, approved origin and session-bound CSRF', a
   });
 });
 
-test('cancellation is publicly identified as pending and unavailable modules fail closed', async () => {
+test('cancellation is CSRF-protected and unavailable modules fail closed', async () => {
   await withApp({}, async base => {
     const response = await fetch(`${base}/api/student/sessions/${mentorId}/cancel`, { method: 'POST', headers: {
       Cookie: `skillswap_session=${token}`, 'Content-Type': 'application/json', Origin: 'http://localhost:5173',
       'X-CSRF-Token': csrf }, body: '{}' });
-    assert.equal(response.status, 409);
-    assert.equal((await response.json()).error.code, 'CANCELLATION_POLICY_PENDING');
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).session.status, 'CANCELLED');
   });
   await withApp({ booking: false }, async base => {
     const response = await fetch(`${base}/api/student/sessions`, { headers: { Cookie: `skillswap_session=${token}` } });

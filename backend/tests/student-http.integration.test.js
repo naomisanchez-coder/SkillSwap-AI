@@ -87,6 +87,8 @@ test('real isolated HTTP profile enforces ownership, CSRF, permissions, atomicit
     const emptyCredits = await json(await fetch(`${started.base}/api/student/credits`, { headers: studentHeaders }));
     assert.equal(emptyCredits.status, 200);
     assert.equal(emptyCredits.body.credits.balance, 0);
+    assert.deepEqual({ total: emptyCredits.body.credits.total, held: emptyCredits.body.credits.held,
+      available: emptyCredits.body.credits.available }, { total: 0, held: 0, available: 0 });
     assert.equal(emptyCredits.body.credits.totalTransactions, 0);
     assert.deepEqual(emptyCredits.body.credits.transactions, []);
     assert.equal((await fetch(`${started.base}/api/student/credits?userId=${adminId}`,
@@ -123,7 +125,10 @@ test('real isolated HTTP profile enforces ownership, CSRF, permissions, atomicit
     assert.equal(secondPage.pagination.nextCursor, null);
     const dashboard = (await json(await fetch(`${started.base}/api/student/dashboard`,
       { headers: studentHeaders }))).body.dashboard;
-    assert.equal(dashboard.credits.balance, 20);
+    assert.deepEqual({ total: dashboard.credits.total, held: dashboard.credits.held,
+      available: dashboard.credits.available }, { total: 20, held: 0, available: 20 });
+    assert.deepEqual(dashboard.sessions, { upcoming: [], completed: [] });
+    assert.deepEqual(dashboard.progress, { completedSessions: 0, completedMinutes: 0, reviewedSessions: 0 });
     assert.equal(dashboard.activity.creditTransactions, 3);
     assert.equal(dashboard.student.onboardingComplete, false);
 

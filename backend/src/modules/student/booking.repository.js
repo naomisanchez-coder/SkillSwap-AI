@@ -12,14 +12,18 @@ function publicSession(row) {
     lastName: row.mentor_last_name }, offerId: row.offer_id,
   skill: { id: row.skill_id, code: row.skill_code, name: row.skill_name }, status: row.status,
   startsAt: iso(row.starts_at), endsAt: iso(row.ends_at), durationMinutes: Number(row.duration_minutes),
-  creditCost: Number(row.credit_cost), meetingUrl: row.meeting_url ?? null };
+  creditCost: Number(row.credit_cost), meetingUrl: row.meeting_url ?? null,
+  review: row.review_rating === null || row.review_rating === undefined ? null : {
+    rating: Number(row.review_rating), comment: row.review_comment ?? null,
+  } };
 }
 
 const sessionSelect = `SELECT ms.*,su.first_name student_first_name,su.last_name student_last_name,
-  mu.first_name mentor_first_name,mu.last_name mentor_last_name,mo.skill_id,sk.code skill_code,sk.name skill_name
+  mu.first_name mentor_first_name,mu.last_name mentor_last_name,mo.skill_id,sk.code skill_code,sk.name skill_name,
+  sr.rating review_rating,sr.comment review_comment
   FROM mentoring_sessions ms JOIN users su ON su.id=ms.student_user_id
   JOIN users mu ON mu.id=ms.mentor_user_id JOIN mentor_offers mo ON mo.id=ms.offer_id
-  JOIN skill_catalog sk ON sk.id=mo.skill_id`;
+  JOIN skill_catalog sk ON sk.id=mo.skill_id LEFT JOIN session_reviews sr ON sr.session_id=ms.id`;
 
 async function ownSession(executor, userId, sessionId, lock = false) {
   const [rows] = await executor.execute(`${sessionSelect} WHERE ms.id=? AND
@@ -219,6 +223,28 @@ export function createBookingRepository(database) {
         await tx.execute(`UPDATE mentoring_sessions SET status='COMPLETED',validated_at=UTC_TIMESTAMP(6)
           WHERE id=?`, [sessionId]);
         await addEvent(tx, value.eventId, sessionId, userId, 'VALIDATED', 'AWAITING_VALIDATION', 'COMPLETED');
+        return publicSession(await ownSession(tx, userId, sessionId));
+      });
+    },
+    cancel(userId, sessionId, value) {
+      return database.transaction(async tx => {
+        const row = await transitionContext(tx, userId, sessionId);
+        if (row.status === 'CANCELLED') return publicSession(row);
+        if (row.status !== 'UPCOMING') throw new PublicError('CONFLICT');
+        const [[clock]] = await tx.execute('SELECT UTC_TIMESTAMP(6) now');
+        if (new Date(clock.now) >= new Date(row.starts_at)) throw new PublicError('CONFLICT');
+        const [holds] = await tx.execute(`SELECT status,refund_transaction_id FROM session_credit_holds
+          WHERE session_id=? FOR UPDATE`, [sessionId]);
+        if (holds.length !== 1 || holds[0].status !== 'HELD') throw new PublicError('CONFLICT');
+        await tx.execute(`INSERT INTO credit_transactions
+          (id,user_id,amount,reason,operation_reference) VALUES (?,?,?,'SESSION_REFUND',?)`,
+        [value.refundTransactionId, row.student_user_id, row.credit_cost, `session:${sessionId}:refund`]);
+        await tx.execute(`UPDATE session_credit_holds SET status='REFUNDED',refund_transaction_id=?,
+          refunded_at=UTC_TIMESTAMP(6) WHERE session_id=? AND status='HELD'`,
+        [value.refundTransactionId, sessionId]);
+        await tx.execute(`UPDATE mentoring_sessions SET status='CANCELLED',cancelled_at=UTC_TIMESTAMP(6)
+          WHERE id=? AND status='UPCOMING'`, [sessionId]);
+        await addEvent(tx, value.eventId, sessionId, userId, 'CANCELLED', 'UPCOMING', 'CANCELLED');
         return publicSession(await ownSession(tx, userId, sessionId));
       });
     },

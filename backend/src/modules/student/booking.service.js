@@ -37,8 +37,9 @@ export function createBookingService(repository, { now = () => new Date() } = {}
         earningTransactionId: randomUUID(), eventId: randomUUID() });
     },
     cancel(userId, sessionId, body) {
-      validateEmpty(body); identifier(sessionId, 'sessionId'); void userId;
-      throw new PublicError('CANCELLATION_POLICY_PENDING');
+      validateEmpty(body); return repository.cancel(userId, identifier(sessionId, 'sessionId'), {
+        refundTransactionId: randomUUID(), eventId: randomUUID(),
+      });
     },
     review(userId, sessionId, body) {
       return repository.review(userId, identifier(sessionId, 'sessionId'), validateReview(body), randomUUID());

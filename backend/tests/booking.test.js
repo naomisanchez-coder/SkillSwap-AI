@@ -12,7 +12,7 @@ function repository(overrides = {}) {
   return { async createBooking(id, value) { return { id, value }; }, async offers() { return []; },
     async setOffer() {}, async availability() {}, async replaceAvailability() {}, async publicAvailability() {},
     async sessions() { return []; }, async session() {}, async setMeeting() {}, async start() {},
-    async performed() {}, async validate() {}, async review() {}, async credits() {}, ...overrides };
+    async performed() {}, async validate() {}, async cancel() {}, async review() {}, async credits() {}, ...overrides };
 }
 
 test('booking costs are derived exclusively from the approved durations', async () => {
@@ -55,12 +55,16 @@ test('meeting links accept only approved HTTPS providers', () => {
   }
 });
 
-test('cancellation remains fail-closed until its economic policy is approved', () => {
-  let called = false;
-  const service = createBookingService(repository({ async cancel() { called = true; } }));
-  assert.throws(() => service.cancel(userId, sessionId, {}),
-    error => error.code === 'CANCELLATION_POLICY_PENDING' && error.status === 409);
-  assert.equal(called, false);
+test('cancellation derives private idempotency identifiers and delegates ownership', async () => {
+  let received;
+  const service = createBookingService(repository({ async cancel(id, session, value) {
+    received = { id, session, value }; return { status: 'CANCELLED' };
+  } }));
+  assert.deepEqual(await service.cancel(userId, sessionId, {}), { status: 'CANCELLED' });
+  assert.equal(received.id, userId);
+  assert.equal(received.session, sessionId);
+  assert.match(received.value.refundTransactionId, /^[0-9a-f-]{36}$/);
+  assert.match(received.value.eventId, /^[0-9a-f-]{36}$/);
 });
 
 test('review contract permits one bounded rating and delegates ownership to the repository', async () => {

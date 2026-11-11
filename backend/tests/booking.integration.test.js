@@ -150,10 +150,12 @@ test('real isolated booking is concurrent-safe and settles held credits exactly 
     const duplicateBodies = await Promise.all(duplicates.map(response => response.json()));
     assert.equal(duplicateBodies[0].session.id, duplicateBodies[1].session.id);
     assert.equal(duplicateBodies[0].session.creditCost, 10);
+    const duplicateSession = duplicateBodies[0].session;
 
     const third = await book(randomUUID(), at(3), 90);
     assert.equal(third.status, 201);
-    assert.equal((await third.json()).session.creditCost, 15);
+    const thirdSession = (await third.json()).session;
+    assert.equal(thirdSession.creditCost, 15);
     assert.equal((await book(randomUUID(), at(5), 90)).status, 409);
     assert.equal((await book(randomUUID(), new Date(start.getTime() + 15 * 60000).toISOString(), 30)).status, 409);
 
@@ -170,6 +172,7 @@ test('real isolated booking is concurrent-safe and settles held credits exactly 
     await database.execute(`UPDATE mentoring_sessions SET starts_at=UTC_TIMESTAMP(6)-INTERVAL 1 MINUTE,
       ends_at=UTC_TIMESTAMP(6)+INTERVAL 29 MINUTE WHERE id=?`, [firstSession.id]);
     assert.equal((await mutate(`/api/student/sessions/${firstSession.id}/start`, sessions.mentor)).status, 200);
+    assert.equal((await mutate(`/api/student/sessions/${firstSession.id}/cancel`, sessions.student)).status, 409);
     await database.execute(`UPDATE mentoring_sessions SET starts_at=UTC_TIMESTAMP(6)-INTERVAL 31 MINUTE,
       ends_at=UTC_TIMESTAMP(6)-INTERVAL 1 MINUTE WHERE id=?`, [firstSession.id]);
     assert.equal((await mutate(`/api/student/sessions/${firstSession.id}/performed`, sessions.mentor)).status, 200);
@@ -189,15 +192,54 @@ test('real isolated booking is concurrent-safe and settles held credits exactly 
     assert.equal((await mutate(reviewPath, sessions.student, { rating: 5, comment: 'Sesión aislada' })).status, 201);
     assert.equal((await mutate(reviewPath, sessions.student, { rating: 4 })).status, 409);
 
+    const cancelPath = `/api/student/sessions/${duplicateSession.id}/cancel`;
+    const cancellations = await Promise.all([
+      mutate(cancelPath, sessions.student), mutate(cancelPath, sessions.mentor),
+    ]);
+    assert.deepEqual(cancellations.map(response => response.status), [200, 200]);
+    assert.ok((await Promise.all(cancellations.map(response => response.json())))
+      .every(body => body.session.status === 'CANCELLED'));
+    assert.equal((await mutate(cancelPath, sessions.student)).status, 200);
+    const afterRefund = await (await fetch(`${started.base}/api/student/session-credits`,
+      { headers: auth(sessions.student) })).json();
+    assert.deepEqual(afterRefund.credits, { total: 35, held: 20, available: 15 });
+
+    const collisionId = randomUUID();
+    await database.execute(`INSERT INTO credit_transactions
+      (id,user_id,amount,reason,operation_reference) VALUES (?,?,1,'INTEGRATION_FIXTURE',?)`,
+    [collisionId, ids.student, `session:${thirdSession.id}:refund`]);
+    assert.equal((await mutate(`/api/student/sessions/${thirdSession.id}/cancel`, sessions.student)).status, 500);
+    const [[rolledBack]] = await database.execute(`SELECT s.status,h.status hold_status,
+      (SELECT COUNT(*) FROM mentoring_session_events e WHERE e.session_id=s.id AND e.event_type='CANCELLED') events
+      FROM mentoring_sessions s JOIN session_credit_holds h ON h.session_id=s.id WHERE s.id=?`, [thirdSession.id]);
+    assert.deepEqual({ status: rolledBack.status, hold: rolledBack.hold_status, events: Number(rolledBack.events) },
+      { status: 'UPCOMING', hold: 'HELD', events: 0 });
+    await database.execute('DELETE FROM credit_transactions WHERE id=?', [collisionId]);
+
+    const dashboard = await (await fetch(`${started.base}/api/student/dashboard`,
+      { headers: auth(sessions.student) })).json();
+    assert.deepEqual({ total: dashboard.dashboard.credits.total, held: dashboard.dashboard.credits.held,
+      available: dashboard.dashboard.credits.available }, { total: 35, held: 20, available: 15 });
+    assert.ok(dashboard.dashboard.credits.movements.some(item => item.reason === 'SESSION_REFUND'));
+    assert.equal(dashboard.dashboard.sessions.upcoming.length, 2);
+    assert.equal(dashboard.dashboard.sessions.completed.length, 1);
+    assert.deepEqual(dashboard.dashboard.sessions.completed[0].review,
+      { rating: 5, comment: 'Sesión aislada' });
+    assert.deepEqual(dashboard.dashboard.progress,
+      { completedSessions: 1, completedMinutes: 30, reviewedSessions: 1 });
+
     const [[counts]] = await database.execute(`SELECT
       (SELECT COUNT(*) FROM mentoring_sessions WHERE student_user_id=?) sessions,
       (SELECT COUNT(*) FROM credit_transactions WHERE user_id=? AND reason='SESSION_HOLD') holds,
+      (SELECT COUNT(*) FROM credit_transactions WHERE user_id=? AND reason='SESSION_REFUND') refunds,
       (SELECT COUNT(*) FROM credit_transactions WHERE user_id=? AND reason='SESSION_EARNING') earnings,
       (SELECT COUNT(*) FROM session_credit_holds h JOIN mentoring_sessions s ON s.id=h.session_id
-        WHERE s.student_user_id=? AND h.status='SETTLED') settled`,
-    [ids.student, ids.student, ids.mentor, ids.student]);
+        WHERE s.student_user_id=? AND h.status='SETTLED') settled,
+      (SELECT COUNT(*) FROM session_credit_holds h JOIN mentoring_sessions s ON s.id=h.session_id
+        WHERE s.student_user_id=? AND h.status='REFUNDED') refunded`,
+    [ids.student, ids.student, ids.student, ids.mentor, ids.student, ids.student]);
     assert.deepEqual(Object.fromEntries(Object.entries(counts).map(([key, value]) => [key, Number(value)])),
-      { sessions: 4, holds: 4, earnings: 1, settled: 1 });
+      { sessions: 4, holds: 4, refunds: 1, earnings: 1, settled: 1, refunded: 1 });
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     try {

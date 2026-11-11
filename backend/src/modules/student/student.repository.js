@@ -48,8 +48,10 @@ function encodeCursor(row) {
 }
 
 async function readCredits(tx, userId, { limit, cursor }) {
-  const [[summary]] = await tx.execute(`SELECT COALESCE(SUM(amount),0) balance,COUNT(*) transaction_count
-    FROM credit_transactions WHERE user_id=?`, [userId]);
+  const [[summary]] = await tx.execute(`SELECT COALESCE(SUM(ct.amount),0) available,
+    COALESCE(SUM(CASE WHEN h.status='HELD' THEN -ct.amount ELSE 0 END),0) held,
+    COUNT(*) transaction_count FROM credit_transactions ct
+    LEFT JOIN session_credit_holds h ON h.hold_transaction_id=ct.id WHERE ct.user_id=?`, [userId]);
   const values = [userId];
   let boundary = '';
   if (cursor) {
@@ -63,12 +65,43 @@ async function readCredits(tx, userId, { limit, cursor }) {
     ORDER BY created_at DESC,id DESC LIMIT ?`, values);
   const hasMore = rows.length > limit;
   const selected = rows.slice(0, limit);
+  const available = safeInteger(summary.available), held = safeInteger(summary.held);
   return {
-    balance: safeInteger(summary.balance), totalTransactions: safeInteger(summary.transaction_count),
+    balance: available, total: safeInteger(available + held), held, available,
+    totalTransactions: safeInteger(summary.transaction_count),
     transactions: selected.map(row => ({ id: row.id, amount: Number(row.amount), reason: row.reason,
       reference: row.operation_reference, occurredAt: `${row.cursor_time.replace(' ', 'T')}Z` })),
     pagination: { limit, nextCursor: hasMore ? encodeCursor(selected.at(-1)) : null },
   };
+}
+
+function dashboardSession(row) {
+  return { id: row.id, status: row.status,
+    mentor: { id: row.mentor_user_id, firstName: row.first_name, lastName: row.last_name },
+    skill: { id: row.skill_id, code: row.code, name: row.name },
+    startsAt: row.starts_at.toISOString(), endsAt: row.ends_at.toISOString(),
+    durationMinutes: Number(row.duration_minutes), creditCost: Number(row.credit_cost),
+    review: row.rating === null ? null : { rating: Number(row.rating), comment: row.comment ?? null } };
+}
+
+async function readDashboardSessions(executor, userId) {
+  const base = `SELECT ms.id,ms.status,ms.mentor_user_id,ms.starts_at,ms.ends_at,ms.duration_minutes,
+    ms.credit_cost,u.first_name,u.last_name,sk.id skill_id,sk.code,sk.name,sr.rating,sr.comment
+    FROM mentoring_sessions ms JOIN users u ON u.id=ms.mentor_user_id
+    JOIN mentor_offers mo ON mo.id=ms.offer_id JOIN skill_catalog sk ON sk.id=mo.skill_id
+    LEFT JOIN session_reviews sr ON sr.session_id=ms.id WHERE ms.student_user_id=?`;
+  const [upcoming] = await executor.execute(`${base} AND ms.status IN ('UPCOMING','ACTIVE','AWAITING_VALIDATION')
+    ORDER BY ms.starts_at,ms.id LIMIT 5`, [userId]);
+  const [completed] = await executor.execute(`${base} AND ms.status='COMPLETED'
+    ORDER BY ms.validated_at DESC,ms.id DESC LIMIT 5`, [userId]);
+  const [[progress]] = await executor.execute(`SELECT COUNT(*) completed_sessions,
+    COALESCE(SUM(duration_minutes),0) completed_minutes,
+    COUNT(sr.session_id) reviewed_sessions FROM mentoring_sessions ms
+    LEFT JOIN session_reviews sr ON sr.session_id=ms.id
+    WHERE ms.student_user_id=? AND ms.status='COMPLETED'`, [userId]);
+  return { upcoming: upcoming.map(dashboardSession), completed: completed.map(dashboardSession),
+    progress: { completedSessions: safeInteger(progress.completed_sessions),
+      completedMinutes: safeInteger(progress.completed_minutes), reviewedSessions: safeInteger(progress.reviewed_sessions) } };
 }
 
 export function createStudentRepository(database) {
@@ -126,5 +159,6 @@ export function createStudentRepository(database) {
     creditsOwn(userId, page) {
       return database.transaction(tx => readCredits(tx, userId, page));
     },
+    dashboardOwn(userId) { return readDashboardSessions(database, userId); },
   });
 }
