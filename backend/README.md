@@ -6,7 +6,7 @@ SkillSwap AI es una plataforma académica para el intercambio de habilidades ent
 
 La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. El incremento 1.1 añadió documentación. El incremento 1.2 incorpora el esquema relacional, un ejecutor seguro y pruebas reales. La migración fue validada en `skillswap_ai_test_auth` y aplicada con autorización explícita a la base principal de desarrollo `skillswap_ai`.
 
-**El registro institucional está implementado en 1.3B.** Correo real, verificación, login, sesiones y concesión de créditos siguen pendientes. Las ocho tablas ya existen en ambas bases; disponer de tablas no implementa los casos de uso de autenticación. Los contratos y su estado están en [docs/auth-api.md](docs/auth-api.md).
+**Registro 1.3B, envío 1.4A y verificación/crédito inicial 1.4B están implementados.** Login y sesiones siguen pendientes. Las ocho tablas y la ampliación OTP existen en ambas bases; los contratos y su estado están en [docs/auth-api.md](docs/auth-api.md).
 
 ## Arquitectura
 
@@ -349,15 +349,23 @@ node scripts/verify-local.js
 
 El lanzador mapea el archivo privado .env.test.local en memoria y solo acepta skillswap_test_app en 127.0.0.1:3306/skillswap_ai_test_auth. No cambia la configuración del runtime ni archivos privados. Incluye pruebas unitarias, HTTP y persistencia real: consentimiento, hash real, duplicados concurrentes, catálogo inactivo/ambiguo, ciclo inválido, rollback del perfil y ausencia de sesiones/créditos. Los datos sintéticos y su limpieza se limitan a registros propios del esquema aislado. La prueba del catálogo carga/repite dentro de una transacción que termina en rollback. No habilita credenciales MIGRATION_TEST_* ni repite DDL.
 
-No se han implementado SMTP, verificación de correo, login, /me, logout ni perfil editable. No avanzar automáticamente a esos incrementos.
+No se implementan login, /me, logout ni perfil editable en 1.3B. SMTP y verificación se describen en los incrementos siguientes.
 
 ## Incremento 1.4A: infraestructura de envío de verificación
 
 POST /api/auth/email/send-code está implementado con transporte SMTP sustituible, OTP criptográfico y HMAC ligado al desafío, transacción de emisión y límites persistidos. La red SMTP se ejecuta fuera de la transacción. La respuesta 202 es uniforme y no acredita recepción; sin SMTP habilitado responde 503. Registro 1.3B permanece compatible, sin correo automático.
 
-No hay proveedor SMTP activo configurado. La política OTP ya está aprobada y fijada: seis dígitos, 600 segundos, cinco intentos, cooldown de 60 segundos y cinco solicitudes por hora móvil. La ampliación 002 fue aplicada y validada en skillswap_ai_test_auth y skillswap_ai. Consultar [email-delivery.md](docs/email-delivery.md) para variables locales obligatorias, pruebas, limitaciones de cola/límites por proceso y requisitos de entrega real. No se modifican archivos privados ni se envía correo a terceros durante las pruebas.
+Brevo fue validado mediante STARTTLS en el puerto 587 con un remitente verificado y un destinatario institucional autorizado. La usuaria confirmó recepción; Gmail mostró una advertencia porque DKIM/DMARC no están completamente configurados. Resolver autenticación del dominio antes de habilitar envíos públicos. La política OTP está fijada: seis dígitos, 600 segundos, cinco intentos, cooldown de 60 segundos y cinco solicitudes por hora móvil. La ampliación 002 está aplicada en skillswap_ai_test_auth y skillswap_ai. Consultar [email-delivery.md](docs/email-delivery.md).
 
-Las pruebas reales de persistencia se limitan a skillswap_ai_test_auth con skillswap_test_app. Los transportes sustituidos no constituyen evidencia SMTP. Nodemailer 10.4.0 es la única dependencia incorporada; requiere Node >=20 y se usa con validación TLS, sin logs de contenido ni acceso a archivos/URLs. No se modificó la migración 001. Verificación de códigos, concesión de créditos, login y sesiones siguen pendientes.
+Las pruebas reales de persistencia se limitan a skillswap_ai_test_auth con skillswap_test_app. Nodemailer 10.4.0 se usa con validación TLS, sin logs de contenido ni acceso a archivos/URLs. No se modificó la migración 001. Login y sesiones siguen pendientes.
+
+## Incremento 1.4B: verificación y crédito inicial
+
+POST /api/auth/email/verify recibe exactamente email, verificationId y code. El código conserva ceros iniciales y debe tener seis dígitos. Solo acepta desafíos PENDING vigentes del estudiante pendiente y compara el HMAC protegido sin guardar o devolver el OTP en claro. Código incorrecto incrementa intentos; el quinto marca EXHAUSTED. Estados SENDING, REVOKED, EXPIRED, EXHAUSTED y CONSUMED producen el mismo 422 VERIFICATION_INVALID.
+
+La verificación bloquea usuario y desafío en orden estable. Consumo, activación y movimiento `INITIAL_EMAIL_VERIFICATION` de +20 se confirman en una transacción. Las restricciones únicas impiden duplicar la concesión ante concurrencia o reintentos. La respuesta 200 indica `verified`, 20 créditos y siguiente acción `login`, pero no crea sesión. Fallos internos revierten toda la operación y se publican como 503 sin detalles privados.
+
+Las pruebas reales usan exclusivamente skillswap_ai_test_auth y skillswap_test_app; cubren código correcto/incorrecto, expiración, cinco intentos, todos los estados no verificables, propietario distinto, consumo, concurrencia, idempotencia, rollback de activación/crédito, historial y ausencia de sesiones. La prueba E2E con un OTP recibido y escrito manualmente requiere autorización específica; no se automatiza ni conserva el código.
 
 ## Migración OTP 002 (aplicada en ambas bases)
 
@@ -365,6 +373,6 @@ Ver [otp-migration-002.md](docs/otp-migration-002.md): control persistente por H
 
 El migrador conserva el modo 001 predeterminado y requiere --through=002_otp_delivery_safety para incluir ambas versiones en orden. Mantiene bloqueo, checksums independientes, autorización DDL explícita y detención ante fallos parciales. Esta preparación no autoriza ejecutar migraciones. Las pruebas unitarias con modelo SQL no prueban funcionamiento real de 002 en MySQL. No ejecutar pruebas de integración hasta la autorización correspondiente.
 
-Validación real aislada 002 del 2026-11-10: 96 pruebas aprobadas, 0 fallidas y una integración histórica con migrator omitida. DDL ejecutado únicamente con skillswap_migrator; fixtures DML únicamente con skillswap_test_app en skillswap_ai_test_auth. Segunda ejecución idempotente, historial/checksums separados y principal intacta mediante huellas de datos/DDL. Se corrigieron dos interpretaciones del postcheck (CHECK escapado y nombres de columnas con dígitos) sin alterar los SQL aplicados ni reconstruir objetos. Detalles y limitaciones en la documentación de 002. La aplicación principal posterior se documenta al final de esta sección; SMTP real y 1.4B siguen pendientes.
+Validación real aislada 002 del 2026-11-10: 96 pruebas aprobadas, 0 fallidas y una integración histórica con migrator omitida. DDL ejecutado únicamente con skillswap_migrator; fixtures DML únicamente con skillswap_test_app en skillswap_ai_test_auth. Segunda ejecución idempotente, historial/checksums separados y principal intacta mediante huellas de datos/DDL. Se corrigieron dos interpretaciones del postcheck (CHECK escapado y nombres de columnas con dígitos) sin alterar los SQL aplicados ni reconstruir objetos. Detalles y limitaciones en la documentación de 002.
 
-Finalización 1.4A del 2026-11-10: 002 aplicada en la principal con autorización explícita y checksums validados, sin repetir 001; segunda ejecución idempotente. La principal conserva 14 carreras/84 asociaciones y cero cuentas, desafíos, sesiones o créditos demo. skillswap_app y ambos endpoints de salud comprobados (HTTP 200). Suite repetida en la base aislada: 96 aprobadas, 0 fallidas, 1 omitida. La generación/protección de códigos, admisión persistente y transiciones de envío están implementadas; recepción SMTP real pendiente de configurar y comprobar. No se implementaron 1.4B ni login.
+Finalización 1.4A del 2026-11-10: 002 aplicada en la principal con autorización explícita y checksums validados, sin repetir 001; segunda ejecución idempotente. La principal conserva 14 carreras/84 asociaciones y cero cuentas, desafíos, sesiones o créditos demo. skillswap_app y ambos endpoints de salud comprobados (HTTP 200). Suite repetida en la base aislada: 96 aprobadas, 0 fallidas, 1 omitida. La generación/protección de códigos, admisión persistente y transiciones de envío están implementadas; la recepción SMTP controlada se comprobó posteriormente. Login continúa pendiente.

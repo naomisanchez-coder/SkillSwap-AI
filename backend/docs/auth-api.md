@@ -1,6 +1,6 @@
 # Contratos de autenticación — SkillSwap AI
 
-**POST /api/auth/register implementado en 1.3B. POST /api/auth/email/send-code implementado como infraestructura configurable 1.4A, con ampliación 002 aplicada en ambas bases y sin recepción SMTP real validada. Los demás endpoints de autenticación y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos automáticamente.
+**POST /api/auth/register implementado en 1.3B, POST /api/auth/email/send-code implementado y validado con SMTP real en 1.4A, y POST /api/auth/email/verify implementado en 1.4B. Login, sesiones y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos automáticamente.
 
 ## Fuentes y precedencia
 
@@ -130,7 +130,7 @@ No establece cookie de sesión. La decisión de disparar el primer envío de cor
 
 ## 2. Envío o reenvío de código
 
-**Estado: INFRAESTRUCTURA IMPLEMENTADA en 1.4A; política aprobada; ampliación 002 aplicada en ambas bases y SMTP real pendiente.**
+**Estado: IMPLEMENTADO en 1.4A; política aprobada; ampliación 002 aplicada en ambas bases y SMTP real controlado comprobado.**
 
 **Método y ruta:** `POST /api/auth/email/send-code`.
 
@@ -166,11 +166,11 @@ Política aprobada: seis dígitos, diez minutos de vigencia, cinco intentos por 
 
 **React:** pantalla de verificación y control de reenvío, pendientes de integración. No mostrar un código de demostración ni prometer recepción basándose solo en `202`.
 
-Implementación, configuración y limitaciones: [email-delivery.md](email-delivery.md). Sin proveedor SMTP habilitado el endpoint responde 503 uniforme, no 202 ficticio. Con configuración válida acepta en una cola acotada por proceso antes de consultar elegibilidad o realizar SMTP; 202 no demuestra creación de un desafío, envío ni recepción. El identificador no elegible es indistinguible en formato. La cola no es durable; no se implementó outbox ni verificación 1.4B.
+Implementación, configuración y limitaciones: [email-delivery.md](email-delivery.md). Sin proveedor SMTP habilitado el endpoint responde 503 uniforme, no 202 ficticio. Con configuración válida acepta en una cola acotada por proceso antes de consultar elegibilidad o realizar SMTP; 202 no demuestra creación de un desafío, envío ni recepción. El identificador no elegible es indistinguible en formato. La cola no es durable y no se implementó outbox.
 
 ## 3. Verificación de correo
 
-**Estado: PROPUESTO, NO IMPLEMENTADO.**
+**Estado: IMPLEMENTADO EN 1.4B.**
 
 **Método y ruta:** `POST /api/auth/email/verify`.
 
@@ -188,7 +188,7 @@ Implementación, configuración y limitaciones: [email-delivery.md](email-delive
 
 **Validación:** correo normalizado; identificador y código como cadenas. Conservar ceros iniciales. Longitud y formato del código dependen de la política aprobada. Desafío ligado a usuario, vigente, no consumido y dentro del límite de intentos.
 
-### Respuesta propuesta de primera verificación: 200
+### Respuesta de primera verificación: 200
 
 ```json
 {
@@ -201,13 +201,13 @@ Implementación, configuración y limitaciones: [email-delivery.md](email-delive
 
 **Autorización y seguridad:** público mediante prueba del desafío; no necesita sesión protegida. Comprobar de forma segura el HMAC, controlar intentos y evitar filtraciones. En una misma conexión y transacción: bloquear usuario/desafío, consumirlo, marcar verificación e insertar movimiento de `+20` con clave única de concesión por usuario. Si falla, revertir toda la operación. Conservar auditoría sin código en claro.
 
-Las solicitudes paralelas y reintentos no vuelven a conceder créditos. La propuesta rechaza desafíos consumidos con el mismo error genérico que otros desafíos inválidos. La navegación después de un éxito cuya respuesta se pierda requiere acordar recuperación de UX sin debilitar la unicidad.
+Las solicitudes paralelas y reintentos no vuelven a conceder créditos. La implementación rechaza desafíos consumidos con el mismo error genérico que otros desafíos inválidos. La restricción `uq_credit_initial_grant`, la referencia de operación y el bloqueo usuario → desafío refuerzan la idempotencia. La navegación después de un éxito cuya respuesta se pierda requiere acordar recuperación de UX sin debilitar la unicidad.
 
 No crear sesión automáticamente según la propuesta actual; `nextAction: login` sigue sujeto a aprobación de navegación. Completar onboarding no es condición para recibir los créditos.
 
 **Errores:** `422 VERIFICATION_INVALID` para código incorrecto, vencido, consumido o desafío inexistente; `422 VALIDATION_ERROR` para entrada mal formada; `429`, `503` y errores comunes.
 
-**React:** pantalla de verificación, mensaje de confirmación y navegación a login; flujo pendiente de integración real.
+**React:** pantalla de verificación, mensaje de confirmación y navegación a login; integración visual pendiente. El backend no crea sesión durante esta operación.
 
 ## 4. Inicio de sesión
 
@@ -394,7 +394,7 @@ Migración: `001_auth_foundation.sql`, validada en `skillswap_ai_test_auth` y ap
 
 Los IDs deben generarse en servidor. TECSUP sigue siendo una institución fija de dominio, no un valor editable por React. La gramática pendiente no se inventa en SQL: la restricción estudiantil impone dominio exacto, punto interior, ausencia de puntos consecutivos y de `+`; el servicio de registro implementa la validación más estricta aprobada. El hash codificado requiere prefijo `$` y longitud mínima, pero SQL no prueba que sea un hash criptográfico válido; esa responsabilidad corresponde al servicio de contraseñas.
 
-Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y todas las conexiones escritoras deberán usar UTC. Las duraciones de sesión siguen pendientes. La política OTP aprobada fija 600 segundos y cinco intentos por desafío; el consumo de intentos corresponde a 1.4B.
+Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y todas las conexiones escritoras deberán usar UTC. Las duraciones de sesión siguen pendientes. La política OTP aprobada fija 600 segundos y cinco intentos por desafío; 1.4B consume los intentos transaccionalmente.
 
 **Límites que exigen transacciones de servicio posteriores:** crear usuario/perfil conjuntamente; verificar carrera activa; comprobar que la cuenta está verificada y habilitada al crear/usar sesión; consumir desafío, verificar usuario y conceder créditos conjuntamente. La FK del movimiento garantiza propietario del desafío, pero no que esté consumido: el servicio deberá comprobarlo bajo bloqueo. El libro admite movimientos futuros con signo; esta tabla por sí sola no garantiza saldo agregado no negativo ni implementa reservas.
 
@@ -423,6 +423,8 @@ Pruebas reales: node scripts/verify-local.js utiliza exclusivamente el esquema a
 
 La migración 002 está aplicada y validada en skillswap_ai_test_auth y skillswap_ai. Incorpora otp_request_limits por HMAC del correo y estado inicial SENDING. Los límites persisten para correos existentes e inexistentes mediante una fila bloqueada y cinco timestamps; los controles por IP/origen siguen siendo complementarios. Ningún correo desconocido se almacena en claro en ese registro.
 
-La política está aprobada y fijada por el backend. Solo queda pendiente configurar y comprobar recepción SMTP real. La verificación 1.4B permanece ausente (404), no implementada: su futuro flujo deberá exigir PENDING vigente, intentos disponibles y HMAC correcto bajo bloqueo; excluir SENDING, REVOKED, EXPIRED, EXHAUSTED y CONSUMED. No se activa ninguna cuenta ni se conceden créditos o sesiones en 1.4A.
+La política está aprobada y fijada por el backend. Brevo aceptó dos envíos controlados y la usuaria confirmó recepción del envío directo y del generado por `send-code`; Gmail mostró una advertencia de autenticación del remitente. DKIM/DMARC y un remitente apto para uso público deben quedar validados antes de habilitar envíos a otros estudiantes.
+
+La verificación 1.4B está implementada: exige `PENDING` vigente, intentos disponibles, correo propietario y HMAC correcto bajo bloqueo; excluye `SENDING`, `REVOKED`, `EXPIRED`, `EXHAUSTED` y `CONSUMED`. Consume el desafío, activa la cuenta y registra exactamente `+20` en una sola transacción, sin crear sesión. Las pruebas de extremo a extremo con introducción manual de un OTP real requieren autorización específica y no forman parte de la suite automática.
 
 Ver [validación de 002](otp-migration-002.md) y [configuración de correo](email-delivery.md). Se conservaron ambos SQL y sus checksums, catálogo principal y fila original de 001. Las pruebas de negocio escriben exclusivamente en el esquema aislado.
