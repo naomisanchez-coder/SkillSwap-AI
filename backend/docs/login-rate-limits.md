@@ -1,6 +1,6 @@
 # Límites persistentes de login — migración 003
 
-**Estado:** migración y componentes preparados; no aplicados en MySQL. Login, sesiones, logout y `/me` continúan sin implementación hasta validar 003 en el esquema aislado.
+**Estado:** migración aplicada y validada en `skillswap_ai_test_auth` y `skillswap_ai`. El componente se integra con login 1.5.
 
 ## Semántica aprobada
 

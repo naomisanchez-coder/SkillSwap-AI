@@ -1,6 +1,6 @@
 # Contratos de autenticación — SkillSwap AI
 
-**POST /api/auth/register implementado en 1.3B, POST /api/auth/email/send-code implementado y validado con SMTP real en 1.4A, y POST /api/auth/email/verify implementado en 1.4B. Login, sesiones y perfil siguen PROPUESTOS, NO IMPLEMENTADOS.** La persistencia de 1.2 y los endpoints de salud se conservan; registro no crea sesiones ni envía correos automáticamente.
+**Registro, envío/verificación de correo y los endpoints `login`, `logout` y `me` están implementados.** El perfil ampliado y la recuperación de contraseña siguen fuera de alcance. Registro y verificación no crean sesiones automáticamente.
 
 ## Fuentes y precedencia
 
@@ -59,15 +59,15 @@ Los mensajes y códigos de aplicación son públicos; no incluir SQL, trazas, ru
 | 500 | Error interno genérico |
 | 503 | Dependencia necesaria no disponible |
 
-### Sesiones y CSRF: mecanismo futuro propuesto
+### Sesiones y CSRF implementados
 
-Sesiones persistidas en servidor con almacenamiento MySQL. Cookie con identificador opaco, `HttpOnly`, `Secure` en producción, `Path=/` y `SameSite=Lax` como propuesta sujeta a la topología de despliegue. Definir expiración absoluta e inactividad antes de implementar `remember`. No usar almacenamiento de sesión en memoria de proceso como solución de producción.
+Sesiones persistidas en MySQL. La cookie opaca es `HttpOnly`, `Secure` en producción, `Path=/` y `SameSite=Lax`. Sin Recordarme: 30 minutos de inactividad y 8 horas absolutas. Con Recordarme: 7 días de inactividad, 30 días absolutas y `Max-Age` de 30 días.
 
 Regenerar el identificador al autenticar. Revocar la sesión en servidor al cerrar y eliminar la cookie con los mismos atributos de alcance. Consultar la habilitación de la cuenta al autorizar. No entregar access/refresh tokens para guardarlos en Web Storage.
 
 React envía `credentials: 'include'` en operaciones de sesión. Express deberá habilitar credenciales CORS únicamente para orígenes permitidos. Usar un host consistente en desarrollo; `localhost` y `127.0.0.1` no son intercambiables para cookies. Evaluar cookies y HTTPS en el despliegue final sin relajar controles de producción.
 
-Login devuelve un token CSRF aleatorio ligado a sesión, propuesto como 32 bytes codificados en 64 caracteres hexadecimales. React lo conserva en memoria; las mutaciones autenticadas lo envían en `X-CSRF-Token`. `GET /api/auth/me` permite recuperarlo sin iniciar otra sesión. No confundir este token de protección con una credencial de acceso.
+Login devuelve un token CSRF HMAC ligado a la sesión y codificado en 64 caracteres hexadecimales. React lo conserva en memoria; las mutaciones autenticadas lo envían en `X-CSRF-Token`. `GET /api/auth/me` lo recupera sin rotación ni sesión nueva.
 
 Para login público: exigir JSON y el encabezado `X-CSRF-Protection: 1` que ya envía React, validar estrictamente origen y rechazar solicitudes simples. Ese encabezado constante no es un secreto. Para operaciones públicas de registro y verificación también aplicar política explícita de origen y límites; CORS por sí solo no es autorización. `SameSite` no sustituye las defensas CSRF.
 
@@ -211,7 +211,7 @@ No crear sesión automáticamente según la propuesta actual; `nextAction: login
 
 ## 4. Inicio de sesión
 
-**Estado: PROPUESTO, NO IMPLEMENTADO.**
+**Estado: IMPLEMENTADO en 1.5.**
 
 **Método y ruta:** `POST /api/auth/login`.
 
@@ -229,7 +229,7 @@ No crear sesión automáticamente según la propuesta actual; `nextAction: login
 
 **Validación:** correo y contraseña como cadenas; `remember` booleano obligatorio. Normalizar correo, nunca contraseña. No aplicar automáticamente la política de registro estudiantil a direcciones administrativas: esa política sigue pendiente. No reutilizar reglas nuevas de longitud de registro para bloquear credenciales históricas válidas sin estrategia aprobada.
 
-### Respuesta estudiantil propuesta: 200
+### Respuesta estudiantil implementada: 200
 
 ```json
 {
@@ -252,17 +252,17 @@ No crear sesión automáticamente según la propuesta actual; `nextAction: login
 
 El marcador CSRF se reemplazará en ejecución por 64 caracteres hexadecimales. La cookie se entrega mediante `Set-Cookie`; el JSON no contiene identificador de sesión ni hash de contraseña. `onboardingComplete` refleja el estado real, no una constante.
 
-**Autorización y seguridad:** público mediante credenciales. Comparación de hash segura, trabajo comparable ante cuentas inexistentes, límites por cuenta e IP, validación de origen y controles CSRF descritos arriba. Regenerar sesión al autenticar. No conceder sesión protegida a cuentas no verificadas o suspendidas. La política de `remember` debe aprobarse antes de implementar sus efectos.
+**Autorización y seguridad:** público mediante credenciales. Comparación scrypt segura, hash señuelo para cuentas inexistentes, límites persistentes por correo/IP, origen permitido y `X-CSRF-Protection: 1`. Solo cuentas ACTIVE y verificadas reciben sesión.
 
 **Errores:** `401 INVALID_CREDENTIALS` sin distinguir inexistencia de cuenta; `403 EMAIL_NOT_VERIFIED` o `ACCOUNT_SUSPENDED` solo después de comprobar contraseña; `403 ORIGIN_NOT_ALLOWED`; `422 VALIDATION_ERROR`, `429`, `503` y errores comunes. Si el mecanismo lo requiere, `403 CSRF_INVALID` para protección de solicitud inválida.
 
 **React:** login; envía `{ email, password, remember }`, `credentials: 'include'` y `X-CSRF-Protection: 1`. Mostrar/ocultar contraseña y navegación a registro son operaciones locales. El enlace de recuperación no autoriza implementar recuperación de contraseña en este incremento.
 
-**Compatibilidad administrativa pendiente:** React exige carrera y ciclo incluso para `admin`. Debe acordarse un DTO con datos académicos opcionales/nulos para administradores, sin inventarlos. No declarar cerrado el contrato administrativo hasta resolverlo.
+**Compatibilidad administrativa:** para `admin`, `institution`, `career`, `cycle` y `onboardingComplete` son `null`; React debe admitir esos campos anulables.
 
 ## 5. Cierre de sesión
 
-**Estado: PROPUESTO, NO IMPLEMENTADO.**
+**Estado: IMPLEMENTADO en 1.5.**
 
 **Método y ruta:** `POST /api/auth/logout`.
 
@@ -270,7 +270,7 @@ El marcador CSRF se reemplazará en ejecución por 64 caracteres hexadecimales. 
 
 **Entrada:** sin campos de negocio; cuerpo ausente o `{}`. Cookie si existe y `X-CSRF-Token` válido para sesión activa. Rechazar campos adicionales.
 
-### Respuesta propuesta: 200
+### Respuesta implementada: 200
 
 ```json
 {
@@ -286,7 +286,7 @@ El marcador CSRF se reemplazará en ejecución por 64 caracteres hexadecimales. 
 
 ## 6. Recuperación de sesión
 
-**Estado: PROPUESTO, NO IMPLEMENTADO.**
+**Estado: IMPLEMENTADO en 1.5.**
 
 **Método y ruta:** `GET /api/auth/me`.
 
@@ -294,7 +294,7 @@ El marcador CSRF se reemplazará en ejecución por 64 caracteres hexadecimales. 
 
 **Entrada:** sin JSON ni identificador de usuario; cookie de sesión.
 
-**Respuesta propuesta: 200:** mismo objeto JSON `{ "user": { ... }, "csrfToken": "..." }` definido íntegramente en login, con datos vigentes. No crear una cuenta, conceder créditos ni generar una nueva sesión de acceso por visitar esta ruta.
+**Respuesta implementada: 200:** mismo objeto JSON `{ "user": { ... }, "csrfToken": "..." }` de login, con datos vigentes. No crea cuenta, créditos ni una sesión nueva.
 
 **Validación y autorización:** sesión vigente, usuario existente, habilitado y verificado. Verificar expiración absoluta y por inactividad conforme a la política pendiente. No ampliar indefinidamente la expiración absoluta. La cuenta administrativa mantiene el pendiente de DTO señalado en login.
 
@@ -366,9 +366,9 @@ Los valores de estado y saldo son ilustrativos: se consultan de la fuente de ver
 | Cuenta de migraciones | Configurar cuenta separada con privilegios mínimos de esquema, secretos externos, scripts reproducibles y registro de versiones; nunca dar DDL a `skillswap_app` |
 | Topología de despliegue | Acordar hosts, HTTPS, proxy y política de cookies sin relajar controles de producción |
 
-### Preparación de límites de login 1.5
+### Límites persistentes de login 1.5
 
-La migración 003 y sus componentes están preparados, no aplicados. La admisión contará todos los intentos antes de consultar cuentas: cinco por HMAC de correo y veinte por HMAC de IP en ventanas fijas de 15 minutos. Los rechazos no desplazan la expiración. `LOGIN_RATE_HMAC_KEY_HEX` debe ser privada, independiente y estable; `TRUST_PROXY_HOPS=0` no confía en cabeceras de proxy. Ver [diseño y aplicación futura](login-rate-limits.md). No declarar login implementado hasta validar 003 realmente en MySQL aislado.
+La migración 003 está aplicada en ambas bases. La admisión cuenta todos los intentos antes de consultar cuentas: cinco por HMAC de correo y veinte por HMAC de IP en ventanas fijas de 15 minutos. Los rechazos no desplazan la expiración. `LOGIN_RATE_HMAC_KEY_HEX` debe ser privada, independiente y estable; `TRUST_PROXY_HOPS=0` no confía en cabeceras de proxy. Ver [login-rate-limits.md](login-rate-limits.md).
 
 ## Compatibilidad y exclusiones
 
@@ -398,13 +398,13 @@ Migración: `001_auth_foundation.sql`, validada en `skillswap_ai_test_auth` y ap
 
 Los IDs deben generarse en servidor. TECSUP sigue siendo una institución fija de dominio, no un valor editable por React. La gramática pendiente no se inventa en SQL: la restricción estudiantil impone dominio exacto, punto interior, ausencia de puntos consecutivos y de `+`; el servicio de registro implementa la validación más estricta aprobada. El hash codificado requiere prefijo `$` y longitud mínima, pero SQL no prueba que sea un hash criptográfico válido; esa responsabilidad corresponde al servicio de contraseñas.
 
-Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y todas las conexiones escritoras deberán usar UTC. Las duraciones de sesión siguen pendientes. La política OTP aprobada fija 600 segundos y cinco intentos por desafío; 1.4B consume los intentos transaccionalmente.
+Las FKs usan la política restrictiva predeterminada, sin cascadas de borrado de usuarios, desafíos o movimientos. Las fechas son `DATETIME(6)` y las conexiones escritoras usan UTC. Las duraciones de sesión son 30 minutos/8 horas o 7/30 días. La política OTP fija 600 segundos y cinco intentos por desafío.
 
 **Límites que exigen transacciones de servicio posteriores:** crear usuario/perfil conjuntamente; verificar carrera activa; comprobar que la cuenta está verificada y habilitada al crear/usar sesión; consumir desafío, verificar usuario y conceder créditos conjuntamente. La FK del movimiento garantiza propietario del desafío, pero no que esté consumido: el servicio deberá comprobarlo bajo bloqueo. El libro admite movimientos futuros con signo; esta tabla por sí sola no garantiza saldo agregado no negativo ni implementa reservas.
 
 La columna generada `initial_grant_user_id` y su índice UNIQUE impiden dos movimientos `INITIAL_EMAIL_VERIFICATION` para el mismo usuario aunque cambie la referencia. Otros motivos no pueden sustituir la concesión inicial: el servidor seleccionará motivos autorizados y no permitirá editar/eliminar el historial desde la API. Los permisos DML del usuario aplicativo no convierten el libro en inmutable frente a acceso SQL directo.
 
-`auth_sessions` es un esquema propio, **no una afirmación de compatibilidad con express-session o un store concreto**. La biblioteca y el adaptador deberán revisarse antes de implementar sesiones. El HMAC CSRF no permite recuperar su texto original desde MySQL: definir derivación segura o rotación al recuperar sesión y su política de múltiples pestañas antes de integrar React. No almacenar cookies ni tokens de acceso en claro para forzar compatibilidad.
+`auth_sessions` usa implementación propia, no `express-session`. MySQL almacena solo SHA-256 del identificador y HMAC del CSRF. El token CSRF público se deriva de forma estable desde la cookie mediante `SESSION_CSRF_KEY_HEX`, permitiendo recuperación y múltiples pestañas sin persistir secretos en claro.
 
 El ejecutor autorizado `database/migrate.js` solo admite `skillswap_ai` y el esquema aislado exacto `skillswap_ai_test_auth`. Inspecciona sin DDL por defecto, exige credenciales separadas y consulta `partial_revokes` antes de comprobar concesiones directas; rechaza privilegios globales operativos, comodines, ALL PRIVILEGES y permisos excesivos. Los escapes de guiones bajos se aceptan con partial_revokes OFF; con ON se exige el nombre literal sin barras. Solo se acepta USAGE global. SELECT, INSERT, CREATE y REFERENCES son los mínimos; UPDATE se reserva al esquema de pruebas y es obligatorio en su suite; las pruebas aisladas reutilizan su lógica. No se configura automáticamente desde las credenciales de la aplicación. El historial no se considera aplicado por existir el archivo ni por pasar pruebas estáticas. No se insertan usuarios demo, administradores ni créditos en el esquema aplicativo. El catálogo aprobado se carga por separado mediante DML autorizado.
 

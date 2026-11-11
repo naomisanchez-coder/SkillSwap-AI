@@ -6,7 +6,7 @@ SkillSwap AI es una plataforma académica para el intercambio de habilidades ent
 
 La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. El incremento 1.1 añadió documentación. El incremento 1.2 incorpora el esquema relacional, un ejecutor seguro y pruebas reales. La migración fue validada en `skillswap_ai_test_auth` y aplicada con autorización explícita a la base principal de desarrollo `skillswap_ai`.
 
-**Registro 1.3B, envío 1.4A y verificación/crédito inicial 1.4B están implementados.** Login y sesiones siguen pendientes. Las ocho tablas y la ampliación OTP existen en ambas bases; los contratos y su estado están en [docs/auth-api.md](docs/auth-api.md).
+**Registro 1.3B, envío 1.4A, verificación/crédito inicial 1.4B y autenticación 1.5 están implementados.** Las migraciones 001–003 existen en ambas bases; login queda deshabilitado si faltan sus claves privadas. Los contratos y su estado están en [docs/auth-api.md](docs/auth-api.md).
 
 ## Arquitectura
 
@@ -180,7 +180,7 @@ Las pruebas HTTP abren puertos locales efímeros. Las auditorías npm necesitan 
 - No imprimir configuraciones completas, contraseñas, códigos temporales o sesiones en respuestas o logs.
 - Las variables `VITE_*` son públicas; no sirven para guardar secretos de backend.
 - Los accesos demo del prototipo no se incorporan a la autenticación real.
-- El CORS actual usa orígenes explícitos; sesiones con cookies y CSRF están pendientes de implementación.
+- CORS admite credenciales solo para orígenes explícitos. Las sesiones usan cookie HttpOnly y CSRF ligado a sesión; no usar orígenes comodín.
 - Trabajar exclusivamente en `feature/backend`, sin modificar otras ramas ni frontend.
 - Mantener el README general de la raíz intacto; la documentación específica vive en este directorio.
 - Usar commits progresivos con prefijos `feat`, `fix`, `test` o `docs` y descripción en español, por ejemplo: `docs(backend): documentar contratos de autenticacion`.
@@ -377,8 +377,8 @@ Validación real aislada 002 del 2026-11-10: 96 pruebas aprobadas, 0 fallidas y 
 
 Finalización 1.4A del 2026-11-10: 002 aplicada en la principal con autorización explícita y checksums validados, sin repetir 001; segunda ejecución idempotente. La principal conserva 14 carreras/84 asociaciones y cero cuentas, desafíos, sesiones o créditos demo. skillswap_app y ambos endpoints de salud comprobados (HTTP 200). Suite repetida en la base aislada: 96 aprobadas, 0 fallidas, 1 omitida. La generación/protección de códigos, admisión persistente y transiciones de envío están implementadas; la recepción SMTP controlada se comprobó posteriormente. Login continúa pendiente.
 
-## Migración de límites de login 003 (preparada, no aplicada)
+## Migración de límites de login 003 y autenticación 1.5
 
-`003_login_rate_limits.sql` propone persistencia pseudonimizada para cinco intentos por correo y veinte por IP durante una ventana fija de 15 minutos. Cuenta todos los intentos admitidos antes de consultar credenciales, bloquea EMAIL → IP en orden determinista y no prolonga una ventana bloqueada. Las filas vencidas dejan de afectar y pueden limpiarse después de 24 horas en lotes de 100.
+`003_login_rate_limits.sql` implementa persistencia pseudonimizada para cinco intentos por correo y veinte por IP durante una ventana fija de 15 minutos. Cuenta todos los intentos admitidos antes de consultar credenciales, bloquea EMAIL → IP en orden determinista y no prolonga una ventana bloqueada. Las filas vencidas dejan de afectar y pueden limpiarse después de 24 horas en lotes de 100.
 
-El migrador reconoce 001→002→003, conserva checksums independientes y permite seleccionar `--through=002_otp_delivery_safety` o `--through=003_login_rate_limits`. No se ha ejecutado DDL de 003. Configuración y aplicación futura aislada: [login-rate-limits.md](docs/login-rate-limits.md). Login, cookies y sesiones siguen pendientes hasta validar la tabla real.
+El migrador reconoce 001→002→003 y 003 fue validada primero en `skillswap_ai_test_auth` y después aplicada de forma controlada en `skillswap_ai`, con segunda ejecución idempotente. Login, logout y `/api/auth/me` usan sesiones persistentes, expiración inactiva/absoluta, cookies HttpOnly y CSRF derivado con HMAC. Configuración y contratos: [session-auth.md](docs/session-auth.md).
