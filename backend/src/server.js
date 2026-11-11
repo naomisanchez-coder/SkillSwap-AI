@@ -141,7 +141,9 @@ try {
     createAdminRepository(database), createPrivateFileReader(privateStorage));
   const ai = readAiConfig(process.env);
   if (ai) aiService = createAiService({ repository: createAiRepository(database),
-    client: ai.provider === 'gemini' ? createGeminiGenerateContentClient(ai) : createOpenAiResponsesClient(ai),
+    client: ai.provider === 'gemini' ? createGeminiGenerateContentClient(ai, {
+      onDiagnostic(event) { console.info(JSON.stringify({ event: 'ai_provider', ...event })); },
+    }) : createOpenAiResponsesClient(ai),
     limiter: createAiLimiter(ai.rateLimit) });
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
     loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService,
