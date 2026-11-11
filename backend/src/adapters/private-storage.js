@@ -64,3 +64,20 @@ export function createLocalPrivateStorage({ root }, { random = randomBytes } = {
     },
   });
 }
+
+/** Demo integrada: archivos previos en solo lectura; nuevas cargas y limpieza en el worktree. */
+export function createLayeredPrivateStorage({ root, readOnlyRoot }) {
+  const local = createLocalPrivateStorage({ root });
+  const existing = createLocalPrivateStorage({ root: readOnlyRoot });
+  return Object.freeze({
+    store: local.store,
+    remove: local.remove,
+    async read(key, maximumBytes) {
+      try { return await local.read(key, maximumBytes); }
+      catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        return existing.read(key, maximumBytes);
+      }
+    },
+  });
+}

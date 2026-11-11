@@ -12,7 +12,10 @@
     "ai:gemini-models": "node scripts/gemini-models.js",
     "demo:mentors": "node scripts/demo-mentors.js",
     "demo:verify": "node scripts/verify-demo.js",
-    "test": "node --test"
+    "test": "node --test",
+    "demo:start": "node scripts/start-integrated-demo.js",
+    "demo:config-check": "node scripts/start-integrated-demo.js --check",
+    "test:technical": "node scripts/test-technical.js"
   },
   "dependencies": {
     "busboy": "1.6.0",

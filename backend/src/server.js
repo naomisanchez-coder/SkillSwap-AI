@@ -26,7 +26,7 @@ import { createPasswordRecoveryService } from './modules/auth/password-recovery.
 import { createStudentRepository } from './modules/student/student.repository.js';
 import { createStudentService } from './modules/student/student.service.js';
 import { readPrivateStorageConfig } from './config/storage.js';
-import { createLocalPrivateStorage } from './adapters/private-storage.js';
+import { createLocalPrivateStorage, createLayeredPrivateStorage } from './adapters/private-storage.js';
 import { createMentorRepository } from './modules/student/mentor.repository.js';
 import { createMentorService } from './modules/student/mentor.service.js';
 import { createExploreRepository } from './modules/student/explore.repository.js';
@@ -125,7 +125,7 @@ try {
   }
   studentService = createStudentService(createStudentRepository(database));
   const storageConfig = readPrivateStorageConfig(process.env);
-  const privateStorage = storageConfig ? createLocalPrivateStorage(storageConfig) : null;
+  const privateStorage = storageConfig ? (storageConfig.readOnlyRoot ? createLayeredPrivateStorage(storageConfig) : createLocalPrivateStorage(storageConfig)) : null;
   if (privateStorage) mentorService = createMentorService(createMentorRepository(database),
     privateStorage, {
       onCleanupFailure(event) { console.warn(`private_storage: ${event}`); },

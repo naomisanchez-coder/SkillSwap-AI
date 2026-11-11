@@ -6,5 +6,7 @@ export function readPrivateStorageConfig(source) {
   if (typeof root !== 'string' || !isAbsolute(root) || parse(root).root === root || root.includes('\0')) {
     throw new Error('Invalid private storage configuration');
   }
-  return Object.freeze({ root });
+  const readOnlyRoot = source.PRIVATE_STORAGE_READ_ONLY_ROOT;
+  if (readOnlyRoot !== undefined && (typeof readOnlyRoot !== 'string' || !isAbsolute(readOnlyRoot) || parse(readOnlyRoot).root === readOnlyRoot || readOnlyRoot.includes('\0') || readOnlyRoot === root)) throw new Error('Invalid read-only private storage configuration');
+  return Object.freeze({ root, ...(readOnlyRoot ? { readOnlyRoot } : {}) });
 }
