@@ -1,5 +1,7 @@
 # SkillSwap AI — frontend integrado
 
+Correcciones actuales y pruebas manuales pendientes: [Perfil, archivos y Gemini](../docs/CORRECCIONES-PERFIL-Y-GEMINI.md).
+
 El acceso normal usa React con la API Express y MySQL demo. Se conservan las pantallas y los estilos originales; los servicios del preview no se usan en el panel integrado.
 
 Guía completa de configuración, arranque y pruebas manuales: [Integración y sustentación](../docs/INTEGRACION-Y-PRUEBAS-MANUALES.md).

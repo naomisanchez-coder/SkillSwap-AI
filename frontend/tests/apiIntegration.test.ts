@@ -127,3 +127,89 @@ test('recuperación: conserva recoveryId y envía código y contraseña solament
     assert.equal(calls.length, 2);
   }, url => url.endsWith('/request') ? { status: 'accepted', recoveryId: 'recovery-id' } : { status: 'password_updated' });
 });
+
+test('foto: DELETE con cookie y CSRF limpia el avatar sin PATCH ni cambios al perfil', async () => {
+  let hasPhoto = true;
+  await mockFetch(async calls => {
+    const { account } = createProfileServices(identity);
+    assert.ok((await account.getAccount()).profile.photoStorageId);
+    const changed = await account.deletePhoto!();
+    assert.equal(changed.profile.photoStorageId, undefined);
+    assert.equal(changed.profile.name, identity.user.name);
+    const mutations = calls.filter(c => c.options.method !== 'GET');
+    assert.equal(mutations.length, 1); assert.equal(mutations[0].options.method, 'DELETE');
+    assert.equal((mutations[0].options.headers as Record<string, string>)['X-CSRF-Token'], identity.csrfToken);
+  }, (url, options) => {
+    if (options.method === 'DELETE') { hasPhoto = false; return { photo: { deleted: true } }; }
+    return url.endsWith('/profile') ? { profile: { ...profile, hasPhoto } } : { applications: [] };
+  });
+});
+
+test('solicitud: envía y recupera declaraciones reales junto al PDF; no utiliza nivel de aprendizaje como aprobación', async () => {
+  let applications: unknown[] = [];
+  const details = { level: 'Avanzado' as const, experience: 'Experiencia real de prueba', topics: 'Temas de prueba' };
+  await mockFetch(async calls => {
+    const { account } = createProfileServices(identity);
+    const result = await account.submitApplication({ id: 'new', submissionId: 'submission', skill: skill.name, ...details, portfolio: '', evidenceFile: new File(['%PDF-fixture'], 'evidence.pdf', { type: 'application/pdf' }) });
+    const call = calls.find(c => c.options.method === 'POST')!;
+    const data = call.body as FormData;
+    assert.equal(data.get('declaredLevel'), 'Avanzado'); assert.equal(data.get('experience'), details.experience); assert.equal(data.get('topics'), details.topics);
+    assert.ok(data.get('certificate') instanceof Blob); assert.equal(data.has('approvedLevel'), false);
+    assert.equal(result.requests[0].level, 'Avanzado'); assert.equal(result.requests[0].experience, details.experience); assert.equal(result.requests[0].status, 'pending');
+  }, (url, options) => {
+    if (url.endsWith('/mentor-application/requirements')) return { requirements: { applicationDetails: { available: true } } };
+    if (url.endsWith('/skills/catalog')) return { skills: [skill] };
+    if (url.endsWith('/profile')) return { profile };
+    if (options.method === 'POST') { applications = [{ id: 'created', skill: skill.name, declaredLevel: details.level, experience: details.experience, topics: details.topics, status: 'PENDING', certificateAttached: true, submittedAt: session.startsAt }]; return { application: applications[0] }; }
+    return { applications };
+  });
+});
+
+test('solicitud pendiente: actualiza datos y sustituye PDF sin reenviar como REJECTED ni eliminar certificado', async () => {
+  await mockFetch(async calls => {
+    const { account } = createProfileServices(identity);
+    await account.submitApplication({ id: 'existing', submissionId: 'existing', skill: skill.name, level: 'Intermedio', experience: 'Experiencia', topics: 'Temas', portfolio: '', evidenceFile: new File(['%PDF-new'], 'new.pdf', { type: 'application/pdf' }) });
+    const writes = calls.filter(c => c.options.method !== 'GET');
+    assert.deepEqual(writes.map(c => c.options.method), ['PATCH', 'PUT']);
+    assert.ok(writes[1].url.endsWith('/existing/certificate'));
+    assert.deepEqual(writes[0].body, { declaredLevel: 'Intermedio', experience: 'Experiencia', topics: 'Temas', portfolioUrl: null });
+  }, url => url.endsWith('/mentor-application/requirements') ? { requirements: { applicationDetails: { available: true } } } : url.endsWith('/skills/catalog') ? { skills: [skill] } : url.endsWith('/profile') ? { profile } : { applications: [{ id: 'existing', skill: skill.name, status: 'PENDING', certificateAttached: true }] });
+});
+
+test('solicitud sin migración: bloquea antes de subir archivos o descartar textos', async () => {
+  await mockFetch(async calls => {
+    const { account } = createProfileServices(identity);
+    await assert.rejects(account.submitApplication({ id: 'new', submissionId: 'new', skill: skill.name, level: 'Avanzado', experience: 'Experiencia', topics: 'Temas', portfolio: '' }), /todavía no está habilitado/);
+    assert.ok(calls.every(c => c.options.method === 'GET'));
+  }, () => ({ requirements: { applicationDetails: { available: false } } }));
+});
+
+test('Gemini 503: informa indisponibilidad sin mostrar códigos internos ni repetir la solicitud', async () => {
+  await mockFetch(async calls => {
+    await assert.rejects(createChatService(identity.csrfToken)('Consulta', []), error => error instanceof ApiError && error.code === 'AI_UNAVAILABLE' && /temporalmente indisponible/.test(error.message) && !/AI_UNAVAILABLE/.test(error.message));
+    assert.equal(calls.length, 1);
+  }, () => Response.json({ error: { code: 'AI_UNAVAILABLE', message: 'El asistente de IA no está disponible temporalmente.' } }, { status: 503 }));
+});
+
+test('etiquetas naturales y validación de solicitud conservan el nombre canónico y aceptan catálogo real', async () => {
+  const { skillLabel } = await import('../src/data/skillLabels');
+  const { normalizeApplication } = await import('../src/data/account');
+  assert.equal(skillLabel(skill.name), 'Programación en Python');
+  const value = normalizeApplication({ skill: skill.name, level: 'Intermedio', experience: 'Experiencia', topics: 'Temas', portfolio: '' }, [skill.name]);
+  assert.equal(value.skill, skill.name);
+  assert.throws(() => normalizeApplication({ ...value, level: '' }, [skill.name]));
+  assert.throws(() => normalizeApplication({ ...value, experience: '' }, [skill.name]));
+});
+
+test('certificado: sustitución independiente usa solo PUT y funciona sin habilitar campos nuevos', async () => {
+  await mockFetch(async calls => {
+    const { account } = createProfileServices(identity);
+    await account.replaceCertificate!('existing', new File(['%PDF-new'], 'new.pdf', { type: 'application/pdf' }));
+    const writes = calls.filter(c => c.options.method !== 'GET');
+    assert.equal(writes.length, 1); assert.equal(writes[0].options.method, 'PUT');
+    assert.ok(writes[0].url.endsWith('/existing/certificate'));
+    assert.deepEqual(Array.from((writes[0].body as FormData).keys()), ['certificate']);
+    assert.equal((writes[0].options.headers as Record<string, string>)['X-CSRF-Token'], identity.csrfToken);
+    assert.ok(!calls.some(c => c.url.includes('/requirements') || c.url.includes('/resubmit')));
+  }, url => url.endsWith('/profile') ? { profile } : { applications: [] });
+});

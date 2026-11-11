@@ -1,5 +1,7 @@
 # Integración en develop y guía de sustentación
 
+**Actualización posterior a las pruebas de Naomi:** consultar [Correcciones de perfil y Gemini](CORRECCIONES-PERFIL-Y-GEMINI.md). Este documento conserva el estado de la primera integración; la guía nueva detalla las correcciones y la migración 009 pendiente.
+
 Fecha: 11 de noviembre de 2026 (Lima). Las pruebas manuales de esta guía están **pendientes y corresponden exclusivamente a Naomi**. Codex no ha registrado estudiantes, enviado OTP/correos, invocado Gemini, reservado/cancelado ni alterado créditos o datos demo.
 
 ## Ramas e historial
