@@ -30,7 +30,7 @@ function fake(initial=0){
   if(sql.includes('COLUMN_DEFAULT'))return [[{value:state.altered?'SENDING':'PENDING'}]];
   if(sql.includes('CHECK_CLAUSE'))return [[{clause:state.altered?"status in ('SENDING','PENDING','CONSUMED','REVOKED','EXPIRED','EXHAUSTED')":"status in ('PENDING','CONSUMED','REVOKED','EXPIRED','EXHAUSTED')"}]];
   const statements=creations.filter(s=>state.tables.has(s.match(/^CREATE TABLE ([a-z_]+)/)[1]));
-  if(sql.includes('information_schema.COLUMNS'))return [statements.flatMap(s=>[...s.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT|BOOLEAN)/gm)].map(m=>({t:s.match(/^CREATE TABLE ([a-z_]+)/)[1],c:m[1],type:m[2].toLowerCase().replace('boolean','tinyint(1)')})))];
+  if(sql.includes('information_schema.COLUMNS'))return [statements.flatMap(s=>[...s.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT UNSIGNED|INT|BOOLEAN)/gm)].map(m=>({t:s.match(/^CREATE TABLE ([a-z_]+)/)[1],c:m[1],type:m[2].toLowerCase().replace('boolean','tinyint(1)')})))];
   if(sql.includes("CONSTRAINT_TYPE = 'CHECK'"))return [statements.flatMap(s=>[...s.matchAll(/CONSTRAINT ([a-z_]+) CHECK/g)].map(m=>({name:m[1],enforced:'YES'})))];
   if(sql.includes('information_schema.TABLE_CONSTRAINTS'))return [statements.flatMap(s=>['PRIMARY',...[...s.matchAll(/(?:CONSTRAINT|UNIQUE KEY) ([a-z_]+)/g)].map(m=>m[1])].map(name=>({t:s.match(/^CREATE TABLE ([a-z_]+)/)[1],name})))];
   throw Error('Unexpected unit-only migration query');
@@ -59,6 +59,8 @@ test('unit-only runner applies every ordered migration and a second run repeats 
  const f=fake();const opts={through:latestMigration,apply:true,allowDdl:true};
  assert.equal((await runMigration(f.connection,config,opts)).applied,true);
  assert.deepEqual(f.state.history,all.map(m=>({version:m.version,checksum:m.checksum})));
+ const [columns]=await f.connection.execute('SELECT columns FROM information_schema.COLUMNS');
+ assert.equal(columns.find(c=>c.t==='private_files'&&c.c==='size_bytes')?.type,'int unsigned');
  const before=f.state.commands.filter(s=>/^CREATE |^ALTER |^INSERT INTO schema_migrations/.test(s)).length;
  assert.equal((await runMigration(f.connection,config,opts)).applied,false);
  assert.equal(f.state.commands.filter(s=>/^CREATE |^ALTER |^INSERT INTO schema_migrations/.test(s)).length,before);

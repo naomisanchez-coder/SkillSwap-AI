@@ -209,7 +209,7 @@ async function checkStructure(connection, database, migration) {
   ensure(checks.every((c) => c.enforced === 'YES'), 'MIGRATION_CHECK_DISABLED');
   for (const statement of migration.statements.filter((s) => s.startsWith('CREATE TABLE '))) {
     const table = statement.match(/^CREATE TABLE ([a-z_]+) /)[1];
-    const expected = [...statement.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT|BOOLEAN)/gm)];
+    const expected = [...statement.matchAll(/^  ([a-z_][a-z0-9_]*) (CHAR\(\d+\)|VARCHAR\(\d+\)|VARBINARY\(\d+\)|DATETIME\(6\)|SMALLINT UNSIGNED|INT UNSIGNED|INT|BOOLEAN)/gm)];
     const actual = columns.filter((c) => c.t === table);
     ensure(actual.length === expected.length, 'MIGRATION_COLUMNS_MISMATCH');
     expected.forEach((match, index) => {
