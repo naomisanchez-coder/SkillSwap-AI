@@ -1,12 +1,12 @@
 # Recuperación segura de contraseña — diseño 1.5B
 
-**Estado:** diseño, migración 004 y pruebas sin DDL preparados. No se aplicó 004, no existen endpoints activos y no se envió correo.
+**Estado:** migración 004 validada y aplicada exclusivamente en `skillswap_ai_test_auth`; endpoints implementados y probados con transporte sustituible. La base principal y SMTP real permanecen sin habilitar.
 
 ## Evidencia visual y decisión pendiente
 
 La referencia disponible de Figma confirma solamente la pantalla inicial con correo institucional y la acción “Comprobar correo”. No confirma una pantalla posterior de enlace, código ni nueva contraseña. El backend se prepara con el código numérico de seis dígitos propuesto, alineado con la infraestructura OTP existente, pero React debe confirmar las pantallas de introducción de código y nueva contraseña antes de integrar el flujo.
 
-## Política propuesta para aprobación
+## Política aprobada
 
 - Código criptográfico de seis dígitos, vigente 600 segundos y máximo cinco intentos.
 - Espera de 60 segundos entre solicitudes admitidas por correo.
@@ -20,7 +20,7 @@ La referencia disponible de Figma confirma solamente la pantalla inicial con cor
 - El proveedor SMTP debe aceptar el mensaje antes de la transición `SENDING → PENDING`; aceptación no demuestra entrega al buzón.
 - Cuentas elegibles: `ACTIVE`, verificadas y con rol `STUDENT` o `ADMIN`. La respuesta de solicitud no revela elegibilidad.
 
-Estas cifras son una propuesta reutilizada de OTP, no una afirmación de que Figma las defina. Deben ratificarse antes de aplicar 004.
+Estas cifras fueron ratificadas para el backend. No se atribuyen a Figma.
 
 ## Contratos preparados
 
@@ -42,7 +42,7 @@ Respuesta uniforme `202`:
 }
 ```
 
-El mismo endpoint gestiona reenvíos. Una cuenta inexistente recibe un identificador indistinguible y consume los mismos límites, sin crear desafío vinculado a usuario ni intentar enviar a destinatarios arbitrarios.
+El mismo endpoint gestiona reenvíos. Una cuenta inexistente recibe un identificador indistinguible y consume los mismos límites, sin crear desafío vinculado a usuario ni intentar enviar a destinatarios arbitrarios. React debe enviar `Content-Type: application/json`, `X-CSRF-Protection: 1` y un origen CORS aprobado.
 
 ### `POST /api/auth/password-recovery/reset`
 
@@ -63,7 +63,7 @@ Respuesta `200`:
 { "status": "password_updated", "nextAction": "login" }
 ```
 
-No se propone un endpoint separado para “validar código”: código y nueva contraseña se consumen atómicamente, reduciendo estados intermedios y oráculos. Los códigos incorrectos, vencidos, consumidos o ajenos responden con el futuro error público uniforme `RECOVERY_INVALID`.
+No existe un endpoint separado para “validar código”: código y nueva contraseña se consumen atómicamente, reduciendo estados intermedios y oráculos. Los códigos incorrectos, vencidos, consumidos o ajenos responden con el error público uniforme `422 RECOVERY_INVALID`.
 
 ## Transacción de cambio
 
@@ -71,16 +71,22 @@ El hash scrypt de la nueva contraseña se calcula antes de abrir la transacción
 
 La notificación de contraseña cambiada ocurre después del commit y no incluye contraseña, código ni identificadores. Un fallo SMTP no revierte el cambio ya confirmado; se registra únicamente un evento sanitizado.
 
-## Claves privadas futuras
+## Claves privadas para habilitación local
 
 - `PASSWORD_RECOVERY_HMAC_KEY_HEX`
 - `PASSWORD_RECOVERY_HMAC_KEY_VERSION`
 - `PASSWORD_RECOVERY_RATE_HMAC_KEY_HEX`
 
-Las dos claves deben tener 32 bytes, ser distintas entre sí y de OTP, login y CSRF, y permanecer estables. No se generaron ni escribieron claves reales en esta intervención.
+Las dos claves deben tener 32 bytes, ser distintas entre sí y de OTP, login y CSRF, y permanecer estables entre reinicios e instancias. Si falta una clave o no existe SMTP habilitado, los endpoints fallan cerrados con `503`; no se generan ni se versionan claves automáticamente.
+
+El servidor carga automáticamente `backend/.env`. Los archivos `.env.*.local` no se combinan automáticamente; para una prueba local controlada deben suministrarse explícitamente al proceso sin copiar secretos entre archivos.
 
 ## Permisos y aplicación futura
 
 La cuenta de migraciones necesitará `SELECT`, `INSERT`, `CREATE` y `REFERENCES` sobre el esquema exacto. No necesita `ALTER`, `DROP` ni permisos globales para 004. La cuenta de aplicación necesitará su DML existente sobre las dos tablas nuevas y sobre `users`/`auth_sessions` para completar la transacción.
 
-La validación real debe ejecutarse primero en `skillswap_ai_test_auth`. Esta documentación no autoriza `--apply` ni DDL.
+004 fue aplicada e inspeccionada en `skillswap_ai_test_auth` con el checksum `7de62a5ab27fc01dc59155908be5eb3fbe1fd73bb6c3f3a7327caddd67c8abba`. La segunda ejecución no repitió DDL. Su aplicación a `skillswap_ai` requiere autorización separada y validación previa de checksums, historial, cuenta y permisos.
+
+## Diferencia confirmada con Figma
+
+La evidencia local confirma la pantalla inicial “Recuperar contraseña” con correo y “Comprobar correo”. No se dispone localmente de evidencia verificable de las pantallas posteriores para introducir el código y la nueva contraseña. Los endpoints se mantienen listos para la integración en `develop`, sin afirmar ni inventar componentes visuales.

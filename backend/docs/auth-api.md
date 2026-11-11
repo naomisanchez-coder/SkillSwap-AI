@@ -1,6 +1,6 @@
 # Contratos de autenticación — SkillSwap AI
 
-**Registro, envío/verificación de correo y los endpoints `login`, `logout` y `me` están implementados.** La recuperación de contraseña tiene diseño y migración 004 preparados, pero sus endpoints no están activos. El perfil ampliado sigue fuera de alcance.
+**Registro, envío/verificación de correo, recuperación de contraseña y los endpoints `login`, `logout` y `me` están implementados.** Recuperación está validada en el esquema aislado; 004 y sus claves aún no están habilitadas en la base principal. El perfil ampliado sigue fuera de alcance.
 
 ## Fuentes y precedencia
 
@@ -306,11 +306,11 @@ El marcador CSRF se reemplazará en ejecución por 64 caracteres hexadecimales. 
 
 ## 7. Recuperación de contraseña
 
-**Estado: DISEÑO Y MIGRACIÓN PREPARADOS; NO IMPLEMENTADO NI APLICADO.**
+**Estado: IMPLEMENTADO Y VALIDADO EN MYSQL AISLADO; PENDIENTE EN BASE PRINCIPAL.**
 
-Contratos propuestos: `POST /api/auth/password-recovery/request` para solicitud/reenvío uniforme y `POST /api/auth/password-recovery/reset` para consumir código y establecer contraseña en una sola operación. No se añade un endpoint de validación independiente. Estados, límites, DTO, transacción, SMTP y pendiente visual están documentados en [password-recovery.md](password-recovery.md).
+Contratos: `POST /api/auth/password-recovery/request` para solicitud/reenvío uniforme y `POST /api/auth/password-recovery/reset` para consumir código y establecer contraseña en una sola operación. Ambos requieren JSON, `X-CSRF-Protection: 1` y origen aprobado cuando se incluye `Origin`. No existe un endpoint de validación independiente. Estados, límites, DTO, transacción, SMTP y diferencia visual están documentados en [password-recovery.md](password-recovery.md).
 
-La política propuesta usa seis dígitos, diez minutos, cinco intentos, 60 segundos de espera, cinco solicitudes por correo y veinte por IP en una hora. Requiere aprobación antes de ejecutar 004. No crea sesión, no concede créditos y revoca sesiones anteriores tras éxito.
+La política aprobada usa seis dígitos, diez minutos, cinco intentos, 60 segundos de espera, cinco solicitudes por correo y veinte por IP en una hora. No crea sesión, no concede créditos y revoca todas las sesiones anteriores tras éxito. La notificación se intenta después del commit y su fallo no revierte el cambio.
 
 ## 8. Consulta del perfil propio
 

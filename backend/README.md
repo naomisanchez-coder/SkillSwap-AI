@@ -383,6 +383,8 @@ Finalización 1.4A del 2026-11-10: 002 aplicada en la principal con autorizació
 
 El migrador reconoce 001→002→003 y 003 fue validada primero en `skillswap_ai_test_auth` y después aplicada de forma controlada en `skillswap_ai`, con segunda ejecución idempotente. Login, logout y `/api/auth/me` usan sesiones persistentes, expiración inactiva/absoluta, cookies HttpOnly y CSRF derivado con HMAC. Configuración y contratos: [session-auth.md](docs/session-auth.md).
 
-## Recuperación de contraseña 1.5B (preparación sin DDL)
+## Recuperación de contraseña 1.5B
 
-`004_password_recovery.sql` propone dos tablas independientes para límites pseudónimos EMAIL/IP y desafíos de recuperación. Conserva 001–003, no contiene `ALTER`, `DROP` ni datos demo y todavía no fue aplicada en ninguna base. Los contratos y decisiones pendientes están en [password-recovery.md](docs/password-recovery.md). No habilitar endpoints ni generar claves privadas antes de validar 004 en el esquema aislado.
+`004_password_recovery.sql` añade dos tablas independientes para límites pseudónimos EMAIL/IP y desafíos de recuperación. Conserva 001–003 y no contiene `ALTER`, `DROP` ni datos demo. Fue aplicada, inspeccionada y repetida de forma idempotente exclusivamente en `skillswap_ai_test_auth`; sigue pendiente en `skillswap_ai`.
+
+Los endpoints `POST /api/auth/password-recovery/request` y `POST /api/auth/password-recovery/reset` usan HMAC, scrypt, límites persistentes, estados `SENDING → PENDING`, consumo único y revocación de sesiones. Las pruebas usan transporte SMTP sustituible y datos sintéticos aislados. Configuración, contratos y diferencia visual pendiente de integración: [password-recovery.md](docs/password-recovery.md).
