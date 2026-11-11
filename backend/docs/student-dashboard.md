@@ -2,9 +2,9 @@
 
 ## Alcance confirmado
 
-El Figma Make describe `dashboard` como resumen, progreso, recomendaciones y próxima sesión, y `wallet` como saldos y movimientos académicos. También distingue saldo disponible y retenido. Este incremento conecta únicamente información respaldada por las tablas actuales: identidad académica, onboarding, saldo contable, cantidad de movimientos e historial.
+El Figma Make describe `dashboard` como resumen, progreso, recomendaciones y próxima sesión, y `wallet` como saldos y movimientos académicos. También distingue saldo disponible y retenido. El contrato evolucionó con la migración 007: ahora conecta identidad académica, onboarding, libro contable, sesiones próximas/completadas y progreso derivado exclusivamente de sesiones `COMPLETED`.
 
-Las recomendaciones, próximas sesiones y saldo retenido se posponen. No existen todavía tablas autorizadas para reservas, sesiones o retenciones; la API no devuelve elementos ficticios ni interpreta texto local del prototipo como datos reales.
+Las recomendaciones se consultan mediante su endpoint especializado. El dashboard no inventa próximas sesiones, valoraciones ni progreso cuando no existen registros reales.
 
 ## Fuente de verdad
 
@@ -32,13 +32,15 @@ No admite parámetros. Devuelve:
       "cycle": 3,
       "onboardingComplete": true
     },
-    "credits": { "balance": 20 },
+    "credits": { "total": 20, "held": 0, "available": 20, "movements": [] },
+    "sessions": { "upcoming": [], "completed": [] },
+    "progress": { "completedSessions": 0, "completedMinutes": 0, "reviewedSessions": 0 },
     "activity": { "creditTransactions": 1 }
   }
 }
 ```
 
-No incluye por ahora próximas sesiones, recomendaciones ni progreso derivado de mentorías.
+Los movimientos se limitan a los cinco más recientes. Las sesiones incluyen solo datos permitidos al propietario autenticado; las recomendaciones se obtienen por `GET /api/student/recommendations`.
 
 ### `GET /api/student/credits`
 
@@ -48,6 +50,9 @@ Admite `limit` entre 1 y 50, con valor predeterminado 20, y el `cursor` opaco de
 {
   "credits": {
     "balance": 20,
+    "total": 20,
+    "held": 0,
+    "available": 20,
     "totalTransactions": 1,
     "transactions": [
       {
@@ -65,9 +70,8 @@ Admite `limit` entre 1 y 50, con valor predeterminado 20, y el `cursor` opaco de
 
 `reason` es un código estable de negocio para que React presente una etiqueta localizada. La referencia es informativa y no autoriza operaciones. La ausencia de movimientos devuelve saldo cero, arreglo vacío y cursor nulo.
 
-## Dependencias pendientes
+## Dependencias actuales
 
-- Próximas sesiones requieren el modelo transaccional de reservas y sesiones.
-- Saldo retenido requiere una representación contable aprobada para holds, liberaciones y reembolsos.
-- Recomendaciones y progreso por mentorías requieren habilidades aprobadas, ofertas activas, disponibilidad y sesiones reales.
-- Mis habilidades y la solicitud de mentor requieren catálogo de habilidades, evidencias y flujo de aprobación; no deben reutilizar intereses libres como habilidades autorizadas.
+- El ranking completo requiere evidencia real para habilidad, nivel, disponibilidad y calidad; los componentes faltantes se informan como parciales y no se renormalizan.
+- Las acciones operativas del mentor y la revisión administrativa ya tienen servicios mínimos, pero sus paneles visuales pertenecen a una segunda etapa.
+- React debe consumir los saldos calculados por el backend; no debe reconstruir retenciones o reembolsos a partir del historial.
