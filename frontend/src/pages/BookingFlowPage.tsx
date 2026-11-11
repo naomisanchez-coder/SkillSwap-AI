@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button } from '../components/ui';
 import { PublicLogo } from '../components/PublicChrome';
@@ -27,7 +28,7 @@ function BookingSuccess({ session, onSessions, onHome }: { session: ConfirmedBoo
           <p className="mt-3 break-words text-[#60716C]">{bookingReceiptMessage(session)}</p>
           {session.adminResolution && <p className="mt-2 text-sm text-[#60716C]">Decisión del {new Date(session.adminResolution.at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}.</p>}
           <div className="mt-6 rounded-2xl bg-[#F7F7F2] p-5 text-left">
-            <p className="font-bold">{session.skill} con {session.mentorName}</p>
+            <p className="font-bold">{skillLabel(session.skill)} con {session.mentorName}</p>
             <p className="mt-2 text-sm text-[#60716C]">{formattedDate} · {formattedTime} · {session.duration} minutos</p>
             <p className="mt-1 text-sm text-[#60716C]">{session.credits} créditos {session.status === 'cancelled' ? 'devueltos' : session.status === 'completed' ? 'utilizados' : 'retenidos'} · Mentoría virtual</p>
             <div className="mt-2 text-[#60716C]"><MeetingLink session={session} /></div>
@@ -163,7 +164,7 @@ function BookingWizard({ initialContext, draft, service, onConfirmed, onBack, on
               <>
                 <div className="flex flex-wrap items-center gap-4 pb-5 border-b border-[#E2E8E0]">
                   <img src={mentor.image} alt={`Foto de ${mentor.name}`} className="w-16 h-16 rounded-2xl object-cover object-top" />
-                  <div><p className="font-bold text-lg">{mentor.name}</p><p className="text-sm text-[#60716C]">{mentor.skill} · {mentor.offer.topic} · {mentor.level}</p></div>
+                  <div><p className="font-bold text-lg">{mentor.name}</p><p className="text-sm text-[#60716C]">{skillLabel(mentor.skill)} · {skillLabel(mentor.offer.topic)} · {mentor.level}</p></div>
                   <Badge variant="success"><Icons.Check s={12} /> Aprobada</Badge>
                 </div>
                 {!enough && <div className="mt-5 rounded-xl bg-[#FDECEC] p-4 text-sm text-[#A43838]"><strong>Te faltan {credits - balance} créditos.</strong><Button full className="mt-3" onClick={onBuyCredits}>Ver mis créditos</Button></div>}
@@ -178,7 +179,7 @@ function BookingWizard({ initialContext, draft, service, onConfirmed, onBack, on
             <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#6B5836]">Resumen</p>
             <div className="mt-4 flex items-center gap-3">
               <img src={mentor.image} alt="" className="w-12 h-12 rounded-xl object-cover object-top" />
-              <div><p className="font-bold">{mentor.name}</p><p className="text-xs text-[#60716C]">{mentor.skill}</p></div>
+              <div><p className="font-bold">{mentor.name}</p><p className="text-xs text-[#60716C]">{skillLabel(mentor.skill)}</p></div>
             </div>
             <dl className="mt-5 divide-y divide-[#E0D1B7] text-sm">
               {[['Fecha', formattedDate], ['Hora', formattedTime], ['Duración', `${duration} minutos`], ['Créditos', String(credits)], ['Saldo disponible', String(balance)], ['Saldo al confirmar', context.serverManaged ? 'Lo confirma el servidor' : String(Math.max(0, balance - credits))]].map(([label, value]) => <div key={label} className="py-3 flex justify-between gap-4"><dt className="text-[#60716C]">{label}</dt><dd className="font-bold text-right">{value}</dd></div>)}

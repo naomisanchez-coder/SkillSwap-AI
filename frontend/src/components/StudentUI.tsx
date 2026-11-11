@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import type { Mentor } from '../data/mentors';
 import type { MentorCompatibility } from '../data/recommendations';
 import { Badge, Button } from './ui';
@@ -87,7 +88,7 @@ export function MentorCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-bold text-[#182B2A]">{mentor.name}</h3>
-            <p className="mt-1 text-sm text-[#60716C]">{mentor.skill} · {mentor.level}</p>
+            <p className="mt-1 text-sm text-[#60716C]">{skillLabel(mentor.skill)} · {mentor.level}</p>
           </div>
           {compatibility && <Badge variant="primary">{compatibility.label}</Badge>}
         </div>

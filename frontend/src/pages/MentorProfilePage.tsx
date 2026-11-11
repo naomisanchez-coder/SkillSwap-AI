@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import { Badge, Button } from '../components/ui';
 import { Icons } from '../components/icons';
 import { RecommendationReasons } from '../components/StudentUI';
@@ -50,7 +51,7 @@ function MentorProfileContent({ profile, mentor, communityRating, reviews, onBac
                 <Badge variant="success"><Icons.Check s={12} /> Habilidad aprobada</Badge>
               </div>
               <h1 ref={heading} tabIndex={-1} className="mt-4 break-words text-3xl md:text-4xl font-extrabold">{mentor.name}</h1>
-              <p className="mt-2 text-lg text-[#52645F]">{mentor.skill} · Nivel {mentor.level.toLowerCase()}</p>
+              <p className="mt-2 text-lg text-[#52645F]">{skillLabel(mentor.skill)} · Nivel {mentor.level.toLowerCase()}</p>
               <p className="mt-4 max-w-2xl leading-7 text-[#52645F]">{mentor.bio}</p>
             </div>
             <div className="rounded-[18px] bg-white p-5 md:min-w-52 md:max-w-64">
@@ -65,10 +66,10 @@ function MentorProfileContent({ profile, mentor, communityRating, reviews, onBac
           <div className="space-y-6">
             <section className="rounded-[20px] border border-[#E2E8E0] bg-white p-6">
               <h2 className="text-xl font-bold">Qué puede enseñarte</h2>
-              <p className="mt-3 font-bold text-[#334A46]">{mentor.offer.topic}</p>
+              <p className="mt-3 font-bold text-[#334A46]">{skillLabel(mentor.offer.topic)}</p>
               <p className="mt-2 leading-7 text-[#60716C]">{mentor.offer.description}</p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {(mentor.topics?.length ? mentor.topics : [mentor.skill]).map(topic => <span key={topic} className="rounded-full bg-[#F2E8D7] px-3 py-2 text-sm font-semibold text-[#493D29]">{topic}</span>)}
+                {(mentor.topics?.length ? mentor.topics : [mentor.skill]).map(topic => <span key={topic} className="rounded-full bg-[#F2E8D7] px-3 py-2 text-sm font-semibold text-[#493D29]">{skillLabel(topic)}</span>)}
               </div>
               {mentor.portfolio && /^https?:\/\//i.test(mentor.portfolio) && (
                 <a href={mentor.portfolio} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#24685F] underline underline-offset-4">Ver portafolio público <Icons.ArrowRight s={14} /></a>

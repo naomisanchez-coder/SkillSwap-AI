@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import { Badge } from '../components/ui';
 import { Icons } from '../components/icons';
 import { EmptyState, StatCard } from '../components/StudentUI';
@@ -17,7 +18,7 @@ const movementLabels = {
 export default function CreditsHubPage({ state }: { state: BookingLedger }) {
   const movements = state.movements
     .filter(item => (!item.userId || item.userId === state.studentId))
-    .map(item => ({ ...item, date: new Date(item.createdAt).toLocaleString('es-PE', { timeZone: 'America/Lima' }), concept: item.type === 'initial_grant' ? 'Créditos iniciales por verificación' : `${movementLabels[item.type]} de ${state.sessions.find(session => session.id === item.sessionId)?.skill ?? 'sesión'}` }));
+    .map(item => ({ ...item, date: new Date(item.createdAt).toLocaleString('es-PE', { timeZone: 'America/Lima' }), concept: item.type === 'initial_grant' ? 'Créditos iniciales por verificación' : `${movementLabels[item.type]} de ${skillLabel(state.sessions.find(session => session.id === item.sessionId)?.skill ?? 'sesión')}` }));
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus(); }, []);
   const stats: Array<[string, number, typeof Icons.Coin]> = [

@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../components/Button';
 import { FieldError } from '../components/AuthFields';
@@ -153,7 +154,7 @@ function ProfileWizard({ initial, service, onComplete, startEditing, skillOption
         {step === 1 && <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {skillOptions.map(skill => <label key={skill} className={`${choiceStyle(preferences.interests.includes(skill))} flex min-h-16 items-center justify-center text-center break-words`}>
             <input className="sr-only" type="checkbox" name="interests" value={skill} checked={preferences.interests.includes(skill)} onChange={() => change({ interests: preferences.interests.includes(skill) ? preferences.interests.filter(item => item !== skill) : [...preferences.interests, skill] })} />
-            <span>{skill}</span>{preferences.interests.includes(skill) && <span aria-hidden="true" className="absolute right-1 top-1"><Icons.Check s={12} /></span>}
+            <span>{skillLabel(skill)}</span>{preferences.interests.includes(skill) && <span aria-hidden="true" className="absolute right-1 top-1"><Icons.Check s={12} /></span>}
           </label>)}
         </div>}
         {step === 2 && <div className="grid gap-4 md:grid-cols-3">

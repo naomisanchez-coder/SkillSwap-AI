@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import { IntegrationContext } from '../services/integrationContext';
 import type { MentorRecommendation } from '../data/recommendations';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -123,7 +124,7 @@ export default function StudentDashboardPage({
           <div className="rounded-2xl bg-[#E8F4FF] p-5"><p className="text-3xl font-extrabold text-[#176B5B]">{learningHours.toLocaleString('es-PE', { maximumFractionDigits: 1 })}</p><p className="mt-1 text-sm text-[#52645F]">Horas de aprendizaje</p></div>
           <div className="rounded-2xl bg-[#FFF4D6] p-5"><p className="text-3xl font-extrabold text-[#176B5B]">{exploredSkills.length}</p><p className="mt-1 text-sm text-[#52645F]">Habilidades exploradas</p></div>
         </div>
-        {exploredSkills.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{exploredSkills.map(skill => <span key={skill} className="rounded-full border border-[#E4EBE7] bg-[#FAFBF8] px-3 py-1.5 text-xs font-semibold text-[#52645F]">{skill}</span>)}</div>}
+        {exploredSkills.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{exploredSkills.map(skill => <span key={skill} className="rounded-full border border-[#E4EBE7] bg-[#FAFBF8] px-3 py-1.5 text-xs font-semibold text-[#52645F]">{skillLabel(skill)}</span>)}</div>}
       </section>
 
       <section className="mt-8 rounded-[24px] bg-[#182B2A] text-white p-7 md:p-9 grid lg:grid-cols-[1fr_auto] gap-8 items-center">

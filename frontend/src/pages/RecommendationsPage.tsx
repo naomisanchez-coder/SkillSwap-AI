@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import { IntegrationContext } from '../services/integrationContext';
 import type { MentorRecommendation } from '../data/recommendations';
 import { useContext, useEffect, useMemo, useState, useRef } from 'react';
@@ -89,7 +90,7 @@ export default function RecommendationsPage({
         <section className="mt-6 rounded-[20px] border border-[#E2E8E0] bg-white p-5 md:p-6 flex flex-col lg:flex-row lg:items-center gap-5">
           <div className="flex-1 grid sm:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
             {[
-              ['Quiero aprender', profile.interests[0] || 'Sin definir'],
+              ['Quiero aprender', skillLabel(profile.interests[0] || 'Sin definir')],
               ['Nivel actual', profile.level || 'Sin definir'],
               ['Disponibilidad', profile.availability || 'Sin definir'],
               ['Modalidad', 'Virtual'],
@@ -176,7 +177,7 @@ function FilterSelect({
     <label className="text-xs font-semibold text-[#60716C]">
       <span className="sr-only">{label}</span>
       <select aria-label={label} value={value} onChange={event => onChange(event.target.value)} className="w-full h-11 rounded-xl border border-[#E2E8E0] bg-white px-3 text-sm text-[#334A46] focus:outline-none focus:ring-2 focus:ring-[#DCEBDD] focus:border-[#34877A]">
-        {options.map(option => <option key={option}>{option}</option>)}
+        {options.map(option => <option key={option} value={option}>{skillLabel(option)}</option>)}
       </select>
     </label>
   );

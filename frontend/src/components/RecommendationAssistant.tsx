@@ -1,3 +1,4 @@
+import { skillLabel } from '../data/skillLabels';
 import { IntegrationContext, type ChatMessage } from '../services/integrationContext';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Mentor } from '../data/mentors';
@@ -222,7 +223,7 @@ export function RecommendationAssistant({
               )}
 
               {step === 'level' && (
-                <Question title="¿Cuál es tu nivel actual?" description={`Buscaremos una persona que pueda ayudarte con ${skill}.`}>
+                <Question title="¿Cuál es tu nivel actual?" description={`Buscaremos una persona que pueda ayudarte con ${skillLabel(skill)}.`}>
                   {levelOptions.map(([value, label]) => <Button key={value} full variant={level === value ? 'secondary' : 'outline'} className="justify-start" onClick={() => { setLevel(value); setStep('availability'); }}>{label}</Button>)}
                 </Question>
               )}
@@ -254,7 +255,7 @@ export function RecommendationAssistant({
                       <article key={mentor.id} className="rounded-2xl border border-[#E2E8E0] p-4">
                         <div className="flex flex-wrap items-center gap-3">
                           <img src={mentor.image} alt={`Foto de ${mentor.name}`} className="w-12 h-12 rounded-xl object-cover object-top" />
-                          <div className="min-w-0 flex-1"><p className="font-bold text-[#182B2A] truncate">{mentor.name}</p><p className="text-xs text-[#60716C]">{mentor.skill} · {mentor.level}</p></div>
+                          <div className="min-w-0 flex-1"><p className="font-bold text-[#182B2A] truncate">{mentor.name}</p><p className="text-xs text-[#60716C]">{skillLabel(mentor.skill)} · {mentor.level}</p></div>
                           <Badge variant="primary">{compatibility.label}</Badge>
                         </div>
                         <ul className="mt-3 space-y-1">{compatibility.reasons.slice(0, 2).map(reason => <li key={reason} className="text-xs leading-5 text-[#60716C] flex gap-2"><Icons.Check s={12} c="mt-1 text-[#34877A]" />{reason}</li>)}</ul>

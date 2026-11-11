@@ -1,0 +1,60 @@
+{
+  "version": "1.1.0",
+  "scope": "DEMO_ONLY",
+  "skills": [
+    {
+      "id": "11111111-1111-4111-8111-111111111101",
+      "code": "demo-python-programming",
+      "name": "Programación en Python (demostración)",
+      "category": "Catálogo de demostración"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111102",
+      "code": "demo-interface-design",
+      "name": "Diseño de interfaces (demostración)",
+      "category": "Catálogo de demostración"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111103",
+      "code": "demo-web-development",
+      "name": "Desarrollo web (demostración)",
+      "category": "Catálogo de demostración"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111104",
+      "code": "demo-sql",
+      "name": "SQL",
+      "category": "Bases de datos"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111105",
+      "code": "demo-javascript",
+      "name": "JavaScript",
+      "category": "Programación"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111106",
+      "code": "demo-git",
+      "name": "Git y control de versiones",
+      "category": "Herramientas de desarrollo"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111107",
+      "code": "demo-linux",
+      "name": "Fundamentos de Linux",
+      "category": "Sistemas y redes"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111108",
+      "code": "demo-networks",
+      "name": "Redes de computadoras",
+      "category": "Sistemas y redes"
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111109",
+      "code": "demo-power-bi",
+      "name": "Power BI",
+      "category": "Análisis de datos"
+    }
+  ]
+}
