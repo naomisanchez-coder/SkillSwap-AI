@@ -357,7 +357,7 @@ Los valores de estado y saldo son ilustrativos: se consultan de la fuente de ver
 | Contraseñas | Aprobado: 8–128 puntos de código, Unicode bien formado, sin truncar, hasta 512 bytes |
 | Catálogo | Aprobado: selección de 14 carreras, claves estables versionadas y ciclos 1–6 como configuración inicial; ver academic-catalog.md |
 | Términos y privacidad | Iniciales 1.0.0 aprobados para prototipo; completar responsable/contacto y revisión jurídica antes del servicio público |
-| Expiración y Recordarme | Definir inactividad, máximo absoluto, persistencia y revocación de sesiones |
+| Expiración y Recordarme | Aprobado: 30 minutos/8 horas sin recordar; 7 días/30 días con cookie persistente; la inactividad nunca supera el máximo absoluto |
 | Correos duplicados | Aprobado: 409 EMAIL_ALREADY_REGISTERED; unicidad y concurrencia verificadas en MySQL |
 | SMTP y remitente | Seleccionar proveedor y remitente autorizado, configurar autenticación de dominio y probar recepción institucional real |
 | Envío inicial y navegación | Acordar envío automático/solicitado, recuperación ante respuesta perdida y destino tras verificar |
@@ -365,6 +365,10 @@ Los valores de estado y saldo son ilustrativos: se consultan de la fuente de ver
 | Administradores | Definir creación segura fuera del registro, correo permitido, verificación y DTO sin datos académicos ficticios |
 | Cuenta de migraciones | Configurar cuenta separada con privilegios mínimos de esquema, secretos externos, scripts reproducibles y registro de versiones; nunca dar DDL a `skillswap_app` |
 | Topología de despliegue | Acordar hosts, HTTPS, proxy y política de cookies sin relajar controles de producción |
+
+### Preparación de límites de login 1.5
+
+La migración 003 y sus componentes están preparados, no aplicados. La admisión contará todos los intentos antes de consultar cuentas: cinco por HMAC de correo y veinte por HMAC de IP en ventanas fijas de 15 minutos. Los rechazos no desplazan la expiración. `LOGIN_RATE_HMAC_KEY_HEX` debe ser privada, independiente y estable; `TRUST_PROXY_HOPS=0` no confía en cabeceras de proxy. Ver [diseño y aplicación futura](login-rate-limits.md). No declarar login implementado hasta validar 003 realmente en MySQL aislado.
 
 ## Compatibilidad y exclusiones
 
