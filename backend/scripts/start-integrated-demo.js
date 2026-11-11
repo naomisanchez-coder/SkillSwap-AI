@@ -20,6 +20,17 @@ export function mergeDemoValues(target, values) {
   return target;
 }
 
+export const localAiOverrideFile = new URL('../.env.ai.override.local', import.meta.url);
+export async function readLocalAiOverride(path = localAiOverrideFile) {
+  try {
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0) throw new Error('El override de IA debe ser un archivo privado 0600.');
+    const values = dotenv.parse(await readFile(path));
+    if (Object.keys(values).some(key => !['AI_MODEL', 'AI_TIMEOUT_MS'].includes(key))) throw new Error('El override local solo admite modelo y timeout de IA.');
+    return values;
+  } catch (error) { if (error.code === 'ENOENT') return {}; throw error; }
+}
+
 // Solo lectura de la configuración privada existente; nunca copiar claves a React.
 export async function readDemoConfig(source, { smtp = false } = {}) {
   const config = {};
@@ -36,7 +47,7 @@ export async function readDemoConfig(source, { smtp = false } = {}) {
   if (!['localhost', '127.0.0.1', '::1'].includes(config.DB_HOST)) throw new Error('La base debe ser local.');
   const storage = config.PRIVATE_STORAGE_ROOT;
   if (!storage || !isAbsolute(storage) || !(await lstat(storage)).isDirectory() || (await lstat(storage)).isSymbolicLink() || ((await lstat(storage)).mode & 0o077) !== 0) throw new Error('Falta el almacenamiento demo existente; no se crea ni sustituye automáticamente.');
-  const result = { ...applyDemoAiConfig(config, privateAi ?? {}), PRIVATE_STORAGE_READ_ONLY_ROOT: storage, PRIVATE_STORAGE_ROOT: resolve(dirname(fileURLToPath(import.meta.url)), '../.private-storage/demo'), NODE_ENV: 'development', HOST: '127.0.0.1', CORS_ORIGIN: 'http://localhost:5173', SMTP_ENABLED: smtp ? 'true' : 'false' };
+  const result = { ...applyDemoAiConfig(config, privateAi ?? {}, await readLocalAiOverride()), PRIVATE_STORAGE_READ_ONLY_ROOT: storage, PRIVATE_STORAGE_ROOT: resolve(dirname(fileURLToPath(import.meta.url)), '../.private-storage/demo'), NODE_ENV: 'development', HOST: '127.0.0.1', CORS_ORIGIN: 'http://localhost:5173', SMTP_ENABLED: smtp ? 'true' : 'false' };
   validateEnv(result); readOtpConfig(result); readLoginSecurityConfig(result); readSessionSecurityConfig(result); readPasswordRecoveryConfig(result); readAiConfig(result);
   if (smtp) readEmailConfig(result);
   return result;
