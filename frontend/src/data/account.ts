@@ -27,8 +27,8 @@ export function isHttpsPortfolio(value: string): boolean {
   if (!value.trim()) return true;
   try { const url = new URL(value.trim()); return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password && !/\s/.test(value.trim()); } catch { return false; }
 }
-export function normalizeApplication(value: ApplicationFields): ApplicationFields {
-  const skill = typeof value.skill === 'string' ? ACTIVE_SKILLS.find(item => item.name.toLowerCase() === value.skill.trim().toLowerCase())?.name : undefined;
+export function normalizeApplication(value: ApplicationFields, availableSkills = ACTIVE_SKILLS.map(item => item.name)): ApplicationFields {
+  const skill = typeof value.skill === 'string' ? availableSkills.find(name => name.toLowerCase() === value.skill.trim().toLowerCase()) : undefined;
   if (!skill) throw new AccountError('validation', 'Selecciona una habilidad vigente del catálogo.');
   if (!['Intermedio', 'Avanzado'].includes(value.level)) throw new AccountError('validation', 'Selecciona un nivel Intermedio o Avanzado.');
   if (typeof value.experience !== 'string' || !value.experience.trim() || value.experience.trim().length > 2000) throw new AccountError('validation', 'Describe tu experiencia en un máximo de 2000 caracteres.');

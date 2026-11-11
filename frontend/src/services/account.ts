@@ -2,6 +2,8 @@ import type { AccountData, ApplicationCommand, PersonalProfile } from '../data/a
 
 /** Contrato sustituible por la API; los componentes no acceden a IndexedDB ni localStorage. */
 export interface AccountService {
+  getApplicationRequirements?(): Promise<{ available: boolean }>;
+  replaceCertificate?(applicationId: string, file: File): Promise<AccountData>;
   deletePhoto?(): Promise<AccountData>;
   getSkillOptions?(): Promise<string[]>;
   getAccount(): Promise<AccountData>;
