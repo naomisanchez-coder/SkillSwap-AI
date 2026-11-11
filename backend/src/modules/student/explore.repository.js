@@ -12,12 +12,15 @@ function publicMentor(row, skills) {
     career: row.career, cycle: Number(row.cycle), bio: row.bio ?? null, skills };
 }
 
-async function approvedSkills(executor, userIds) {
+async function offeredSkills(executor, userIds) {
   if (!userIds.length) return new Map();
   const placeholders = userIds.map(() => '?').join(',');
-  const [rows] = await executor.execute(`SELECT ma.user_id,s.id,s.code,s.name,s.category
-    FROM mentor_applications ma JOIN skill_catalog s ON s.id=ma.skill_id AND s.is_active=TRUE
-    WHERE ma.status='APPROVED' AND ma.user_id IN (${placeholders}) ORDER BY ma.user_id,s.name,s.id`, userIds);
+  const [rows] = await executor.execute(`SELECT mo.mentor_user_id user_id,s.id,s.code,s.name,s.category
+    FROM mentor_offers mo JOIN mentor_applications ma
+      ON ma.user_id=mo.mentor_user_id AND ma.skill_id=mo.skill_id AND ma.status='APPROVED'
+    JOIN skill_catalog s ON s.id=mo.skill_id AND s.is_active=TRUE
+    WHERE mo.status='ACTIVE' AND mo.mentor_user_id IN (${placeholders})
+    ORDER BY mo.mentor_user_id,s.name,s.id`, userIds);
   const result = new Map(userIds.map(id => [id, []]));
   for (const row of rows) result.get(row.user_id)?.push({ id: row.id, code: row.code,
     name: row.name, category: row.category ?? null });
@@ -53,15 +56,18 @@ export function createExploreRepository(database) {
     },
     async mentors(viewerId, page) {
       const values = [viewerId];
-      let where = `${mentorBase} AND u.id<>? AND EXISTS (SELECT 1 FROM mentor_applications ma
-        JOIN skill_catalog sx ON sx.id=ma.skill_id AND sx.is_active=TRUE
-        WHERE ma.user_id=u.id AND ma.status='APPROVED'`;
-      if (page.skillId) { where += ' AND sx.id=?'; values.push(page.skillId); }
+      let where = `${mentorBase} AND u.id<>? AND EXISTS (SELECT 1 FROM mentor_offers mo
+        JOIN mentor_applications ma ON ma.user_id=mo.mentor_user_id AND ma.skill_id=mo.skill_id AND ma.status='APPROVED'
+        JOIN skill_catalog sx ON sx.id=mo.skill_id AND sx.is_active=TRUE
+        WHERE mo.mentor_user_id=u.id AND mo.status='ACTIVE'`;
+      if (page.skillId) { where += ' AND mo.skill_id=?'; values.push(page.skillId); }
       if (page.category) { where += ' AND sx.category=?'; values.push(page.category); }
       where += ')';
       if (page.q) { where += ` AND (CONCAT_WS(' ',u.first_name,u.last_name) LIKE ? ESCAPE '=' OR EXISTS
-        (SELECT 1 FROM mentor_applications mq JOIN skill_catalog sq ON sq.id=mq.skill_id
-          WHERE mq.user_id=u.id AND mq.status='APPROVED' AND sq.is_active=TRUE AND sq.name LIKE ? ESCAPE '='))`;
+        (SELECT 1 FROM mentor_offers oq JOIN mentor_applications mq
+          ON mq.user_id=oq.mentor_user_id AND mq.skill_id=oq.skill_id AND mq.status='APPROVED'
+          JOIN skill_catalog sq ON sq.id=oq.skill_id AND sq.is_active=TRUE
+          WHERE oq.mentor_user_id=u.id AND oq.status='ACTIVE' AND sq.name LIKE ? ESCAPE '='))`;
         values.push(pattern(page.q), pattern(page.q)); }
       const sort = "CONCAT_WS(' ',u.first_name,u.last_name)";
       if (page.cursor) { where += ` AND (${sort}>? OR (${sort}=? AND u.id>?))`;
@@ -71,18 +77,19 @@ export function createExploreRepository(database) {
         ${sort} sort_name ${where} ORDER BY sort_name,u.id LIMIT ?`, values);
       const hasMore = rows.length > page.limit;
       const selected = rows.slice(0, page.limit);
-      const skills = await approvedSkills(database, selected.map(row => row.id));
+      const skills = await offeredSkills(database, selected.map(row => row.id));
       return { mentors: selected.map(row => publicMentor(row, skills.get(row.id) ?? [])),
         pagination: { limit: page.limit, nextCursor: hasMore
           ? encodeCursor(selected.at(-1).sort_name, selected.at(-1).id) : null } };
     },
     async mentor(viewerId, mentorId) {
       const [rows] = await database.execute(`SELECT u.id,u.first_name,u.last_name,c.name career,p.cycle,d.bio
-        ${mentorBase} AND u.id<>? AND u.id=? AND EXISTS (SELECT 1 FROM mentor_applications ma
-          JOIN skill_catalog s ON s.id=ma.skill_id AND s.is_active=TRUE
-          WHERE ma.user_id=u.id AND ma.status='APPROVED')`, [viewerId, mentorId]);
+        ${mentorBase} AND u.id<>? AND u.id=? AND EXISTS (SELECT 1 FROM mentor_offers mo
+          JOIN mentor_applications ma ON ma.user_id=mo.mentor_user_id AND ma.skill_id=mo.skill_id AND ma.status='APPROVED'
+          JOIN skill_catalog s ON s.id=mo.skill_id AND s.is_active=TRUE
+          WHERE mo.mentor_user_id=u.id AND mo.status='ACTIVE')`, [viewerId, mentorId]);
       if (rows.length !== 1) throw new PublicError('FORBIDDEN');
-      const skills = await approvedSkills(database, [mentorId]);
+      const skills = await offeredSkills(database, [mentorId]);
       return publicMentor(rows[0], skills.get(mentorId) ?? []);
     },
     async recommendationInputs(userId) {
@@ -93,10 +100,35 @@ export function createExploreRepository(database) {
       const ids = learning.map(skill => skill.id);
       const placeholders = ids.map(() => '?').join(',');
       const [rows] = await database.execute(`SELECT DISTINCT u.id,u.first_name,u.last_name,c.name career,p.cycle,d.bio
-        ${mentorBase} AND u.id<>? AND EXISTS (SELECT 1 FROM mentor_applications ma
-          WHERE ma.user_id=u.id AND ma.status='APPROVED' AND ma.skill_id IN (${placeholders}))`, [userId, ...ids]);
-      const skills = await approvedSkills(database, rows.map(row => row.id));
-      return { learning, mentors: rows.map(row => publicMentor(row, skills.get(row.id) ?? [])) };
+        ${mentorBase} AND u.id<>? AND EXISTS (SELECT 1 FROM mentor_offers mo JOIN mentor_applications ma
+          ON ma.user_id=mo.mentor_user_id AND ma.skill_id=mo.skill_id AND ma.status='APPROVED'
+          WHERE mo.mentor_user_id=u.id AND mo.status='ACTIVE' AND mo.skill_id IN (${placeholders}))`, [userId, ...ids]);
+      const mentorIds = rows.map(row => row.id);
+      const skills = await offeredSkills(database, mentorIds);
+      if (!mentorIds.length) return { learning, mentors: [] };
+      const mentorPlaceholders = mentorIds.map(() => '?').join(',');
+      const [[clock]] = await database.execute('SELECT UTC_TIMESTAMP(6) now', []);
+      const [slots] = await database.execute(`SELECT mentor_user_id,weekday,
+        TIME_FORMAT(start_time,'%H:%i') start,TIME_FORMAT(end_time,'%H:%i') end
+        FROM mentor_availability WHERE is_active=TRUE AND mentor_user_id IN (${mentorPlaceholders})
+        ORDER BY mentor_user_id,weekday,start_time,end_time,id`, mentorIds);
+      const [busy] = await database.execute(`SELECT mentor_user_id,starts_at,ends_at FROM mentoring_sessions
+        WHERE mentor_user_id IN (${mentorPlaceholders}) AND status IN ('UPCOMING','ACTIVE','AWAITING_VALIDATION')
+        AND ends_at>UTC_TIMESTAMP(6) AND starts_at<DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 8 DAY)
+        ORDER BY mentor_user_id,starts_at,id`, mentorIds);
+      const [quality] = await database.execute(`SELECT ms.mentor_user_id,COUNT(*) completed_sessions,
+        COUNT(sr.session_id) reviewed_sessions,AVG(sr.rating) average_rating
+        FROM mentoring_sessions ms LEFT JOIN session_reviews sr ON sr.session_id=ms.id
+        WHERE ms.mentor_user_id IN (${mentorPlaceholders}) AND ms.status='COMPLETED'
+        GROUP BY ms.mentor_user_id ORDER BY ms.mentor_user_id`, mentorIds);
+      const byMentor = (values, field = 'mentor_user_id') => values.reduce((map, value) => {
+        const list = map.get(value[field]) ?? []; list.push(value); map.set(value[field], list); return map;
+      }, new Map());
+      const slotMap = byMentor(slots), busyMap = byMentor(busy);
+      const qualityMap = new Map(quality.map(value => [value.mentor_user_id, value]));
+      return { learning, mentors: rows.map(row => ({ ...publicMentor(row, skills.get(row.id) ?? []),
+        availability: { now: clock.now, slots: slotMap.get(row.id) ?? [], busy: busyMap.get(row.id) ?? [] },
+        quality: qualityMap.get(row.id) ?? null })) };
     },
   });
 }

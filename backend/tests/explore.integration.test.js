@@ -32,7 +32,8 @@ test('real isolated explore exposes approved mentors and deterministic partial r
     user: process.env.DATABASE_TEST_USER, password: process.env.DATABASE_TEST_PASSWORD });
   const suffix = randomBytes(8).toString('hex');
   const ids = { viewer: randomUUID(), mentorA: randomUUID(), mentorB: randomUUID(), pending: randomUUID(),
-    admin: randomUUID(), career: randomUUID(), skills: [randomUUID(), randomUUID(), randomUUID()] };
+    admin: randomUUID(), career: randomUUID(), skills: [randomUUID(), randomUUID(), randomUUID()],
+    offers: [randomUUID(), randomUUID(), randomUUID()], completed: randomUUID() };
   const protection = createSessionProtection(randomBytes(32).toString('hex'));
   const sessionRepository = createSessionRepository(database, sessionPolicy);
   const sessionService = createSessionService(sessionRepository, protection);
@@ -76,6 +77,22 @@ test('real isolated explore exposes approved mentors and deterministic partial r
       await approved(ids.mentorA, ids.skills[0]);
       await approved(ids.mentorB, ids.skills[0]);
       await approved(ids.mentorB, ids.skills[1]);
+      await tx.execute(`INSERT INTO mentor_offers (id,mentor_user_id,skill_id,status) VALUES
+        (?,?,?,'ACTIVE'),(?,?,?,'ACTIVE'),(?,?,?,'ACTIVE')`,
+      [ids.offers[0], ids.mentorA, ids.skills[0], ids.offers[1], ids.mentorB, ids.skills[0],
+        ids.offers[2], ids.mentorB, ids.skills[1]]);
+      await tx.execute(`INSERT INTO mentor_availability (id,mentor_user_id,weekday,start_time,end_time) VALUES
+        (?,?,MOD(WEEKDAY(DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 5 HOUR))+1,7)+1,'00:00:00','23:59:00'),
+        (?,?,MOD(WEEKDAY(DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 5 HOUR))+1,7)+1,'00:00:00','23:59:00')`,
+      [randomUUID(), ids.mentorA, randomUUID(), ids.mentorB]);
+      await tx.execute(`INSERT INTO mentoring_sessions
+        (id,request_key,student_user_id,mentor_user_id,offer_id,starts_at,ends_at,duration_minutes,credit_cost,status,
+         started_at,performed_at,validated_at) VALUES (?,?,?,?,?,DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 2 HOUR),
+         DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 90 MINUTE),30,5,'COMPLETED',DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 2 HOUR),
+         DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 90 MINUTE),DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 90 MINUTE))`,
+      [ids.completed, randomUUID(), ids.viewer, ids.mentorB, ids.offers[1]]);
+      await tx.execute(`INSERT INTO session_reviews (session_id,reviewer_user_id,mentor_user_id,rating,comment)
+        VALUES (?,?,?,?,?)`, [ids.completed, ids.viewer, ids.mentorB, 5, 'Valoración sintética aislada']);
       await tx.execute("INSERT INTO mentor_applications (id,user_id,skill_id,status) VALUES (?,?,?,'PENDING')",
         [randomUUID(), ids.pending, ids.skills[2]]);
     });
@@ -130,9 +147,11 @@ test('real isolated explore exposes approved mentors and deterministic partial r
     assert.equal(recommendations.rankingStatus, 'PARTIAL');
     assert.deepEqual(recommendations.weights, { skill: 45, level: 20, availability: 25, quality: 10 });
     assert.deepEqual(recommendations.recommendations.map(item => [item.mentor.id, item.score]),
-      [[ids.mentorB, 45], [ids.mentorA, 22.5]]);
-    assert.ok(recommendations.recommendations.every(item => item.components.availability.available === false &&
-      item.components.quality.available === false && item.components.level.available === false));
+      [[ids.mentorB, 80], [ids.mentorA, 47.5]]);
+    assert.ok(recommendations.recommendations.every(item => item.components.availability.available === true &&
+      item.components.level.available === false));
+    assert.equal(recommendations.recommendations[0].components.quality.available, true);
+    assert.equal(recommendations.recommendations[1].components.quality.available, false);
     const empty = await (await fetch(`${started.base}/api/student/recommendations`,
       { headers: auth(sessions.pending) })).json();
     assert.deepEqual({ status: empty.rankingStatus, items: empty.recommendations },
@@ -141,6 +160,10 @@ test('real isolated explore exposes approved mentors and deterministic partial r
     if (server) await new Promise(resolve => server.close(resolve));
     try {
       await database.transaction(async tx => {
+        await tx.execute('DELETE FROM session_reviews WHERE session_id=?', [ids.completed]);
+        await tx.execute('DELETE FROM mentoring_sessions WHERE id=?', [ids.completed]);
+        await tx.execute('DELETE FROM mentor_availability WHERE mentor_user_id IN (?,?)', [ids.mentorA, ids.mentorB]);
+        await tx.execute('DELETE FROM mentor_offers WHERE mentor_user_id IN (?,?)', [ids.mentorA, ids.mentorB]);
         await tx.execute('DELETE FROM mentor_applications WHERE user_id IN (?,?,?)',
           [ids.mentorA, ids.mentorB, ids.pending]);
         await tx.execute('DELETE FROM student_skills WHERE user_id IN (?,?,?,?)',

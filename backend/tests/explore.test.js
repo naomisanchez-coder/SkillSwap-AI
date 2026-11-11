@@ -24,7 +24,7 @@ test('recommendations preserve approved weights and expose unavailable signals w
   assert.deepEqual(result.recommendations.map(item => [item.mentor.id, item.score]), [[second, 45], [first, 22.5]]);
   for (const item of result.recommendations) for (const name of result.missingSignals) {
     assert.deepEqual(item.components[name], { weight: recommendationWeights[name], available: false,
-      score: null, contribution: 0, reason: 'DATA_NOT_MODELED' });
+      score: null, contribution: 0, reason: name === 'level' ? 'DATA_NOT_MODELED' : 'INSUFFICIENT_DATA' });
   }
 });
 test('recommendations are empty without declared learning skills and query contracts fail closed', async () => {
@@ -34,6 +34,26 @@ test('recommendations are empty without declared learning skills and query contr
   await assert.rejects(service().recommendations(viewer, { quality: '5' }), error => error.code === 'VALIDATION_ERROR');
   assert.throws(() => service().catalog({ cursor: 'not-canonical' }), error => error.code === 'VALIDATION_ERROR');
   assert.throws(() => service().mentor(viewer, 'not-a-uuid'), error => error.code === 'VALIDATION_ERROR');
+});
+
+test('recommendations use effective future availability and valid completed-session reviews without renormalizing', async () => {
+  const monday = '2026-11-09 15:00:00.000000'; // 10:00 in America/Lima.
+  const inputs = { learning: [skillA], mentors: [{ id: first, firstName: 'Alfa', lastName: 'Uno', skills: [skillA],
+    availability: { now: monday, slots: [{ weekday: 1, start: '10:00', end: '12:00' }],
+      busy: [{ starts_at: '2026-11-09 15:30:00.000000', ends_at: '2026-11-09 16:00:00.000000' }] },
+    quality: { completed_sessions: 3, reviewed_sessions: 2, average_rating: '4.0000' },
+  }] };
+  const result = await service(inputs).recommendations(viewer, {});
+  assert.equal(result.rankingStatus, 'PARTIAL');
+  assert.deepEqual(result.missingSignals, ['level']);
+  assert.equal(result.recommendations[0].score, 71.75);
+  assert.equal(result.recommendations[0].evidenceCoverage, 80);
+  assert.deepEqual(result.recommendations[0].components.availability, { weight: 25, available: true,
+    score: 0.75, contribution: 18.75, evidence: { configuredMinutes: 120, bookableMinutes: 90,
+      horizon: 'NEXT_WEEKLY_OCCURRENCE' } });
+  assert.deepEqual(result.recommendations[0].components.quality, { weight: 10, available: true,
+    score: 0.8, contribution: 8, evidence: { completedSessions: 3, reviewedSessions: 2, averageRating: 4 } });
+  assert.equal(result.recommendations[0].components.level.reason, 'DATA_NOT_MODELED');
 });
 
 test('explore query accepts only bounded search, category, skill and stable pagination controls', async () => {
