@@ -50,12 +50,12 @@ test('002 privilege check requires exact table ALTER; schema/global/excess right
  assert.throws(()=>checkMigrationPrivileges([minimum],config.database,0,{requireAlter:true}),e=>e.code==='MIGRATION_PRIVILEGES_MISSING');
  for(const grant of ['GRANT ALTER ON `skillswap\\_ai\\_test\\_auth`.* TO `u`@`h`','GRANT ALTER ON *.* TO `u`@`h`','GRANT ALTER ON `skillswap_ai_test_auth`.`users` TO `u`@`h`'])assert.throws(()=>checkMigrationPrivileges([minimum,alter,{grant}],config.database,0,{requireAlter:true}));
 });
-test('unit-only runner inspects two pending migrations without DDL',async()=>{
+test('unit-only runner inspects all pending migrations without DDL',async()=>{
  const f=fake();const result=await runMigration(f.connection,config,{through:latestMigration});
- assert.deepEqual(result.migrations.map(m=>m.state),['pending','pending']);assert.equal(result.applied,false);
+ assert.deepEqual(result.migrations.map(m=>m.state),['pending','pending','pending']);assert.equal(result.applied,false);
  assert.ok(f.state.commands.every(s=>/^(SELECT|SHOW)/.test(s)));
 });
-test('unit-only runner applies ordered 001/002 and a second run does not repeat either',async()=>{
+test('unit-only runner applies ordered 001/002/003 and a second run repeats none',async()=>{
  const f=fake();const opts={through:latestMigration,apply:true,allowDdl:true};
  assert.equal((await runMigration(f.connection,config,opts)).applied,true);
  assert.deepEqual(f.state.history,all.map(m=>({version:m.version,checksum:m.checksum})));
@@ -63,10 +63,10 @@ test('unit-only runner applies ordered 001/002 and a second run does not repeat 
  assert.equal((await runMigration(f.connection,config,opts)).applied,false);
  assert.equal(f.state.commands.filter(s=>/^CREATE |^ALTER |^INSERT INTO schema_migrations/.test(s)).length,before);
 });
-test('unit-only runner upgrades applied 001 without recreating tables or rewriting its history',async()=>{
+test('unit-only runner upgrades applied 001 through 003 without recreating prior tables',async()=>{
  const f=fake(1);assert.equal((await runMigration(f.connection,config,{through:latestMigration,apply:true,allowDdl:true})).applied,true);
- assert.equal(f.state.commands.filter(s=>s.startsWith('CREATE TABLE')).length,1);
- assert.equal(f.state.commands.filter(s=>s.startsWith('INSERT INTO schema_migrations')).length,1);
+ assert.equal(f.state.commands.filter(s=>s.startsWith('CREATE TABLE')).length,2);
+ assert.equal(f.state.commands.filter(s=>s.startsWith('INSERT INTO schema_migrations')).length,2);
 });
 test('unit-only failed ALTER leaves visible partial state, no 002 record and no automatic cleanup/retry',async()=>{
  const f=fake(1);f.state.fail='ALTER TABLE';

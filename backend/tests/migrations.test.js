@@ -246,7 +246,7 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
 }, async (t) => {
   // Read only explicit integration variables; never fall back to application DB credentials.
   const config = testConfiguration(process.env);
-  const latestTables = [...tables, 'otp_request_limits'].sort();
+  const latestTables = [...tables, 'otp_request_limits', 'login_rate_limits'].sort();
   let connection;
   try {
     connection = await mysql.createConnection(config);
@@ -272,6 +272,7 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
     assert.equal(columns.find((c) => c.t === 'credit_transactions' && c.c === 'amount').type, 'int');
     assert.equal(columns.find((c) => c.t === 'users' && c.c === 'created_at').type, 'datetime');
     assert.equal(columns.find((c) => c.t === 'email_verifications' && c.c === 'code_hmac').type, 'varbinary');
+    assert.equal(columns.find((c) => c.t === 'login_rate_limits' && c.c === 'identifier_hmac').type, 'varbinary');
     assert.ok(!columns.some((column) =>
       (column.t === 'users' && ['password', 'confirm_password'].includes(column.c)) ||
       (column.t === 'email_verifications' && column.c === 'code')));
@@ -279,7 +280,10 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
       'SELECT CONSTRAINT_TYPE AS type FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ?', [config.database]);
     assert.equal(constraints.filter((r) => r.type === 'PRIMARY KEY').length, latestTables.length);
     assert.equal(constraints.filter((r) => r.type === 'FOREIGN KEY').length, 7);
-    assert.ok(constraints.filter((r) => r.type === 'CHECK').length >= 20);
+    assert.ok(constraints.filter((r) => r.type === 'CHECK').length >= 24);
+    const [indexes] = await connection.execute(
+      "SELECT INDEX_NAME AS name,COLUMN_NAME AS column_name FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=? AND TABLE_NAME='login_rate_limits'", [config.database]);
+    assert.ok(indexes.some(index=>index.name==='ix_login_rate_expiry'&&index.column_name==='expires_at'));
     await connection.beginTransaction();
     try {
       const career = randomUUID();
@@ -347,6 +351,18 @@ test('MySQL 8.4 isolated schema: migration, metadata, constraints and rollback-o
         await rejects(connection.execute('UPDATE auth_sessions SET idle_expires_at = created_at WHERE id_hash = ?', [id]), 'ER_CHECK_CONSTRAINT_VIOLATED');
         await rejects(connection.execute('UPDATE auth_sessions SET revoked_at = ? WHERE id_hash = ?', ['2025-12-31 23:59:59', id]), 'ER_CHECK_CONSTRAINT_VIOLATED');
         await rejects(connection.execute('UPDATE auth_sessions SET csrf_token_hmac = ? WHERE id_hash = ?', [randomBytes(8), id]), 'ER_CHECK_CONSTRAINT_VIOLATED');
+      });
+      await t.test('login rate scope, HMAC, counters and fixed window constraints', async () => {
+        const identifier = randomBytes(32);
+        const expiry = '2026-01-01 00:15:00.000000';
+        await connection.execute('INSERT INTO login_rate_limits (scope,identifier_hmac,window_started_at,expires_at,attempts) VALUES (?,?,?,?,?)',
+          ['EMAIL', identifier, now, expiry, 5]);
+        await rejects(connection.execute('INSERT INTO login_rate_limits (scope,identifier_hmac,window_started_at,expires_at,attempts) VALUES (?,?,?,?,?)',
+          ['EMAIL', identifier, now, expiry, 1]), 'ER_DUP_ENTRY');
+        for (const values of [['USER', randomBytes(32), now, expiry, 1], ['IP', randomBytes(8), now, expiry, 1],
+          ['IP', randomBytes(32), now, expiry, 21], ['IP', randomBytes(32), now, future, 1]]) {
+          await rejects(connection.execute('INSERT INTO login_rate_limits (scope,identifier_hmac,window_started_at,expires_at,attempts) VALUES (?,?,?,?,?)', values), 'ER_CHECK_CONSTRAINT_VIOLATED');
+        }
       });
     } finally {
       await connection.rollback();

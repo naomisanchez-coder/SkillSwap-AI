@@ -5,8 +5,9 @@ import { pathToFileURL } from 'node:url';
 import mysql from 'mysql2/promise';
 
 const version = '001_auth_foundation';
-export const latestMigration = '002_otp_delivery_safety';
-const versions = [version, latestMigration];
+const otpMigration = '002_otp_delivery_safety';
+export const latestMigration = '003_login_rate_limits';
+const versions = [version, otpMigration, latestMigration];
 const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth']);
 const expectedTables = ['schema_migrations', 'careers', 'career_cycles', 'users',
   'student_profiles', 'email_verifications', 'auth_sessions', 'credit_transactions'].sort();
@@ -39,19 +40,33 @@ export async function readMigration(selected = version) {
   const history = 'INSERT INTO schema_migrations (version, checksum)\nVALUES (@skillswap_migration_version, @skillswap_migration_checksum)';
   ensure(statements.at(-1) === history, 'MIGRATION_HISTORY_INVALID');
   const created = statements.filter(s => s.startsWith('CREATE TABLE '));
-  const tables = selected === version ? expectedTables : ['otp_request_limits'];
+  const tables = selected === version ? expectedTables :
+    selected === otpMigration ? ['otp_request_limits'] : ['login_rate_limits'];
   ensure(JSON.stringify(created.map(s => s.match(/^CREATE TABLE ([a-z_]+) /)?.[1]).sort()) === JSON.stringify(tables), 'MIGRATION_TABLES_INVALID');
   const alter = "ALTER TABLE email_verifications\n  DROP CHECK chk_verifications_status,\n  ADD CONSTRAINT chk_verifications_status CHECK (status IN ('SENDING', 'PENDING', 'CONSUMED', 'REVOKED', 'EXPIRED', 'EXHAUSTED')),\n  ALTER COLUMN status SET DEFAULT 'SENDING'";
-  ensure(statements.length === (selected === version ? expectedTables.length + 3 : 5), 'MIGRATION_FORMAT_INVALID');
-  ensure(statements.every(s => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s) || (selected === latestMigration && s === alter)), 'MIGRATION_FORMAT_INVALID');
+  const lengths = { [version]: expectedTables.length + 3, [otpMigration]: 5, [latestMigration]: 4 };
+  ensure(statements.length === lengths[selected], 'MIGRATION_FORMAT_INVALID');
+  ensure(statements.every(s => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s) || (selected === otpMigration && s === alter)), 'MIGRATION_FORMAT_INVALID');
   const checksum = createHash('sha256').update(bytes).digest('hex');
-  if (selected === version) ensure(checksum === 'a544084c180a8c8ce701bd506bc98819d4e433b61460b1b20b7dbe4f0e1061c8', 'MIGRATION_IMMUTABLE_CHECKSUM');
+  const immutable = {
+    [version]: 'a544084c180a8c8ce701bd506bc98819d4e433b61460b1b20b7dbe4f0e1061c8',
+    [otpMigration]: 'bd3cdf30528264baad434993caf1c0334a64bb6ca4d71bcc6518cc3b7d974c8e',
+    [latestMigration]: '46866a4e7d745276542b1276445b40bc5424ae9667716f864d562d05693eebc2',
+  };
+  ensure(checksum === immutable[selected], 'MIGRATION_IMMUTABLE_CHECKSUM');
   return { version: selected, checksum, statements };
 }
 
 export async function readMigrations(through = version) {
   ensure(versions.includes(through), 'MIGRATION_VERSION_INVALID');
   return Promise.all(versions.slice(0, versions.indexOf(through) + 1).map(v => readMigration(v)));
+}
+
+export function parseMigrationArguments(args) {
+  const throughArgument = args[1]?.match(/^--through=([0-9]{3}_[a-z0-9_]+)$/);
+  ensure(args.length <= 2 && (args.length === 0 || ['--check', '--apply'].includes(args[0])) &&
+    (args.length < 2 || (throughArgument && versions.includes(throughArgument[1]))), 'MIGRATION_ARGUMENT_INVALID');
+  return { apply: args[0] === '--apply', through: throughArgument?.[1] ?? version };
 }
 
 export async function executeMigrationStatements(connection, statements) {
@@ -61,7 +76,9 @@ export async function executeMigrationStatements(connection, statements) {
 
 // Conservative parser for direct SHOW GRANTS output, not arbitrary GRANT SQL.
 // Never infer minimum privileges from global rights, roles or wildcard scopes.
-export function checkMigrationPrivileges(rows, database, partialRevokes, { requireUpdate = false, requireAlter = false } = {}) {
+export function checkMigrationPrivileges(rows, database, partialRevokes, {
+  requireUpdate = false, requireAlter = false, allowAlter = requireAlter, requireReferences = true,
+} = {}) {
   ensure(allowedSchemas.has(database), 'MIGRATION_TARGET_INVALID');
   ensure([0, 1, '0', '1'].includes(partialRevokes), 'MIGRATION_PRIVILEGE_MODE_UNKNOWN');
   ensure(Array.isArray(rows) && rows.length > 0, 'MIGRATION_PRIVILEGES_MISSING');
@@ -74,7 +91,7 @@ export function checkMigrationPrivileges(rows, database, partialRevokes, { requi
     // Table-level grants use literal schema names, not database-level patterns.
     const alterGrant = values[0].match(/^GRANT ALTER ON `(skillswap_ai|skillswap_ai_test_auth)`\.`email_verifications` TO `(?:``|[^`])+`@`(?:``|[^`])+`$/);
     if (alterGrant) {
-      ensure(requireAlter, 'MIGRATION_EXCESS_PRIVILEGES_REJECTED');
+      ensure(allowAlter, 'MIGRATION_EXCESS_PRIVILEGES_REJECTED');
       if (alterGrant[1] === database) tableAlter = true;
       continue;
     }
@@ -105,7 +122,8 @@ export function checkMigrationPrivileges(rows, database, partialRevokes, { requi
     ensure(privileges.every((privilege) => allowed.has(privilege)), 'MIGRATION_EXCESS_PRIVILEGES_REJECTED');
     if (schema === database) for (const privilege of privileges) targetPrivileges.add(privilege);
   }
-  const required = ['CREATE', 'REFERENCES', 'SELECT', 'INSERT'];
+  const required = ['CREATE', 'SELECT', 'INSERT'];
+  if (requireReferences) required.push('REFERENCES');
   if (requireUpdate) required.push('UPDATE');
   if (requireAlter) ensure(tableAlter, 'MIGRATION_PRIVILEGES_MISSING');
   ensure(required.every((privilege) => targetPrivileges.has(privilege)), 'MIGRATION_PRIVILEGES_MISSING');
@@ -118,8 +136,6 @@ async function inspect(connection, config, migrations) {
     'MIGRATION_INSTANCE_INVALID');
   const account = instance.account.slice(0, instance.account.lastIndexOf('@'));
   ensure(account === config.user && account !== 'skillswap_app', 'MIGRATION_IDENTITY_INVALID');
-  const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
-  checkMigrationPrivileges(grants, config.database, instance.partialRevokes, { requireAlter: migrations.length > 1 });
   const [objects] = await connection.execute(
     'SELECT TABLE_NAME AS name, TABLE_TYPE AS type, ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
     [config.database]);
@@ -128,11 +144,20 @@ async function inspect(connection, config, migrations) {
     'SELECT (SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ?) + (SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA = ?) AS count',
     [config.database, config.database]);
   ensure(Number(other.count) === 0, 'MIGRATION_UNEXPECTED_OBJECTS');
+  const history = objects.length ? (await connection.query('SELECT version, checksum FROM schema_migrations ORDER BY version'))[0] : [];
+  if (objects.length) ensure(history.length > 0 && history.length <= migrations.length &&
+    history.every((row, i) => row.version === migrations[i].version && row.checksum === migrations[i].checksum), 'MIGRATION_HISTORY_MISMATCH');
+  const pending = migrations.slice(history.length);
+  const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
+  checkMigrationPrivileges(grants, config.database, instance.partialRevokes, {
+    requireAlter: pending.some(item => item.version === otpMigration),
+    allowAlter: migrations.some(item => item.version === otpMigration),
+    requireReferences: pending.some(item => item.version === version),
+  });
   if (!objects.length) return 0;
-  const [history] = await connection.query('SELECT version, checksum FROM schema_migrations ORDER BY version');
-  ensure(history.length > 0 && history.length <= migrations.length && history.every((row, i) => row.version === migrations[i].version && row.checksum === migrations[i].checksum), 'MIGRATION_HISTORY_MISMATCH');
   const applied = migrations.slice(0, history.length);
-  const tables = [...expectedTables, ...(history.length > 1 ? ['otp_request_limits'] : [])].sort();
+  const tables = [...expectedTables, ...(history.length > 1 ? ['otp_request_limits'] : []),
+    ...(history.length > 2 ? ['login_rate_limits'] : [])].sort();
   ensure(JSON.stringify(objects.map((o) => o.name).sort()) === JSON.stringify(tables) &&
     objects.every((o) => o.type === 'BASE TABLE' && o.engine === 'InnoDB'), 'MIGRATION_PARTIAL_OR_FOREIGN_SCHEMA');
   await checkStructure(connection, config.database, { statements: applied.flatMap(m => m.statements) });
@@ -152,7 +177,7 @@ async function inspect(connection, config, migrations) {
       ? values.map(value => value.slice(1, -1)).sort() : [];
     ensure(JSON.stringify(states) === JSON.stringify([...(history.length > 1 ? ['SENDING'] : []),'PENDING','CONSUMED','REVOKED','EXPIRED','EXHAUSTED'].sort()), 'MIGRATION_STATUS_CHECK_MISMATCH');
   }
-  if (migrations.length > 1 && history.length === 1) {
+  if (migrations.some(item => item.version === otpMigration) && history.length === 1) {
     const [[active]] = await connection.query("SELECT COUNT(*) AS count FROM email_verifications WHERE created_at > DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 1 HOUR) OR (status = 'PENDING' AND expires_at > UTC_TIMESTAMP(6))");
     ensure(Number(active.count) === 0, 'MIGRATION_LEGACY_REQUESTS_REVIEW_REQUIRED');
   }
@@ -225,15 +250,14 @@ if (direct) {
   let connection;
   try {
     const args = process.argv.slice(2);
-    ensure(args.length <= 2 && (args.length === 0 || ['--check', '--apply'].includes(args[0])) && (args.length < 2 || args[1] === `--through=${latestMigration}`), 'MIGRATION_ARGUMENT_INVALID');
-    const apply = args[0] === '--apply';
+    const { apply, through } = parseMigrationArguments(args);
     // Deliberately no dotenv or DB_* fallback: migration identity is separate.
     const config = migrationConfiguration(process.env, apply);
     connection = await mysql.createConnection(config);
     const result = await runMigration(connection, config, {
       apply, allowDdl: process.env.MIGRATION_ALLOW_DDL === 'yes',
       validatedChecksum: process.env.MIGRATION_VALIDATED_CHECKSUM,
-      through: args[1] ? latestMigration : version,
+      through,
       validatedChecksums: process.env.MIGRATION_VALIDATED_CHECKSUMS ? JSON.parse(process.env.MIGRATION_VALIDATED_CHECKSUMS) : {},
     });
     console.info(JSON.stringify(result));
