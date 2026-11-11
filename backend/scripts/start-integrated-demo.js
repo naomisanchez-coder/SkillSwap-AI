@@ -3,6 +3,7 @@ import { dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import dotenv from 'dotenv';
+import { applyDemoAiConfig, installDemoEnvironment } from './demo-ai-config.js';
 import { validateEnv } from '../src/config/env.js';
 import { readOtpConfig, readEmailConfig } from '../src/config/email.js';
 import { readLoginSecurityConfig } from '../src/config/login-security.js';
@@ -22,17 +23,20 @@ export function mergeDemoValues(target, values) {
 // Solo lectura de la configuración privada existente; nunca copiar claves a React.
 export async function readDemoConfig(source, { smtp = false } = {}) {
   const config = {};
+  let privateAi;
   for (const name of ['.env', '.env.smtp.local', '.env.ai.local', '.env.demo.local']) {
     const path = resolve(source, name);
     const info = await stat(path);
     if (!info.isFile() || (info.mode & 0o077) !== 0) throw new Error(`Permisos privados requeridos para ${name}: 0600.`);
-    mergeDemoValues(config, dotenv.parse(await readFile(path)));
+    const values = dotenv.parse(await readFile(path));
+    if (name === '.env.ai.local') privateAi = values;
+    mergeDemoValues(config, values);
   }
   if (config.DB_NAME !== 'skillswap_ai_demo' || config.DB_USER !== 'skillswap_demo_app') throw new Error('Se requiere la identidad exclusiva de skillswap_ai_demo.');
   if (!['localhost', '127.0.0.1', '::1'].includes(config.DB_HOST)) throw new Error('La base debe ser local.');
   const storage = config.PRIVATE_STORAGE_ROOT;
   if (!storage || !isAbsolute(storage) || !(await lstat(storage)).isDirectory() || (await lstat(storage)).isSymbolicLink() || ((await lstat(storage)).mode & 0o077) !== 0) throw new Error('Falta el almacenamiento demo existente; no se crea ni sustituye automáticamente.');
-  const result = { ...config, PRIVATE_STORAGE_READ_ONLY_ROOT: storage, PRIVATE_STORAGE_ROOT: resolve(dirname(fileURLToPath(import.meta.url)), '../.private-storage/demo'), NODE_ENV: 'development', HOST: '127.0.0.1', CORS_ORIGIN: 'http://localhost:5173', SMTP_ENABLED: smtp ? 'true' : 'false' };
+  const result = { ...applyDemoAiConfig(config, privateAi ?? {}), PRIVATE_STORAGE_READ_ONLY_ROOT: storage, PRIVATE_STORAGE_ROOT: resolve(dirname(fileURLToPath(import.meta.url)), '../.private-storage/demo'), NODE_ENV: 'development', HOST: '127.0.0.1', CORS_ORIGIN: 'http://localhost:5173', SMTP_ENABLED: smtp ? 'true' : 'false' };
   validateEnv(result); readOtpConfig(result); readLoginSecurityConfig(result); readSessionSecurityConfig(result); readPasswordRecoveryConfig(result); readAiConfig(result);
   if (smtp) readEmailConfig(result);
   return result;
@@ -56,9 +60,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     } else {
       await assertPortAvailable(Number(config.PORT));
       // Sustituir todo el entorno de aplicación por la configuración demo verificada.
-      for (const key of Object.keys(process.env)) if (/^(DB_|SMTP_|AI_|GEMINI_|OPENAI_|SESSION_|OTP_|LOGIN_|PASSWORD_RECOVERY_|PRIVATE_STORAGE_)/.test(key)) delete process.env[key];
-      Object.assign(process.env, config);
+      installDemoEnvironment(config);
       console.info(`Demo local: http://localhost:${config.PORT}; SMTP ${config.SMTP_ENABLED === 'true' ? 'habilitado por --smtp' : 'deshabilitado'}.`);
+      console.info('Gemini: configuración presente y válida; salida limitada a 300 tokens; sin llamada de diagnóstico al proveedor.');
       await import('../src/server.js');
     }
   } catch (error) {
