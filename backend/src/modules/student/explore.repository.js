@@ -1,3 +1,4 @@
+import { sessionCosts } from './booking.validation.js';
 import { PublicError } from '../../errors/PublicError.js';
 
 function pattern(value) {
@@ -21,7 +22,7 @@ async function offeredSkills(executor, userIds, levelsAvailable) {
   const levelJoin = levelsAvailable
     ? 'LEFT JOIN mentor_skill_levels msl ON msl.offer_id=mo.id LEFT JOIN skill_level_catalog lc ON lc.code=msl.level_code AND lc.is_active=TRUE'
     : '';
-  const [rows] = await executor.execute(`SELECT mo.mentor_user_id user_id,s.id,s.code,s.name,s.category${levelSelect}
+  const [rows] = await executor.execute(`SELECT mo.id offer_id,mo.mentor_user_id user_id,s.id,s.code,s.name,s.category${levelSelect}
     FROM mentor_offers mo JOIN mentor_applications ma
       ON ma.user_id=mo.mentor_user_id AND ma.skill_id=mo.skill_id AND ma.status='APPROVED'
     JOIN skill_catalog s ON s.id=mo.skill_id AND s.is_active=TRUE
@@ -30,7 +31,7 @@ async function offeredSkills(executor, userIds, levelsAvailable) {
     ORDER BY mo.mentor_user_id,s.name,s.id`, userIds);
   const result = new Map(userIds.map(id => [id, []]));
   for (const row of rows) result.get(row.user_id)?.push({ id: row.id, code: row.code,
-    name: row.name, category: row.category ?? null, level: row.level_code ? {
+    name: row.name, category: row.category ?? null, offerId: row.offer_id, costByDuration: sessionCosts, level: row.level_code ? {
       code: row.level_code, name: row.level_name, rank: Number(row.level_rank),
     } : null });
   return result;
