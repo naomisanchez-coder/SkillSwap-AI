@@ -13,7 +13,7 @@ El catálogo de habilidades de la migración 006 está operativo, pero permanece
 - `GET /api/student/explore/mentors/:mentorId`: devuelve el detalle público mínimo y sus habilidades activas aprobadas/ofrecidas.
 - `GET /api/student/recommendations`: devuelve recomendaciones para las habilidades que el estudiante declaró con intención `LEARN`. Acepta únicamente `limit`.
 
-Los perfiles públicos contienen `id`, nombres, carrera, ciclo, biografía y habilidades aprobadas. No contienen correo, nivel/objetivos/horario privado, intereses, estados de cuenta, notas administrativas, certificados, portafolios, créditos ni sesiones.
+Los perfiles públicos contienen `id`, nombres, carrera, ciclo, biografía y habilidades aprobadas. Una habilidad puede incluir su nivel de dominio administrado o `null`; nunca expone quién lo asignó. No contienen correo, nivel general/objetivos/horario privado, intereses, estados de cuenta, notas administrativas, certificados, portafolios, créditos ni sesiones.
 
 La paginación usa cursores opacos y orden total estable. Búsqueda y filtros se parametrizan; los comodines aportados por el usuario se tratan como texto.
 
@@ -34,12 +34,12 @@ La calidad usa exclusivamente valoraciones de sesiones `COMPLETED`. Con al menos
 
 Las contribuciones disponibles se suman sin renormalizar pesos. `evidenceCoverage` suma los pesos respaldados de cada mentor. Los empates se resuelven por coincidencias, nombre, apellido e identificador.
 
-El texto libre `learning_level` describe al estudiante en general y no acredita dominio de una habilidad concreta. Por ello nivel conserva `available:false`, contribución cero y `DATA_NOT_MODELED`. La migración propuesta `008_mentor_skill_levels.sql` crea un catálogo administrable vacío y una asignación auditada por oferta; no incorpora etiquetas ni rangos inventados y no se ha aplicado a ninguna base. Hasta aprobar y cargar sus valores, todo ranking con resultados permanece `PARTIAL`. Sin habilidades `LEARN` o coincidencias activas, la respuesta es `INSUFFICIENT_DATA`.
+El texto libre `learning_level` describe al estudiante en general y no acredita dominio de una habilidad concreta. La migración `008_mentor_skill_levels.sql`, aplicada únicamente al esquema aislado durante este cierre, crea un catálogo administrable vacío y una asignación auditada por oferta. Para habilidades coincidentes con nivel, la puntuación es el promedio de `rank_value / 100` y la contribución `20 × puntuación`. Si falta una asignación coincidente, el componente queda `INSUFFICIENT_DATA`, con cero y sin renormalización. Un ranking solo es `COMPLETE` cuando nivel, disponibilidad y calidad tienen evidencia; sin habilidades `LEARN` o coincidencias activas es `INSUFFICIENT_DATA`.
 
-No fue posible acceder desde este repositorio a una fuente Figma adicional con opciones literales de nivel. El flujo administrativo mínimo pendiente debe listar solicitudes, permitir que un ADMIN inspeccione documentos privados con autorización de servidor y decidir `APPROVED`/`REJECTED` registrando `decided_by`, fecha, notas y evento. No es necesario para calcular el ranking con fixtures aisladas y no se implementa como panel administrativo en 1.12.
+No existe en el repositorio una fuente Figma con opciones literales de nivel. Por eso la migración no contiene semillas y los valores incluidos para pruebas llevan alcance `DEMO_ONLY`. El flujo administrativo mínimo está documentado en [admin-mentor-approval.md](admin-mentor-approval.md); no incluye un panel visual.
 
 ## Catálogo de habilidades
 
-No existe una lista aprobada de habilidades/categorías en el repositorio. `database/skill-catalog.js` y `scripts/skill-catalog.js` preparan una carga externa versionada, transaccional e idempotente: validan UUID, código, nombre, categoría y duplicados equivalentes; el modo `--check` no escribe; `--apply` exige autorización explícita; cualquier conflicto aborta sin sobrescribir, desactivar ni eliminar filas. No se incluye ningún seed.
+No existe una lista aprobada de habilidades/categorías en el repositorio. `database/skill-catalog.js` y `scripts/skill-catalog.js` preparan una carga externa versionada, transaccional e idempotente: validan UUID, código, nombre, categoría, alcance y duplicados equivalentes; el modo `--check` no escribe; `--apply` exige autorización explícita; cualquier conflicto aborta sin sobrescribir, desactivar ni eliminar filas. El cargador rechaza catálogos `DEMO_ONLY` sobre la base principal.
 
-Formato esperado: `{ "version":"1.0.0", "skills":[{"id":"uuid","code":"slug","name":"...","category":null}] }`. La categoría puede ser `null`; no debe atribuirse una taxonomía a TECSUP sin una fuente aprobada.
+Formato esperado: `{ "version":"1.0.0", "scope":"APPROVED", "skills":[{"id":"uuid","code":"slug","name":"...","category":null}] }`. La categoría puede ser `null`; no debe atribuirse una taxonomía a TECSUP sin una fuente aprobada. Los manifiestos provisionales y su limpieza están en [demo-mentors.md](demo-mentors.md).
