@@ -15,5 +15,15 @@ export function createStudentController(service) {
     async catalog(request, response) {
       response.set('Cache-Control', 'no-store').status(200).json(await service.catalog());
     },
+    async credits(request, response) {
+      response.set('Cache-Control', 'no-store').status(200).json({
+        credits: await service.credits(request.auth.user.id, request.query),
+      });
+    },
+    async dashboard(request, response) {
+      response.set('Cache-Control', 'no-store').status(200).json({
+        dashboard: await service.dashboard(request.auth.user.id, request.query),
+      });
+    },
   });
 }

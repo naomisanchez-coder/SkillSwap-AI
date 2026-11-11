@@ -4,6 +4,8 @@ const profileFields = new Set(['firstName', 'lastName', 'bio', 'career', 'cycle'
   'interests', 'level', 'goals', 'schedule']);
 const controls = /[\u0000-\u001f\u007f]/;
 const length = value => [...value].length;
+const cursorTime = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}$/;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function plainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
@@ -78,4 +80,39 @@ export function onboardingComplete(profile) {
   return Array.isArray(profile.interests) && profile.interests.length > 0 &&
     typeof profile.level === 'string' && profile.level.length > 0 &&
     typeof profile.schedule === 'string' && profile.schedule.length > 0;
+}
+
+function queryObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+export function validateDashboardQuery(query) {
+  if (Object.keys(queryObject(query)).length !== 0) {
+    throw new PublicError('VALIDATION_ERROR', { query: 'El dashboard no admite filtros ni identificadores de usuario.' });
+  }
+}
+
+export function validateCreditsQuery(query) {
+  const source = queryObject(query);
+  if (Object.keys(source).some(key => !['limit', 'cursor'].includes(key)) ||
+      Array.isArray(source.limit) || Array.isArray(source.cursor)) {
+    throw new PublicError('VALIDATION_ERROR', { query: 'Usa únicamente limit y cursor.' });
+  }
+  const limit = source.limit === undefined ? 20 : Number(source.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50 || String(limit) !== String(source.limit ?? limit)) {
+    throw new PublicError('VALIDATION_ERROR', { limit: 'Selecciona entre 1 y 50 movimientos.' });
+  }
+  if (source.cursor === undefined) return { limit, cursor: null };
+  if (typeof source.cursor !== 'string' || !/^[A-Za-z0-9_-]{1,512}$/.test(source.cursor)) {
+    throw new PublicError('VALIDATION_ERROR', { cursor: 'El cursor no es válido.' });
+  }
+  try {
+    const decoded = Buffer.from(source.cursor, 'base64url').toString('utf8');
+    if (Buffer.from(decoded).toString('base64url') !== source.cursor) throw new Error();
+    const value = JSON.parse(decoded);
+    if (!Array.isArray(value) || value.length !== 2 || !cursorTime.test(value[0]) || !uuid.test(value[1])) throw new Error();
+    return { limit, cursor: { createdAt: value[0], id: value[1] } };
+  } catch {
+    throw new PublicError('VALIDATION_ERROR', { cursor: 'El cursor no es válido.' });
+  }
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateInterests, validateOnboarding, validateProfilePatch,
+import { validateCreditsQuery, validateDashboardQuery, validateInterests, validateOnboarding, validateProfilePatch,
   onboardingComplete } from '../src/modules/student/student.validation.js';
 import { createStudentService } from '../src/modules/student/student.service.js';
 
@@ -36,10 +36,30 @@ test('student service always scopes reads and mutations to the authenticated ide
     async findOwn(id) { calls.push(['find', id]); return profile; },
     async updateOwn(id, patch) { calls.push(['update', id, patch]); return { ...profile, ...patch, onboardingComplete: true }; },
     async catalog() { calls.push(['catalog']); return [{ code: 'software', name: 'Software', cycles: [1, 2] }]; },
+    async creditsOwn(id, page) { calls.push(['credits', id, page]); return { balance: 20, totalTransactions: 1,
+      transactions: [], pagination: { limit: page.limit, nextCursor: null } }; },
   });
   assert.equal((await service.profile('session-user')).onboardingComplete, true);
   assert.equal((await service.completeOnboarding('session-user', { interests: ['Python'],
     level: 'Intermedio', schedule: 'Tardes' })).complete, true);
   assert.deepEqual(await service.catalog(), { careers: [{ code: 'software', name: 'Software', cycles: [1, 2] }] });
-  assert.deepEqual(calls.map(call => call[1]).filter(Boolean), ['session-user', 'session-user']);
+  assert.equal((await service.credits('session-user', {})).balance, 20);
+  assert.equal((await service.dashboard('session-user', {})).credits.balance, 20);
+  assert.ok(calls.filter(call => call[0] === 'credits').every(call => call[1] === 'session-user'));
+});
+
+test('credit pagination accepts bounded canonical values and opaque cursors only', () => {
+  assert.deepEqual(validateCreditsQuery({}), { limit: 20, cursor: null });
+  assert.deepEqual(validateCreditsQuery({ limit: '50' }), { limit: 50, cursor: null });
+  const value = ['2026-11-10 12:34:56.123456', '123e4567-e89b-12d3-a456-426614174000'];
+  const cursor = Buffer.from(JSON.stringify(value)).toString('base64url');
+  assert.deepEqual(validateCreditsQuery({ limit: '2', cursor }), {
+    limit: 2, cursor: { createdAt: value[0], id: value[1] },
+  });
+  for (const query of [{ userId: 'other' }, { limit: '0' }, { limit: '51' }, { limit: '02' },
+    { cursor: 'not-a-cursor' }, { limit: ['2', '3'] }]) {
+    assert.throws(() => validateCreditsQuery(query), error => error.code === 'VALIDATION_ERROR');
+  }
+  assert.doesNotThrow(() => validateDashboardQuery({}));
+  assert.throws(() => validateDashboardQuery({ userId: 'other' }), error => error.code === 'VALIDATION_ERROR');
 });

@@ -37,6 +37,40 @@ async function replaceInterests(tx, userId, interests) {
   }
 }
 
+function safeInteger(value) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number)) throw new Error('Credit total exceeds the safe response boundary');
+  return number;
+}
+
+function encodeCursor(row) {
+  return Buffer.from(JSON.stringify([row.cursor_time, row.id])).toString('base64url');
+}
+
+async function readCredits(tx, userId, { limit, cursor }) {
+  const [[summary]] = await tx.execute(`SELECT COALESCE(SUM(amount),0) balance,COUNT(*) transaction_count
+    FROM credit_transactions WHERE user_id=?`, [userId]);
+  const values = [userId];
+  let boundary = '';
+  if (cursor) {
+    boundary = ' AND (created_at < ? OR (created_at = ? AND id < ?))';
+    values.push(cursor.createdAt, cursor.createdAt, cursor.id);
+  }
+  values.push(limit + 1);
+  const [rows] = await tx.execute(`SELECT id,amount,reason,operation_reference,
+      DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') cursor_time
+    FROM credit_transactions WHERE user_id=?${boundary}
+    ORDER BY created_at DESC,id DESC LIMIT ?`, values);
+  const hasMore = rows.length > limit;
+  const selected = rows.slice(0, limit);
+  return {
+    balance: safeInteger(summary.balance), totalTransactions: safeInteger(summary.transaction_count),
+    transactions: selected.map(row => ({ id: row.id, amount: Number(row.amount), reason: row.reason,
+      reference: row.operation_reference, occurredAt: `${row.cursor_time.replace(' ', 'T')}Z` })),
+    pagination: { limit, nextCursor: hasMore ? encodeCursor(selected.at(-1)) : null },
+  };
+}
+
 export function createStudentRepository(database) {
   return Object.freeze({
     findOwn(userId) { return readProfile(database, userId); },
@@ -88,6 +122,9 @@ export function createStudentRepository(database) {
         career.cycles.push(Number(row.cycle));
       }
       return careers;
+    },
+    creditsOwn(userId, page) {
+      return database.transaction(tx => readCredits(tx, userId, page));
     },
   });
 }

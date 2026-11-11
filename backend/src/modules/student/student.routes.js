@@ -34,5 +34,7 @@ export function createStudentRouter({ origins, sessionService, studentService,
   router.get('/onboarding', controller?.onboarding ?? (() => {}));
   router.put('/onboarding', mutation, controller?.completeOnboarding ?? (() => {}));
   router.get('/catalog', controller?.catalog ?? (() => {}));
+  router.get('/credits', controller?.credits ?? (() => {}));
+  router.get('/dashboard', controller?.dashboard ?? (() => {}));
   return router;
 }

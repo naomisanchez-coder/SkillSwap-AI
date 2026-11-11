@@ -20,6 +20,12 @@ async function withApp({ role = 'student', configured = true } = {}, work) {
     async onboarding(id) { calls.push(['onboarding', id]); return { interests: [], level: null, schedule: null, complete: false }; },
     async completeOnboarding(id, body) { calls.push(['complete', id, body]); return { ...body, complete: true }; },
     async catalog() { calls.push(['catalog']); return { careers: [] }; },
+    async credits(id, query) { calls.push(['credits', id, query]); return { balance: 20, totalTransactions: 1,
+      transactions: [], pagination: { limit: 20, nextCursor: null } }; },
+    async dashboard(id, query) { calls.push(['dashboard', id, query]); return { student: {
+      firstName: profile.firstName, lastName: profile.lastName, career: profile.career, cycle: profile.cycle,
+      onboardingComplete: profile.onboardingComplete }, credits: { balance: 20 },
+    activity: { creditTransactions: 1 } }; },
   } : undefined;
   const app = createApp({ database: { check: async () => {} }, origins: ['http://localhost:5173'],
     sessionService, studentService, cookie: { name: 'skillswap_session' } });
@@ -67,5 +73,20 @@ test('onboarding and catalog expose only the authenticated student contracts', a
 test('student endpoints fail closed when the module is not configured', async () => {
   await withApp({ configured: false }, async base => {
     assert.equal((await fetch(`${base}/api/student/profile`, { headers: { Cookie: `skillswap_session=${token}` } })).status, 503);
+  });
+});
+
+test('dashboard and credits are read-only, session-owned and available without CSRF', async () => {
+  await withApp({}, async (base, calls) => {
+    const headers = { Cookie: `skillswap_session=${token}` };
+    const dashboard = await fetch(`${base}/api/student/dashboard`, { headers });
+    const credits = await fetch(`${base}/api/student/credits?limit=20`, { headers });
+    assert.equal(dashboard.status, 200);
+    assert.equal(credits.status, 200);
+    assert.equal((await dashboard.json()).dashboard.credits.balance, 20);
+    assert.equal((await credits.json()).credits.balance, 20);
+    assert.ok(calls.some(call => call[0] === 'dashboard' && call[1] === profile.id));
+    assert.ok(calls.some(call => call[0] === 'credits' && call[1] === profile.id));
+    assert.equal((await fetch(`${base}/api/student/credits`, { method: 'POST', headers })).status, 404);
   });
 });
