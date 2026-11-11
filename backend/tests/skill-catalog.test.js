@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { synchronizeSkillCatalog, validateSkillCatalog } from '../database/skill-catalog.js';
 
-const catalog = { version: '1.0.0', skills: [
+const catalog = { version: '1.0.0', scope: 'APPROVED', skills: [
   { id: '123e4567-e89b-12d3-a456-426614174000', code: 'synthetic-one', name: 'Sintética Uno', category: 'Pruebas' },
   { id: '223e4567-e89b-12d3-a456-426614174000', code: 'synthetic-two', name: 'Sintética Dos', category: null },
 ] };
@@ -27,7 +27,7 @@ test('skill catalog check is read-only, apply inserts missing rows and conflicts
     throw new Error('Unexpected SQL');
   } }) };
   assert.deepEqual(await synchronizeSkillCatalog(database, catalog),
-    { version: '1.0.0', apply: false, entries: 2, missing: 2, stored: 0 });
+    { version: '1.0.0', scope: 'APPROVED', apply: false, entries: 2, missing: 2, stored: 0 });
   assert.equal(inserts, 0);
   assert.equal((await synchronizeSkillCatalog(database, catalog, { apply: true })).missing, 2);
   assert.equal((await synchronizeSkillCatalog(database, catalog, { apply: true })).missing, 0);

@@ -24,7 +24,7 @@ test('recommendations preserve approved weights and expose unavailable signals w
   assert.deepEqual(result.recommendations.map(item => [item.mentor.id, item.score]), [[second, 45], [first, 22.5]]);
   for (const item of result.recommendations) for (const name of result.missingSignals) {
     assert.deepEqual(item.components[name], { weight: recommendationWeights[name], available: false,
-      score: null, contribution: 0, reason: name === 'level' ? 'DATA_NOT_MODELED' : 'INSUFFICIENT_DATA' });
+      score: null, contribution: 0, reason: 'INSUFFICIENT_DATA' });
   }
 });
 test('recommendations are empty without declared learning skills and query contracts fail closed', async () => {
@@ -53,7 +53,24 @@ test('recommendations use effective future availability and valid completed-sess
       horizon: 'NEXT_WEEKLY_OCCURRENCE' } });
   assert.deepEqual(result.recommendations[0].components.quality, { weight: 10, available: true,
     score: 0.8, contribution: 8, evidence: { completedSessions: 3, reviewedSessions: 2, averageRating: 4 } });
-  assert.equal(result.recommendations[0].components.level.reason, 'DATA_NOT_MODELED');
+  assert.equal(result.recommendations[0].components.level.reason, 'INSUFFICIENT_DATA');
+});
+
+test('recommendations use audited per-offer levels without renormalizing approved weights', async () => {
+  const inputs = { learning: [skillA], mentors: [{ id: first, firstName: 'Alfa', lastName: 'Uno',
+    skills: [{ ...skillA, level: { code: 'demo-advanced', name: 'Avanzado (demostración)', rank: 75 } }],
+    availability: { now: '2026-11-09 15:00:00.000000',
+      slots: [{ weekday: 1, start: '10:00', end: '11:00' }], busy: [] },
+    quality: { completed_sessions: 1, reviewed_sessions: 1, average_rating: '5.0000' },
+  }] };
+  const result = await service(inputs).recommendations(viewer, {});
+  assert.equal(result.rankingStatus, 'COMPLETE');
+  assert.deepEqual(result.missingSignals, []);
+  assert.equal(result.recommendations[0].score, 95);
+  assert.equal(result.recommendations[0].evidenceCoverage, 100);
+  assert.deepEqual(result.recommendations[0].components.level, { weight: 20, available: true,
+    score: 0.75, contribution: 15, evidence: { levels: [{ skillId: skillA.id,
+      code: 'demo-advanced', name: 'Avanzado (demostración)', rank: 75 }] } });
 });
 
 test('explore query accepts only bounded search, category, skill and stable pagination controls', async () => {

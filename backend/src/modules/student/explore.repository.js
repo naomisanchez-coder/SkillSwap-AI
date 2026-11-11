@@ -12,18 +12,27 @@ function publicMentor(row, skills) {
     career: row.career, cycle: Number(row.cycle), bio: row.bio ?? null, skills };
 }
 
-async function offeredSkills(executor, userIds) {
+async function offeredSkills(executor, userIds, levelsAvailable) {
   if (!userIds.length) return new Map();
   const placeholders = userIds.map(() => '?').join(',');
-  const [rows] = await executor.execute(`SELECT mo.mentor_user_id user_id,s.id,s.code,s.name,s.category
+  const levelSelect = levelsAvailable
+    ? ',lc.code level_code,lc.name level_name,lc.rank_value level_rank'
+    : ',NULL level_code,NULL level_name,NULL level_rank';
+  const levelJoin = levelsAvailable
+    ? 'LEFT JOIN mentor_skill_levels msl ON msl.offer_id=mo.id LEFT JOIN skill_level_catalog lc ON lc.code=msl.level_code AND lc.is_active=TRUE'
+    : '';
+  const [rows] = await executor.execute(`SELECT mo.mentor_user_id user_id,s.id,s.code,s.name,s.category${levelSelect}
     FROM mentor_offers mo JOIN mentor_applications ma
       ON ma.user_id=mo.mentor_user_id AND ma.skill_id=mo.skill_id AND ma.status='APPROVED'
     JOIN skill_catalog s ON s.id=mo.skill_id AND s.is_active=TRUE
+    ${levelJoin}
     WHERE mo.status='ACTIVE' AND mo.mentor_user_id IN (${placeholders})
     ORDER BY mo.mentor_user_id,s.name,s.id`, userIds);
   const result = new Map(userIds.map(id => [id, []]));
   for (const row of rows) result.get(row.user_id)?.push({ id: row.id, code: row.code,
-    name: row.name, category: row.category ?? null });
+    name: row.name, category: row.category ?? null, level: row.level_code ? {
+      code: row.level_code, name: row.level_name, rank: Number(row.level_rank),
+    } : null });
   return result;
 }
 
@@ -31,7 +40,7 @@ const mentorBase = `FROM users u JOIN student_profiles p ON p.user_id=u.id
   JOIN careers c ON c.id=p.career_id LEFT JOIN student_profile_details d ON d.user_id=u.id
   WHERE u.role='STUDENT' AND u.status='ACTIVE' AND u.email_verified_at IS NOT NULL`;
 
-export function createExploreRepository(database) {
+export function createExploreRepository(database, { levelsAvailable = false } = {}) {
   return Object.freeze({
     async catalog(page) {
       const values = [];
@@ -77,7 +86,7 @@ export function createExploreRepository(database) {
         ${sort} sort_name ${where} ORDER BY sort_name,u.id LIMIT ?`, values);
       const hasMore = rows.length > page.limit;
       const selected = rows.slice(0, page.limit);
-      const skills = await offeredSkills(database, selected.map(row => row.id));
+      const skills = await offeredSkills(database, selected.map(row => row.id), levelsAvailable);
       return { mentors: selected.map(row => publicMentor(row, skills.get(row.id) ?? [])),
         pagination: { limit: page.limit, nextCursor: hasMore
           ? encodeCursor(selected.at(-1).sort_name, selected.at(-1).id) : null } };
@@ -89,7 +98,7 @@ export function createExploreRepository(database) {
           JOIN skill_catalog s ON s.id=mo.skill_id AND s.is_active=TRUE
           WHERE mo.mentor_user_id=u.id AND mo.status='ACTIVE')`, [viewerId, mentorId]);
       if (rows.length !== 1) throw new PublicError('FORBIDDEN');
-      const skills = await offeredSkills(database, [mentorId]);
+      const skills = await offeredSkills(database, [mentorId], levelsAvailable);
       return publicMentor(rows[0], skills.get(mentorId) ?? []);
     },
     async recommendationInputs(userId) {
@@ -104,7 +113,7 @@ export function createExploreRepository(database) {
           ON ma.user_id=mo.mentor_user_id AND ma.skill_id=mo.skill_id AND ma.status='APPROVED'
           WHERE mo.mentor_user_id=u.id AND mo.status='ACTIVE' AND mo.skill_id IN (${placeholders}))`, [userId, ...ids]);
       const mentorIds = rows.map(row => row.id);
-      const skills = await offeredSkills(database, mentorIds);
+      const skills = await offeredSkills(database, mentorIds, levelsAvailable);
       if (!mentorIds.length) return { learning, mentors: [] };
       const mentorPlaceholders = mentorIds.map(() => '?').join(',');
       const [[clock]] = await database.execute('SELECT UTC_TIMESTAMP(6) now', []);

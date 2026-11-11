@@ -6,12 +6,13 @@ const canonical = value => value.normalize('NFKD').replaceAll(/\p{M}/gu, '').toL
 
 export function validateSkillCatalog(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      Object.keys(value).sort().join(',') !== 'skills,version' ||
+      Object.keys(value).sort().join(',') !== 'scope,skills,version' ||
+      !['APPROVED', 'DEMO_ONLY'].includes(value.scope) ||
       typeof value.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.version) ||
       !Array.isArray(value.skills) || value.skills.length < 1 || value.skills.length > 500) {
     throw new Error('Invalid skill catalog');
   }
-  const catalog = { version: value.version, skills: value.skills.map(item => {
+  const catalog = { version: value.version, scope: value.scope, skills: value.skills.map(item => {
     if (!item || typeof item !== 'object' || Array.isArray(item) ||
         Object.keys(item).sort().join(',') !== 'category,code,id,name' ||
         typeof item.id !== 'string' || !uuid.test(item.id) || typeof item.code !== 'string' ||
@@ -27,7 +28,7 @@ export function validateSkillCatalog(value) {
   if (new Set(catalog.skills.map(item => canonical(item.name))).size !== catalog.skills.length) {
     throw new Error('Invalid skill catalog');
   }
-  return Object.freeze({ version: catalog.version, skills: Object.freeze(catalog.skills) });
+  return Object.freeze({ version: catalog.version, scope: catalog.scope, skills: Object.freeze(catalog.skills) });
 }
 
 export async function readSkillCatalog(path) {
@@ -53,6 +54,7 @@ export async function synchronizeSkillCatalog(database, catalog, { apply = false
       }
     }
     const [[stored]] = await tx.execute('SELECT COUNT(*) total FROM skill_catalog', []);
-    return { version: value.version, apply, entries: value.skills.length, missing, stored: Number(stored.total) };
+    return { version: value.version, scope: value.scope, apply, entries: value.skills.length,
+      missing, stored: Number(stored.total) };
   });
 }

@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "scope": "DEMO_ONLY",
+  "mentors": [
+    {
+      "key": "diego-ramirez-torres",
+      "firstName": "Diego",
+      "lastName": "Ramírez Torres",
+      "bio": "Perfil ficticio de demostración orientado a la práctica segura de Python.",
+      "careerCode": "software",
+      "cycle": 4,
+      "skillCode": "demo-python-programming",
+      "levelCode": "demo-advanced",
+      "availability": [{ "weekday": 1, "start": "18:00", "end": "20:00" }]
+    },
+    {
+      "key": "valeria-mendoza-flores",
+      "firstName": "Valeria",
+      "lastName": "Mendoza Flores",
+      "bio": "Perfil ficticio de demostración para fundamentos de diseño de interfaces.",
+      "careerCode": "diseno-industrial",
+      "cycle": 4,
+      "skillCode": "demo-interface-design",
+      "levelCode": "demo-intermediate",
+      "availability": [{ "weekday": 3, "start": "17:00", "end": "19:00" }]
+    },
+    {
+      "key": "andres-castillo-vega",
+      "firstName": "Andrés",
+      "lastName": "Castillo Vega",
+      "bio": "Perfil ficticio de demostración para acompañamiento inicial en desarrollo web.",
+      "careerCode": "software",
+      "cycle": 5,
+      "skillCode": "demo-web-development",
+      "levelCode": "demo-intermediate",
+      "availability": [{ "weekday": 5, "start": "18:00", "end": "20:00" }]
+    }
+  ]
+}

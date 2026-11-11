@@ -2,8 +2,6 @@ import { validateExploreQuery, validateMentorId, validateRecommendationsQuery } 
 
 export const recommendationWeights = Object.freeze({ skill: 45, level: 20, availability: 25, quality: 10 });
 
-const unavailable = weight => ({ weight, available: false, score: null, contribution: 0,
-  reason: 'DATA_NOT_MODELED' });
 const insufficient = weight => ({ weight, available: false, score: null, contribution: 0,
   reason: 'INSUFFICIENT_DATA' });
 const minute = 60000, day = 24 * 60 * minute, limaOffset = 5 * 60 * minute;
@@ -58,6 +56,16 @@ function qualityComponent(value) {
     contribution: rounded(recommendationWeights.quality * score, 2),
     evidence: { completedSessions: completed, reviewedSessions: reviewed, averageRating: rounded(average, 2) } };
 }
+function levelComponent(skills) {
+  if (!skills.length || skills.some(skill => !skill.level || !Number.isFinite(Number(skill.level.rank)))) {
+    return insufficient(recommendationWeights.level);
+  }
+  const levels = skills.map(skill => ({ skillId: skill.id, code: skill.level.code,
+    name: skill.level.name, rank: Number(skill.level.rank) }));
+  const score = rounded(levels.reduce((total, item) => total + item.rank, 0) / levels.length / 100);
+  return { weight: recommendationWeights.level, available: true, score,
+    contribution: rounded(recommendationWeights.level * score, 2), evidence: { levels } };
+}
 
 export function createExploreService(repository) {
   if (!repository || typeof repository.catalog !== 'function' || typeof repository.mentors !== 'function' ||
@@ -79,21 +87,23 @@ export function createExploreService(repository) {
         const matchedSkills = mentor.skills.filter(skill => requested.has(skill.id));
         const ratio = matchedSkills.length / requested.size;
         const skillContribution = Math.round(recommendationWeights.skill * ratio * 100) / 100;
+        const levelValue = levelComponent(matchedSkills);
         const availabilityValue = availabilityComponent(availability);
         const qualityValue = qualityComponent(quality);
-        const evidenceCoverage = recommendationWeights.skill + (availabilityValue.available ? recommendationWeights.availability : 0) +
+        const evidenceCoverage = recommendationWeights.skill + (levelValue.available ? recommendationWeights.level : 0) +
+          (availabilityValue.available ? recommendationWeights.availability : 0) +
           (qualityValue.available ? recommendationWeights.quality : 0);
-        return { mentor, matchedSkills, score: rounded(skillContribution + availabilityValue.contribution +
+        return { mentor, matchedSkills, score: rounded(skillContribution + levelValue.contribution + availabilityValue.contribution +
           qualityValue.contribution, 2), evidenceCoverage,
           components: { skill: { weight: recommendationWeights.skill, available: true, score: ratio,
-            contribution: skillContribution }, level: unavailable(recommendationWeights.level),
+            contribution: skillContribution }, level: levelValue,
           availability: availabilityValue, quality: qualityValue } };
       }).filter(item => item.matchedSkills.length > 0).sort((a, b) => b.score - a.score ||
         b.matchedSkills.length - a.matchedSkills.length || a.mentor.firstName.localeCompare(b.mentor.firstName, 'es') ||
         a.mentor.lastName.localeCompare(b.mentor.lastName, 'es') || a.mentor.id.localeCompare(b.mentor.id)).slice(0, limit);
-      const missingSignals = ['level', ...['availability', 'quality'].filter(name =>
-        recommendations.some(item => !item.components[name].available))];
-      return { rankingStatus: recommendations.length ? 'PARTIAL' : 'INSUFFICIENT_DATA',
+      const missingSignals = ['level', 'availability', 'quality'].filter(name =>
+        recommendations.some(item => !item.components[name].available));
+      return { rankingStatus: recommendations.length ? (missingSignals.length ? 'PARTIAL' : 'COMPLETE') : 'INSUFFICIENT_DATA',
         weights: recommendationWeights, missingSignals, recommendations };
     },
   });

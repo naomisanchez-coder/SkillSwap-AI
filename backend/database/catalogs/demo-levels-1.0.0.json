@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "scope": "DEMO_ONLY",
+  "levels": [
+    { "code": "demo-initial", "name": "Inicial (demostración)", "rank": 25 },
+    { "code": "demo-intermediate", "name": "Intermedio (demostración)", "rank": 50 },
+    { "code": "demo-advanced", "name": "Avanzado (demostración)", "rank": 75 }
+  ]
+}

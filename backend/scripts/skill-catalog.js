@@ -13,6 +13,7 @@ try {
   if ((!isolated && !main) || config.DB_HOST !== '127.0.0.1' || config.DB_PORT !== '3306' || !config.DB_PASSWORD ||
       (mode === '--apply' && process.env.SKILL_CATALOG_ALLOW_WRITE !== 'yes')) throw new Error('Catalog target rejected');
   const catalog = await readSkillCatalog(catalogPath);
+  if (main && catalog.scope !== 'APPROVED') throw new Error('Demonstration catalog cannot target main');
   database = createDatabase({ host: config.DB_HOST, port: 3306, database: config.DB_NAME,
     user: config.DB_USER, password: config.DB_PASSWORD });
   const [[identity]] = await database.execute('SELECT CURRENT_USER() account,DATABASE() db', []);
