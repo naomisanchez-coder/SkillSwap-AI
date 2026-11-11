@@ -33,6 +33,11 @@ import { createExploreRepository } from './modules/student/explore.repository.js
 import { createExploreService } from './modules/student/explore.service.js';
 import { createBookingRepository } from './modules/student/booking.repository.js';
 import { createBookingService } from './modules/student/booking.service.js';
+import { readAiConfig } from './config/ai.js';
+import { createOpenAiResponsesClient } from './adapters/openai-responses.js';
+import { createAiRepository } from './modules/student/ai.repository.js';
+import { createAiLimiter } from './modules/student/ai.limiter.js';
+import { createAiService } from './modules/student/ai.service.js';
 
 let database;
 let emailService;
@@ -44,6 +49,7 @@ let studentService;
 let mentorService;
 let exploreService;
 let bookingService;
+let aiService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -122,9 +128,12 @@ try {
   const [bookingMigration] = await database.execute(
     "SELECT 1 present FROM schema_migrations WHERE version='007_sessions_booking_credits' LIMIT 1", []);
   if (bookingMigration.length === 1) bookingService = createBookingService(createBookingRepository(database));
+  const ai = readAiConfig(process.env);
+  if (ai) aiService = createAiService({ repository: createAiRepository(database),
+    client: createOpenAiResponsesClient(ai), limiter: createAiLimiter(ai.rateLimit) });
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
     loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService,
-    bookingService, trustProxyHops }));
+    bookingService, aiService, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);

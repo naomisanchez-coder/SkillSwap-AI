@@ -6,7 +6,8 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { createStudentRouter } from './modules/student/student.routes.js';
 
 export function createApp({ database, origins, emailService, verificationService, loginService, sessionService,
-  cookie, recoveryService, studentService, mentorService, exploreService, bookingService, trustProxyHops = 0 }) {
+  cookie, recoveryService, studentService, mentorService, exploreService, bookingService, aiService,
+  trustProxyHops = 0 }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', trustProxyHops === 0 ? false : trustProxyHops);
@@ -17,7 +18,7 @@ export function createApp({ database, origins, emailService, verificationService
   app.use('/api/auth', createAuthRouter(database, origins, emailService, verificationService,
     loginService, sessionService, cookie, recoveryService));
   app.use('/api/student', createStudentRouter({ origins, sessionService, studentService, mentorService,
-    exploreService, bookingService, cookie }));
+    exploreService, bookingService, aiService, cookie }));
   app.use((request, response) => {
     response.status(404).json({ status: 'error', message: 'Not found' });
   });

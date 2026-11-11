@@ -14,6 +14,8 @@ const definitions = Object.freeze({
   UNSUPPORTED_MEDIA_TYPE: [415, 'Envía el cuerpo como application/json.'],
   FORBIDDEN: [403, 'No tienes autorización para esta operación.'],
   RATE_LIMITED: [429, 'Demasiadas solicitudes. Inténtalo más tarde.'],
+  AI_PROVIDER_LIMITED: [503, 'El servicio de IA alcanzó temporalmente su límite.'],
+  AI_UNAVAILABLE: [503, 'El asistente de IA no está disponible temporalmente.'],
   SERVICE_UNAVAILABLE: [503, 'El servicio no está disponible temporalmente.'],
 });
 

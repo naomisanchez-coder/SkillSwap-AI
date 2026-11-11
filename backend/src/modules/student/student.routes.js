@@ -6,14 +6,16 @@ import { createMentorController } from './mentor.controller.js';
 import { parseMultipart } from '../../middleware/multipart.js';
 import { createExploreController } from './explore.controller.js';
 import { createBookingController } from './booking.controller.js';
+import { createAiController } from './ai.controller.js';
 
 export function createStudentRouter({ origins, sessionService, studentService,
-  mentorService, exploreService, bookingService, cookie = { name: 'skillswap_session' } }) {
+  mentorService, exploreService, bookingService, aiService, cookie = { name: 'skillswap_session' } }) {
   const router = Router();
   const controller = studentService ? createStudentController(studentService) : null;
   const mentor = mentorService ? createMentorController(mentorService) : null;
   const explore = exploreService ? createExploreController(exploreService) : null;
   const booking = bookingService ? createBookingController(bookingService) : null;
+  const ai = aiService ? createAiController(aiService) : null;
   const authenticate = async (request, response, next) => {
     try {
       if (!sessionService || !controller) throw new PublicError('SERVICE_UNAVAILABLE');
@@ -39,6 +41,7 @@ export function createStudentRouter({ origins, sessionService, studentService,
   const mentorAvailable = (request, response, next) => mentor ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
   const exploreAvailable = (request, response, next) => explore ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
   const bookingAvailable = (request, response, next) => booking ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
+  const aiAvailable = (request, response, next) => ai ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
   router.use(authenticate);
   router.get('/profile', controller?.profile ?? (() => {}));
   router.patch('/profile', mutation, json, controller?.updateProfile ?? (() => {}));
@@ -84,5 +87,6 @@ export function createStudentRouter({ origins, sessionService, studentService,
   router.post('/sessions/:sessionId/cancel', bookingAvailable, mutation, json, booking?.cancel ?? (() => {}));
   router.post('/sessions/:sessionId/reviews', bookingAvailable, mutation, json, booking?.review ?? (() => {}));
   router.get('/session-credits', bookingAvailable, booking?.credits ?? (() => {}));
+  router.post('/ai/chat', aiAvailable, mutation, json, ai?.chat ?? (() => {}));
   return router;
 }
