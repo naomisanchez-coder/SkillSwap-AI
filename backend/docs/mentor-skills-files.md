@@ -2,7 +2,7 @@
 
 ## Estado
 
-La migración `006_mentor_skills_files` y la API están preparadas, pero 006 no fue aplicada a ninguna base. Las rutas de archivos fallan de forma cerrada con 503 mientras no se configure `PRIVATE_STORAGE_ROOT`; configurarlo no sustituye la aplicación y validación previa de la migración en `skillswap_ai_test_auth`.
+La migración `006_mentor_skills_files` está aplicada y validada en las bases aislada y principal de desarrollo. Las rutas de archivos fallan de forma cerrada con 503 mientras no se configure `PRIVATE_STORAGE_ROOT`.
 
 Checksum SHA-256 de la propuesta 006:
 
