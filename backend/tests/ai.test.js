@@ -89,7 +89,8 @@ test('Gemini adapter uses official endpoints, header authentication and no tools
   assert.deepEqual(body, { systemInstruction: { parts: [{ text: 'Internal' }] }, contents: [
     { role: 'user', parts: [{ text: 'Hola' }] },
     { role: 'model', parts: [{ text: 'Hola también' }] },
-  ], generationConfig: { maxOutputTokens: 240 }, store: false });
+  ], generationConfig: { maxOutputTokens: 240 } });
+  assert.equal(body.store, undefined);
   assert.equal(body.tools, undefined);
 });
 

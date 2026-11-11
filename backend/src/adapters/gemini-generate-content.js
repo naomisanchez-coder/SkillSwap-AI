@@ -88,7 +88,6 @@ export function createGeminiGenerateContentClient(config, { fetchImpl = fetch, s
           contents: input.map(item => ({ role: item.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: item.content }] })),
           generationConfig: { maxOutputTokens: config.maximumOutputTokens },
-          store: false,
         }),
       });
       if (!response.ok) rejectHttp(operation, response, durationMs);
