@@ -27,8 +27,24 @@ async function withApp({ role = 'student', configured = true } = {}, work) {
       onboardingComplete: profile.onboardingComplete }, credits: { balance: 20 },
     activity: { creditTransactions: 1 } }; },
   } : undefined;
+  const mentorService = configured ? {
+    requirements() { return { certificate: { required: true } }; },
+    async catalog() { calls.push(['skill-catalog']); return []; },
+    async ownSkills(id) { calls.push(['skills', id]); return []; },
+    async setOwnSkill(id, skillId, body) { calls.push(['set-skill', id, skillId, body]); return { skillId, ...body }; },
+    async applications(id) { calls.push(['applications', id]); return []; },
+    async createApplication(id, multipart) { calls.push(['create-application', id, multipart]);
+      if (!multipart.files.certificate) throw new PublicError('VALIDATION_ERROR', { certificate: 'Requerido.' });
+      return { id: 'application', status: 'PENDING' }; },
+    async replaceCertificate() { return { id: 'application', status: 'PENDING' }; },
+    async resubmit() { return { id: 'application', status: 'PENDING' }; },
+    async document() { return { buffer: Buffer.from('%PDF-test'), mediaType: 'application/pdf' }; },
+    async savePhoto(id, multipart) { calls.push(['photo', id, multipart]); return { available: true }; },
+    async photo() { return { buffer: Buffer.from('image'), mediaType: 'image/png' }; },
+    async deletePhoto() { return { deleted: true }; },
+  } : undefined;
   const app = createApp({ database: { check: async () => {} }, origins: ['http://localhost:5173'],
-    sessionService, studentService, cookie: { name: 'skillswap_session' } });
+    sessionService, studentService, mentorService, cookie: { name: 'skillswap_session' } });
   const server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
   try { await work(`http://127.0.0.1:${server.address().port}`, calls); }
   finally { await new Promise(resolve => server.close(resolve)); }
@@ -88,5 +104,30 @@ test('dashboard and credits are read-only, session-owned and available without C
     assert.ok(calls.some(call => call[0] === 'dashboard' && call[1] === profile.id));
     assert.ok(calls.some(call => call[0] === 'credits' && call[1] === profile.id));
     assert.equal((await fetch(`${base}/api/student/credits`, { method: 'POST', headers })).status, 404);
+  });
+});
+
+test('mentor application and photo multipart routes require owner session and CSRF', async () => {
+  await withApp({}, async (base, calls) => {
+    const form = new FormData();
+    form.set('skillId', '123e4567-e89b-12d3-a456-426614174000');
+    form.set('certificate', new Blob(['%PDF-1.4\n%%EOF'], { type: 'application/pdf' }), 'certificate.pdf');
+    const response = await fetch(`${base}/api/student/mentor-applications`, { method: 'POST', headers: {
+      Cookie: `skillswap_session=${token}`, Origin: 'http://localhost:5173', 'X-CSRF-Token': csrf }, body: form });
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).application.status, 'PENDING');
+    assert.ok(calls.some(call => call[0] === 'create-application' && call[1] === profile.id &&
+      call[2].files.certificate.mediaType === 'application/pdf'));
+
+    const photo = new FormData();
+    photo.set('photo', new Blob(['image'], { type: 'image/png' }), 'photo.png');
+    assert.equal((await fetch(`${base}/api/student/profile/photo`, { method: 'PUT', headers: {
+      Cookie: `skillswap_session=${token}`, Origin: 'http://localhost:5173', 'X-CSRF-Token': csrf }, body: photo })).status, 200);
+    assert.equal((await fetch(`${base}/api/student/profile/photo`, { method: 'DELETE', headers: {
+      Cookie: `skillswap_session=${token}`, Origin: 'http://localhost:5173', 'X-CSRF-Token': csrf } })).status, 200);
+  });
+  await withApp({ role: 'admin' }, async base => {
+    assert.equal((await fetch(`${base}/api/student/skills`, { headers: {
+      Cookie: `skillswap_session=${token}` } })).status, 403);
   });
 });

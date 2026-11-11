@@ -25,6 +25,10 @@ import { createPasswordRecoveryRepository } from './modules/auth/password-recove
 import { createPasswordRecoveryService } from './modules/auth/password-recovery.service.js';
 import { createStudentRepository } from './modules/student/student.repository.js';
 import { createStudentService } from './modules/student/student.service.js';
+import { readPrivateStorageConfig } from './config/storage.js';
+import { createLocalPrivateStorage } from './adapters/private-storage.js';
+import { createMentorRepository } from './modules/student/mentor.repository.js';
+import { createMentorService } from './modules/student/mentor.service.js';
 
 let database;
 let emailService;
@@ -33,6 +37,7 @@ let loginService;
 let sessionService;
 let recoveryService;
 let studentService;
+let mentorService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -102,8 +107,13 @@ try {
       rememberMaxAge: sessionSecurity.policy.remembered.absoluteSeconds * 1000 };
   }
   studentService = createStudentService(createStudentRepository(database));
+  const storageConfig = readPrivateStorageConfig(process.env);
+  if (storageConfig) mentorService = createMentorService(createMentorRepository(database),
+    createLocalPrivateStorage(storageConfig), {
+      onCleanupFailure(event) { console.warn(`private_storage: ${event}`); },
+    });
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
-    loginService, sessionService, cookie, recoveryService, studentService, trustProxyHops }));
+    loginService, sessionService, cookie, recoveryService, studentService, mentorService, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);
