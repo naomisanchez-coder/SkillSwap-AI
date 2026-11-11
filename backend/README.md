@@ -6,16 +6,16 @@ SkillSwap AI es una plataforma académica para el intercambio de habilidades ent
 
 La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. El incremento 1.1 añadió documentación. El incremento 1.2 incorpora el esquema relacional, un ejecutor seguro y pruebas reales. La migración fue validada en `skillswap_ai_test_auth` y aplicada con autorización explícita a la base principal de desarrollo `skillswap_ai`.
 
-**Registro 1.3B, envío 1.4A, verificación/crédito inicial 1.4B y autenticación 1.5 están implementados.** Las migraciones 001–003 existen en ambas bases; login queda deshabilitado si faltan sus claves privadas. Los contratos y su estado están en [docs/auth-api.md](docs/auth-api.md).
+**Registro 1.3B, envío 1.4A, verificación/crédito inicial 1.4B, autenticación 1.5 y recuperación 1.5B están implementados.** Las migraciones 001–004 existen en ambas bases. El perfil/onboarding 1.6 y su migración 005 están preparados, pero no se consideran operativos hasta validar y autorizar el DDL incremental. Los contratos de autenticación están en [docs/auth-api.md](docs/auth-api.md) y el alcance estudiantil en [docs/student-profile.md](docs/student-profile.md).
 
 ## Arquitectura
 
 - Presentación: frontend React separado, comunicado mediante API REST JSON.
 - Servidor: Node.js con JavaScript ES Modules y Express.
 - Persistencia: MySQL 8.4 mediante `mysql2/promise`.
-- Monolito modular por capas: ruta → controlador → servicio → repositorio → MySQL. El módulo auth implementa registro; se conserva la infraestructura existente.
+- Monolito modular por capas: ruta → controlador → servicio → repositorio → MySQL. Los módulos auth y student reutilizan la infraestructura existente.
 
-`src/app.js` crea la aplicación sin abrir puertos. `src/server.js` administra el servidor HTTP y el cierre del pool. La configuración se concentra en `src/config/`. El pool expone comprobación de disponibilidad, cierre, ejecución parametrizada y transacciones sobre una misma conexión. El módulo src/modules/auth separa HTTP, validación, negocio, hash y persistencia.
+`src/app.js` crea la aplicación sin abrir puertos. `src/server.js` administra el servidor HTTP y el cierre del pool. La configuración se concentra en `src/config/`. El pool expone comprobación de disponibilidad, cierre, ejecución parametrizada y transacciones sobre una misma conexión. Los módulos `src/modules/auth` y `src/modules/student` separan HTTP, validación, negocio y persistencia.
 
 ## Tecnologías y versiones
 
