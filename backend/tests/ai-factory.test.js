@@ -28,3 +28,16 @@ test('inicialización: timeout simulado se clasifica y OpenAI permanece disponib
   const alternative = createConfiguredAiService({ ...config, AI_PROVIDER: 'openai', AI_API_KEY: 'mock-openai-key-never-sent-externally' }, { repository, transport: { async fetchImpl(url) { calls++; assert.equal(url, 'https://api.openai.com/v1/responses'); return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'Alternativa simulada' }] }] }); } } });
   assert.equal((await alternative.chat('student', { message: 'Hola' })).reply, 'Alternativa simulada'); assert.equal(calls, 1);
 });
+
+test('modelo ligero configurado: request compatible y respuesta española, sin parámetros extra ni llamadas al construir', async () => {
+  const { applyDemoAiConfig } = await import('../scripts/demo-ai-config.js');
+  const source = applyDemoAiConfig({}, config, { AI_MODEL: 'gemini-light-offline-fixture' }); let calls = 0;
+  const service = createConfiguredAiService(source, { repository, transport: { async fetchImpl(url, options) {
+    calls++; assert.ok(url.endsWith('/models/gemini-light-offline-fixture:generateContent'));
+    const body = JSON.parse(options.body); assert.deepEqual(body.generationConfig, { maxOutputTokens: 300 });
+    assert.equal(body.store, undefined); assert.equal(body.tools, undefined);
+    assert.match(body.systemInstruction.parts[0].text, /español/);
+    return Response.json({ candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [{ text: 'Empieza por un objetivo de aprendizaje pequeño.' }] } }], usageMetadata: { thoughtsTokenCount: 0, candidatesTokenCount: 12 } });
+  } } });
+  assert.equal(calls, 0); assert.match((await service.chat('student', { message: '¿Cómo estudio mejor?', history: [] })).reply, /objetivo de aprendizaje/); assert.equal(calls, 1);
+});

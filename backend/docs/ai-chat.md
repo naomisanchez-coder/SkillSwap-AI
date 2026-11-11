@@ -110,3 +110,19 @@ await fetch('/api/student/ai/chat', {
 Las pruebas automatizadas sustituyen ambos transportes y no llaman a OpenAI ni Gemini. Google AI Studio confirmó para el proyecto local el nivel gratuito y ausencia de cuenta de facturación; el catálogo oficial autenticado confirmó `gemini-3.8-flash` con `generateContent`, y la tabla oficial vigente indica entrada y salida gratuitas para su modalidad estándar. El fallo previo se atribuyó a un campo `store` no admitido por el contrato de Gemini; se eliminó sin cambiar el endpoint público.
 
 Después de rotar la clave local se realizó una única solicitud real adicional, acotada a 128 tokens, sin herramientas ni datos privados, mediante el endpoint autenticado, sesión y CSRF reales sobre `skillswap_ai_test_auth`. El endpoint devolvió `200`, el proveedor registró `SUCCESS/200` en 3.589 segundos y hubo una sola llamada, sin reintentos. Se obtuvo contenido generativo real, aunque quedó truncado por el límite reducido de salida; para la integración local se recomienda conservar el límite configurado de 300 tokens y no reintentar automáticamente respuestas incompletas. La fixture aislada se eliminó al finalizar.
+
+## Override privado del worktree para la sustentación
+
+El lanzador integrado admite `backend/.env.ai.override.local`, opcional, ignorado por Git y con permisos 0600. Solo acepta `AI_MODEL` y `AI_TIMEOUT_MS`: no permite sustituir credenciales, SMTP, conexión MySQL ni ampliar el límite de salida. Si falta, conserva la configuración privada de origen. El modelo anterior y la clave permanecen en ese archivo de origen, sin copiarse ni modificarse.
+
+La selección local se verificó mediante una consulta autenticada de la ficha del modelo: HTTP 200, soporte de generateContent y capacidad de salida suficiente. Esto confirma que el modelo es visible para la clave; el catálogo no informa del nivel de facturación ni de la cuota remanente. La entrada y salida gratuitas se contrastaron con los [precios oficiales del modelo ligero](https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite). La [documentación oficial de razonamiento](https://aistudio.google.com/docs/thinking?generate-content=true) indica razonamiento mínimo por defecto para ese modelo: no se añaden thinkingBudget ni otros parámetros que puedan ser incompatibles. Se conservan 300 tokens de salida y timeout de 30 segundos, dentro de los 35 segundos de espera del cliente.
+
+Validaciones de esta preparación: 220 pruebas backend aprobadas, 3 omitidas; 98 frontend aprobadas; build, TypeScript, ESLint y git diff --check correctos. Los mocks cubren la selección privada sin cambiar clave/SMTP, parámetros compatibles, respuesta en español, 503, timeout, cuota y el contrato message.content. No se hicieron solicitudes generativas reales ni cambios persistentes en MySQL.
+
+Cerrar primero el Express anterior con Ctrl+C y ejecutar desde backend:
+
+```sh
+npm run demo:start -- --smtp
+```
+
+Naomi realizará UNA consulta manual desde http://localhost:5173 con la cuenta existente. La aplicación está preparada; una respuesta generativa real y la disponibilidad de cuota no se declaran verificadas hasta esa prueba. No ejecutar reintentos automáticos ni versionar el override privado.

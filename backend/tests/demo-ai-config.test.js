@@ -16,3 +16,26 @@ test('demo: Gemini privado prevalece sobre plantilla y conserva SMTP, OTP e iden
 test('demo: configuración ausente o deshabilitada falla antes de iniciar Express', () => {
   for (const value of [{}, { ...ai, AI_ENABLED: 'false' }, { ...ai, GEMINI_API_KEY: '' }]) assert.throws(() => applyDemoAiConfig({}, value));
 });
+
+test('override privado: cambia solo modelo y timeout, conserva clave, SMTP y límite de salida', () => {
+  const original = { ...ai }; const config = { SMTP_ENABLED: 'true', DB_NAME: 'skillswap_ai_demo' };
+  const result = applyDemoAiConfig(config, original, { AI_MODEL: 'gemini-light-offline-fixture', AI_TIMEOUT_MS: '30000' });
+  assert.equal(result.AI_MODEL, 'gemini-light-offline-fixture'); assert.equal(result.GEMINI_API_KEY, original.GEMINI_API_KEY);
+  assert.equal(original.AI_MODEL, ai.AI_MODEL); assert.equal(result.SMTP_ENABLED, 'true');
+  assert.equal(result.DB_NAME, 'skillswap_ai_demo'); assert.equal(readAiConfig(result).maximumOutputTokens, 300);
+  for (const override of [{ GEMINI_API_KEY: 'replacement' }, { SMTP_ENABLED: 'false' }, { DB_NAME: 'other' }, { AI_MAX_OUTPUT_TOKENS: '1000' }, { AI_TIMEOUT_MS: '60000' }, { AI_MODEL: '' }]) assert.throws(() => applyDemoAiConfig(config, original, override));
+});
+
+test('lector de override: ausente conserva configuración; rechaza permisos abiertos y cambios ajenos a IA', async () => {
+  const { mkdtemp, writeFile, chmod, unlink, rmdir } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { readLocalAiOverride } = await import('../scripts/start-integrated-demo.js');
+  const root = await mkdtemp(join(tmpdir(), 'skillswap-ai-override-')); const file = join(root, '.env.ai.override.local');
+  try {
+    assert.deepEqual(await readLocalAiOverride(file), {});
+    await writeFile(file, 'AI_MODEL=gemini-light-offline-fixture\nAI_TIMEOUT_MS=30000\n', { mode: 0o600 });
+    assert.equal((await readLocalAiOverride(file)).AI_MODEL, 'gemini-light-offline-fixture');
+    await chmod(file, 0o644); await assert.rejects(readLocalAiOverride(file), /0600/);
+    await chmod(file, 0o600); await writeFile(file, 'SMTP_ENABLED=false\n'); await assert.rejects(readLocalAiOverride(file), /solo admite/);
+  } finally { await unlink(file).catch(() => {}); await rmdir(root); }
+});
