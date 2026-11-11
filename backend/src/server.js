@@ -1,3 +1,4 @@
+import { createConfiguredAiService } from './modules/student/ai.factory.js';
 import { createServer } from 'node:http';
 import { loadEnv } from './config/env.js';
 import { createDatabase } from './config/db.js';
@@ -33,12 +34,7 @@ import { createExploreRepository } from './modules/student/explore.repository.js
 import { createExploreService } from './modules/student/explore.service.js';
 import { createBookingRepository } from './modules/student/booking.repository.js';
 import { createBookingService } from './modules/student/booking.service.js';
-import { readAiConfig } from './config/ai.js';
-import { createOpenAiResponsesClient } from './adapters/openai-responses.js';
-import { createGeminiGenerateContentClient } from './adapters/gemini-generate-content.js';
 import { createAiRepository } from './modules/student/ai.repository.js';
-import { createAiLimiter } from './modules/student/ai.limiter.js';
-import { createAiService } from './modules/student/ai.service.js';
 import { createPrivateFileReader } from './modules/student/private-file-reader.js';
 import { createAdminRepository } from './modules/admin/admin.repository.js';
 import { createAdminService } from './modules/admin/admin.service.js';
@@ -141,12 +137,10 @@ try {
   if (bookingMigration.length === 1) bookingService = createBookingService(createBookingRepository(database));
   if (privateStorage && levelMigration.length === 1) adminService = createAdminService(
     createAdminRepository(database), createPrivateFileReader(privateStorage));
-  const ai = readAiConfig(process.env);
-  if (ai) aiService = createAiService({ repository: createAiRepository(database),
-    client: ai.provider === 'gemini' ? createGeminiGenerateContentClient(ai, {
-      onDiagnostic(event) { console.info(JSON.stringify({ event: 'ai_provider', ...event })); },
-    }) : createOpenAiResponsesClient(ai),
-    limiter: createAiLimiter(ai.rateLimit) });
+  aiService = createConfiguredAiService(process.env, {
+    repository: createAiRepository(database),
+    onDiagnostic(event) { console.info(JSON.stringify({ event: 'ai_provider', ...event })); },
+  });
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
     loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService,
     bookingService, aiService, adminService, trustProxyHops }));
