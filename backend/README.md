@@ -6,7 +6,7 @@ SkillSwap AI es una plataforma académica para el intercambio de habilidades ent
 
 La Etapa 0 fue implementada en `aa5fd55cab63432b7bd099eabd6f6175d6592142`: servidor Express, configuración local, pool MySQL, endpoints de salud y pruebas automatizadas. El incremento 1.1 añadió documentación. El incremento 1.2 incorpora el esquema relacional, un ejecutor seguro y pruebas reales. La migración fue validada en `skillswap_ai_test_auth` y aplicada con autorización explícita a la base principal de desarrollo `skillswap_ai`.
 
-**Registro 1.3B, envío 1.4A, verificación/crédito inicial 1.4B, autenticación 1.5, recuperación 1.5B y perfil 1.6 están implementados.** Las migraciones 001–005 existen en ambas bases. El incremento 1.7 conecta las lecturas reales de Inicio y Mis créditos; reservas, sesiones, retenciones y recomendaciones siguen pendientes. Los contratos están en [docs/auth-api.md](docs/auth-api.md), [docs/student-profile.md](docs/student-profile.md) y [docs/student-dashboard.md](docs/student-dashboard.md).
+**Registro 1.3B, envío 1.4A, verificación/crédito inicial 1.4B, autenticación 1.5, recuperación 1.5B y perfil 1.6 están implementados.** Las migraciones 001–005 existen en ambas bases. El incremento 1.7 conecta las lecturas reales de Inicio y Mis créditos. El modelo 006 y la API de habilidades, solicitudes y archivos privados están preparados, pero no se consideran operativos hasta validar y autorizar 006. Los contratos están en [docs/auth-api.md](docs/auth-api.md), [docs/student-profile.md](docs/student-profile.md), [docs/student-dashboard.md](docs/student-dashboard.md) y [docs/mentor-skills-files.md](docs/mentor-skills-files.md).
 
 ## Arquitectura
 
@@ -108,6 +108,7 @@ Desde la raíz del repositorio, entrar en `backend/`. Si no existe `.env`, crear
 | `DB_PASSWORD` | Configurar exclusivamente en el entorno local |
 | `DB_NAME` | `skillswap_ai` |
 | `CORS_ORIGIN` | `http://localhost:5173`; admite lista separada por comas |
+| `PRIVATE_STORAGE_ROOT` | Ruta absoluta privada; dejar vacía hasta aplicar y validar 006 |
 
 El archivo `.env` se carga desde `backend/`, con independencia del directorio de ejecución. Las variables ya presentes en el proceso tienen precedencia. La configuración valida puertos, campos obligatorios, entorno, usuario aplicativo y orígenes explícitos.
 

@@ -390,6 +390,8 @@ Los contratos de perfil y onboarding preparados en 1.6 se documentan en [student
 
 Los contratos de solo lectura para Inicio y Mis créditos se documentan en [student-dashboard.md](student-dashboard.md). El saldo se deriva exclusivamente del libro `credit_transactions`; no existe una API para editarlo desde el cliente.
 
+El modelo y los contratos preparados para habilidades, solicitud de mentor, certificados y fotografía se documentan en [mentor-skills-files.md](mentor-skills-files.md). Requieren validar la migración 006 antes de habilitarse.
+
 
 ## Persistencia implementada en el incremento 1.2
 
