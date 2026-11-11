@@ -38,6 +38,9 @@ import { createOpenAiResponsesClient } from './adapters/openai-responses.js';
 import { createAiRepository } from './modules/student/ai.repository.js';
 import { createAiLimiter } from './modules/student/ai.limiter.js';
 import { createAiService } from './modules/student/ai.service.js';
+import { createPrivateFileReader } from './modules/student/private-file-reader.js';
+import { createAdminRepository } from './modules/admin/admin.repository.js';
+import { createAdminService } from './modules/admin/admin.service.js';
 
 let database;
 let emailService;
@@ -50,6 +53,7 @@ let mentorService;
 let exploreService;
 let bookingService;
 let aiService;
+let adminService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -120,20 +124,26 @@ try {
   }
   studentService = createStudentService(createStudentRepository(database));
   const storageConfig = readPrivateStorageConfig(process.env);
-  if (storageConfig) mentorService = createMentorService(createMentorRepository(database),
-    createLocalPrivateStorage(storageConfig), {
+  const privateStorage = storageConfig ? createLocalPrivateStorage(storageConfig) : null;
+  if (privateStorage) mentorService = createMentorService(createMentorRepository(database),
+    privateStorage, {
       onCleanupFailure(event) { console.warn(`private_storage: ${event}`); },
     });
-  exploreService = createExploreService(createExploreRepository(database));
+  const [levelMigration] = await database.execute(
+    "SELECT 1 present FROM schema_migrations WHERE version='008_mentor_skill_levels' LIMIT 1", []);
+  exploreService = createExploreService(createExploreRepository(database,
+    { levelsAvailable: levelMigration.length === 1 }));
   const [bookingMigration] = await database.execute(
     "SELECT 1 present FROM schema_migrations WHERE version='007_sessions_booking_credits' LIMIT 1", []);
   if (bookingMigration.length === 1) bookingService = createBookingService(createBookingRepository(database));
+  if (privateStorage && levelMigration.length === 1) adminService = createAdminService(
+    createAdminRepository(database), createPrivateFileReader(privateStorage));
   const ai = readAiConfig(process.env);
   if (ai) aiService = createAiService({ repository: createAiRepository(database),
     client: createOpenAiResponsesClient(ai), limiter: createAiLimiter(ai.rateLimit) });
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
     loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService,
-    bookingService, aiService, trustProxyHops }));
+    bookingService, aiService, adminService, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);

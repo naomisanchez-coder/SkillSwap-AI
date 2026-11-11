@@ -1,6 +1,7 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { PublicError } from '../../errors/PublicError.js';
 import { validatePdf, validatePhoto, validatePortfolioUrl } from './student-files.js';
+import { createPrivateFileReader } from './private-file-reader.js';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -25,24 +26,12 @@ async function storedFile(storage, validated, purpose) {
     size: validated.size, sha256: validated.sha256 };
 }
 
-function verifyStored(value, buffer) {
-  const expected = Buffer.isBuffer(value.sha256) ? value.sha256 : Buffer.from(value.sha256);
-  const actual = createHash('sha256').update(buffer).digest();
-  return buffer.length === Number(value.size_bytes) && expected.length === actual.length && timingSafeEqual(expected, actual);
-}
-
 export function createMentorService(repository, storage, { onCleanupFailure = () => {} } = {}) {
   if (!repository || !storage) throw new Error('Mentor repository and private storage required');
+  const readPrivateFile = createPrivateFileReader(storage);
   const cleanup = async key => {
     if (!key) return;
     try { await storage.remove(key); } catch { onCleanupFailure('PRIVATE_FILE_CLEANUP_REQUIRED'); }
-  };
-  const download = async metadata => {
-    let buffer;
-    try { buffer = await storage.read(metadata.storage_key, Number(metadata.size_bytes)); }
-    catch { throw new PublicError('SERVICE_UNAVAILABLE'); }
-    if (!verifyStored(metadata, buffer)) throw new PublicError('SERVICE_UNAVAILABLE');
-    return { buffer, mediaType: metadata.media_type };
   };
   return Object.freeze({
     requirements() {
@@ -109,7 +98,7 @@ export function createMentorService(repository, storage, { onCleanupFailure = ()
     async document(userId, applicationId, type) {
       const normalized = type === 'certificate' ? 'CERTIFICATE' : type === 'portfolio' ? 'PORTFOLIO' : null;
       if (!normalized) throw new PublicError('VALIDATION_ERROR', { document: 'Selecciona un documento permitido.' });
-      return download(await repository.document(userId, identifier(applicationId, 'applicationId'), normalized));
+      return readPrivateFile(await repository.document(userId, identifier(applicationId, 'applicationId'), normalized));
     },
     async savePhoto(userId, multipart) {
       exactObject(multipart?.fields, [], 'form');
@@ -122,7 +111,7 @@ export function createMentorService(repository, storage, { onCleanupFailure = ()
         return { available: true };
       } catch (error) { await cleanup(value.storageKey); throw error; }
     },
-    async photo(userId) { return download(await repository.photo(userId)); },
+    async photo(userId) { return readPrivateFile(await repository.photo(userId)); },
     async deletePhoto(userId) {
       const result = await repository.deletePhoto(userId);
       await cleanup(result.oldStorageKey);
