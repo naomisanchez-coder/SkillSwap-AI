@@ -2,7 +2,7 @@
 
 ## Estado y decisiones confirmadas
 
-La migración `007_sessions_booking_credits.sql` está preparada y no debe aplicarse sin una autorización posterior. Mientras `schema_migrations` no contenga `007_sessions_booking_credits`, el servidor no compone este módulo y sus rutas responden `503 SERVICE_UNAVAILABLE`; las rutas ya publicadas continúan funcionando.
+La migración `007_sessions_booking_credits.sql` está aplicada y validada en `skillswap_ai_test_auth`; permanece pendiente en `skillswap_ai`. Mientras el esquema de ejecución no contenga `007_sessions_booking_credits`, el servidor no compone este módulo y sus rutas responden `503 SERVICE_UNAVAILABLE`; las rutas ya publicadas continúan funcionando.
 
 El flujo funcional confirmado por Figma es:
 
@@ -60,8 +60,10 @@ Todas las rutas exigen una sesión `STUDENT`; las mutaciones además exigen orig
 
 El cliente aporta una `requestId` UUID estable por intención de reserva. No aporta costo, estado económico, estudiante ni mentor. Las lecturas filtran siempre por el participante autenticado y no exponen certificados, notas administrativas o datos privados.
 
-## Validación pendiente con MySQL
+## Validación real con MySQL aislado
 
-Las pruebas sin DDL cubren contratos, precios, horarios, proveedores de videollamada, autorización HTTP, CSRF, cancelación cerrada, orden/checksum y restricciones declarativas de 007. Después de autorizar primero la migración en `skillswap_ai_test_auth`, deben comprobarse con `skillswap_test_app`: concurrencia real, rollback, saldo insuficiente, intervalos solapados, idempotencia, transiciones, liquidación, futura política de reembolso y limpieza de fixtures. No ejecutar esas pruebas en `skillswap_ai`.
+El checksum aplicado es `aafc96679930a69496175c1904e2a240e412c28e75181a1a4f558cd14bd1c6c6`. El postcheck confirmó seis tablas InnoDB, 15 claves foráneas, 18 restricciones CHECK habilitadas, índices, historial e idempotencia. Las integraciones usan `skillswap_test_app` y comprobaron tarifas, saldo insuficiente, intervalos solapados, reintento por clave, concurrencia con inicios idénticos, transiciones, permisos, liquidación única, valoración y limpieza selectiva. Ninguna prueba de escritura se ejecutó en `skillswap_ai`.
 
-La disponibilidad ya puede alimentar el 25 % del ranking de recomendaciones después de aplicar y poblar 007. La calidad (10 %) requiere sesiones completadas y valoraciones reales. El nivel por habilidad continúa sin modelo confirmado; no debe inferirse del texto de onboarding.
+La propuesta de cancelar únicamente una sesión `UPCOMING`, con reembolso total y sin penalización, es compatible con el modelo: `CANCELLED`, `REFUNDED`, `refund_transaction_id` y el evento `CANCELLED` ya están definidos. Su operación deberá insertar un movimiento positivo único para el estudiante y actualizar retención, sesión y evento en una transacción. No se activa hasta aprobar expresamente esa regla.
+
+La disponibilidad podrá alimentar el 25 % del ranking de recomendaciones después de aplicar 007 también en el entorno que sirve la aplicación y poblar datos reales. La calidad (10 %) requiere sesiones completadas y valoraciones reales. El nivel por habilidad continúa sin modelo confirmado; no debe inferirse del texto de onboarding.

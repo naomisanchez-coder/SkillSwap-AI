@@ -392,6 +392,6 @@ Los endpoints `POST /api/auth/password-recovery/request` y `POST /api/auth/passw
 
 ## Incremento 1.10: reservas y sesiones (preparado, sin DDL)
 
-La migración incremental `007_sessions_booking_credits.sql` y el módulo por capas están preparados. No se ha aplicado 007 en `skillswap_ai_test_auth` ni en `skillswap_ai`; por seguridad, el servidor deja las nuevas rutas en `503 SERVICE_UNAVAILABLE` hasta encontrar el registro de migración. Se conservan las tarifas 30/5, 60/10 y 90/15, retenciones transaccionales, liquidación al validar y una valoración por sesión completada.
+La migración incremental `007_sessions_booking_credits.sql` y el módulo por capas están preparados. 007 está aplicada y validada en `skillswap_ai_test_auth`, pero permanece pendiente en `skillswap_ai`; por seguridad, el servidor deja las nuevas rutas en `503 SERVICE_UNAVAILABLE` en cualquier esquema sin el registro de migración. Se conservan las tarifas 30/5, 60/10 y 90/15, retenciones transaccionales, liquidación al validar y una valoración por sesión completada.
 
-La cancelación está bloqueada hasta aprobar plazo y efecto económico. Las pruebas MySQL reales de concurrencia, conflictos, rollback y movimientos quedan pendientes de aplicar 007 primero en el esquema aislado. Contratos y decisiones: [sessions-booking-credits.md](docs/sessions-booking-credits.md).
+La cancelación está bloqueada hasta aprobar plazo y efecto económico. Las pruebas MySQL aisladas comprobaron estructura, concurrencia, conflictos, rollback, idempotencia y movimientos; no autorizan aplicar 007 en la principal. Contratos y decisiones: [sessions-booking-credits.md](docs/sessions-booking-credits.md).
