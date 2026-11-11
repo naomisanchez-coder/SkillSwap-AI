@@ -15,14 +15,11 @@ Los archivos locales ignorados son `.env.demo.local` y `.env.migrations.demo.loc
 
 Las claves HMAC de login, CSRF y recuperación deben generarse como valores hexadecimales independientes de 32 bytes y permanecer estables. Las claves OTP y credenciales SMTP se cargan separadamente desde `.env.smtp.local`; ese archivo permanece con `SMTP_ENABLED=false` en reposo.
 
-## Secuencia controlada pendiente
+## Secuencia controlada aplicada
 
-1. Ejecutar el preflight de 001 con `.env.migrations.demo.local`.
-2. Aplicar 001 con autorización DDL en memoria.
-3. Confirmar el permiso `ALTER` exacto sobre `skillswap_ai_demo.email_verifications`.
-4. Ejecutar preflight y aplicar hasta `008_mentor_skill_levels`.
-5. Cargar el catálogo académico aprobado y luego los catálogos de habilidades/niveles `DEMO_ONLY` mediante `skillswap_demo_app`.
-6. Comprobar y preparar los tres mentores persistentes mediante el procedimiento explícito:
+Las migraciones 001–008 fueron aplicadas con el migrador oficial y quedaron registradas con checksum independiente. El esquema conserva 14 carreras, 84 asociaciones carrera/ciclo, tres habilidades y tres niveles `DEMO_ONLY`, además de los tres mentores persistentes. Una ejecución posterior del preflight no repitió DDL.
+
+El procedimiento reproducible para comprobar o volver a preparar un esquema demo autorizado es:
 
 ```sh
 node scripts/demo-mentors.js --check .env.demo.local
@@ -37,16 +34,14 @@ La comprobación operativa crea un estudiante temporal mediante registro y OTP s
 ```sh
 DEMO_VERIFY_ALLOW_WRITE=yes node scripts/verify-demo.js .env.demo.local
 ```
-6. Provisionar los tres mentores con el procedimiento privilegiado auditado, archivos sintéticos privados, solicitudes ADMIN, ofertas, niveles y disponibilidad.
-
 No se debe ejecutar ningún paso si la identidad, el destino, el historial o los permisos difieren. La configuración por sí sola no demuestra que las migraciones o datos se hayan aplicado.
 
 ## Arranque previsto
 
-Cuando el entorno esté validado, Express se inicia cargando primero SMTP y después la configuración demo, manteniendo cualquier activación de SMTP explícita solo para la ejecución autorizada:
+Express se inicia con la configuración demo. Para habilitar el chatbot se carga primero el archivo de IA; SMTP se incorpora solo durante una prueba de correo expresamente autorizada:
 
 ```sh
-SMTP_ENABLED=true node --env-file=.env.smtp.local --env-file=.env.demo.local src/server.js
+node --env-file=.env.ai.local --env-file=.env.demo.local src/server.js
 ```
 
-Sin autorización de envío, omitir `SMTP_ENABLED=true`; el servidor conserva SMTP deshabilitado. React utilizará posteriormente `http://localhost:4000`, pero la integración del frontend queda fuera de este incremento.
+Sin autorización de envío, no cargar una activación SMTP; el servidor conserva el transporte real deshabilitado. React utilizará posteriormente `http://localhost:4000`, pero la integración y validación visual del frontend siguen pendientes en `develop`.

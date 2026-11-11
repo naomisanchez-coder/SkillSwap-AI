@@ -105,4 +105,4 @@ await fetch('/api/student/ai/chat', {
 });
 ```
 
-Las pruebas automatizadas sustituyen ambos transportes y no llaman a OpenAI ni Gemini. Una prueba real requiere comprobar primero el modelo disponible y su nivel, autorización separada, clave/configuración válida y una única solicitud acotada.
+Las pruebas automatizadas sustituyen ambos transportes y no llaman a OpenAI ni Gemini. Google AI Studio confirmó para el proyecto local el nivel gratuito, ausencia de cuenta de facturación y disponibilidad de `gemini-3.8-flash` con `generateContent`. La primera generación real continúa pendiente: antes de ejecutarla debe rotarse cualquier clave que haya quedado expuesta durante una inspección y repetirse la validación sin imprimirla. La prueba autorizada debe ser una única solicitud acotada, sin reintentos, herramientas ni datos privados.
