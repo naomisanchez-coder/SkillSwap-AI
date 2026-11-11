@@ -3,6 +3,7 @@ const definitions = Object.freeze({
   VALIDATION_ERROR: [422, 'Revisa los datos enviados.'],
   CONFLICT: [409, 'La operación entra en conflicto con el estado actual.'],
   EMAIL_ALREADY_REGISTERED: [409, 'El correo ya está registrado.'],
+  VERIFICATION_INVALID: [422, 'El código de verificación no es válido o ya no está disponible.'],
   UNAUTHORIZED: [401, 'Inicia sesión para continuar.'],
   UNSUPPORTED_MEDIA_TYPE: [415, 'Envía el cuerpo como application/json.'],
   FORBIDDEN: [403, 'No tienes autorización para esta operación.'],

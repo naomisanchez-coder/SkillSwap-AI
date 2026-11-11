@@ -8,9 +8,12 @@ import { createEmailRepository } from './modules/auth/email.repository.js';
 import { createEmailService } from './modules/auth/email.service.js';
 import { createEmailRateRepository } from './modules/auth/email-rate.repository.js';
 import { createRateIdentifier, createCodeProtection } from './modules/auth/email-code.js';
+import { createEmailVerificationRepository } from './modules/auth/email-verification.repository.js';
+import { createEmailVerificationService } from './modules/auth/email-verification.service.js';
 
 let database;
 let emailService;
+let verificationService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -37,14 +40,17 @@ try {
   const config = loadEnv();
   database = createDatabase(config.db);
   const smtp = readEmailConfig(process.env);
+  const otpConfigured = Boolean(process.env.OTP_HMAC_KEY_HEX || process.env.OTP_RATE_HMAC_KEY_HEX);
+  const otp = smtp || otpConfigured ? readOtpConfig(process.env) : undefined;
   if (smtp) {
-    const otp = readOtpConfig(process.env);
     emailService = createEmailService({ rateRepository: createEmailRateRepository(database), rateIdentifier: createRateIdentifier(otp.rateKeyHex), repository: createEmailRepository(database),
       mailer: createSmtpMailer(smtp), protection: createCodeProtection(otp.protection), policy: otp.policy,
       onEvent(event) { console.info(`email_verification: ${event}`); },
     });
   }
-  server = createServer(createApp({ database, origins: config.origins, emailService }));
+  if (otp) verificationService = createEmailVerificationService(
+    createEmailVerificationRepository(database), createCodeProtection(otp.protection));
+  server = createServer(createApp({ database, origins: config.origins, emailService, verificationService }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);

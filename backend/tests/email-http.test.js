@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes, randomInt } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { createEmailService as rawEmailService } from '../src/modules/auth/email.service.js';
 import { createCodeProtection } from '../src/modules/auth/email-code.js';
@@ -39,10 +39,11 @@ test('configured injection returns exact 202 DTO without cookies/OTP, and cooldo
     await service.idle();assert.equal(sends,0);
   });
 });
-test('verification remains unavailable: SENDING cannot be submitted to an implemented verifier', async () => {
+test('verification is uniformly unavailable when OTP verification is not configured', async () => {
   await run(undefined, async base => {
     const response=await fetch(`${base}/api/auth/email/verify`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({verificationId:'opaque-test-id',code:String(randomInt(0,1000000)).padStart(6,'0')})});
-    assert.equal(response.status,404);
+      body:JSON.stringify({email:'prueba.aislada@tecsup.edu.pe',verificationId:randomUUID(),code:String(randomInt(0,1000000)).padStart(6,'0')})});
+    assert.equal(response.status,503);
+    assert.equal((await response.json()).error.code,'SERVICE_UNAVAILABLE');
   });
 });

@@ -1,6 +1,6 @@
 import { PublicError } from '../../errors/PublicError.js';
 
-export function createAuthController(service, emailService) {
+export function createAuthController(service, emailService, verificationService) {
   return Object.freeze({
     async sendEmailCode(request, response) {
       if (!emailService) throw new PublicError('SERVICE_UNAVAILABLE');
@@ -15,6 +15,11 @@ export function createAuthController(service, emailService) {
     async register(request, response) {
       const result = await service.register(request.body);
       response.set('Cache-Control', 'no-store').status(201).json(result);
+    },
+    async verifyEmail(request, response) {
+      if (!verificationService) throw new PublicError('SERVICE_UNAVAILABLE');
+      const result = await verificationService.verify(request.body);
+      response.set('Cache-Control', 'no-store').status(200).json(result);
     },
   });
 }
