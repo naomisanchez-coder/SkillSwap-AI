@@ -18,6 +18,7 @@ const choiceStyle = (selected: boolean) => `relative cursor-pointer rounded-xl b
 
 // Adaptación de ProfileSetupPage.tsx de Figma: mismos pasos y opciones.
 export default function ProfileSetupPage({ service, onBack, onComplete, onReset, startEditing = false, backLabel = 'Volver al inicio' }: { service: ProfileService; onBack: () => void; onComplete?: (preferences: OnboardingPreferences) => void; onReset?: () => void; startEditing?: boolean; backLabel?: string }) {
+  const [skillOptions, setSkillOptions] = useState(profileSkills);
   const [loaded, setLoaded] = useState<{ preferences: OnboardingPreferences | null } | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -26,7 +27,7 @@ export default function ProfileSetupPage({ service, onBack, onComplete, onReset,
   const resetInFlight = useRef(false);
   useEffect(() => {
     let active = true;
-    service.getPreferences().then(preferences => { if (active) setLoaded({ preferences }); }, () => { if (active) setLoadError(true); });
+    Promise.all([service.getPreferences(), service.getSkillOptions?.() ?? Promise.resolve(profileSkills)]).then(([preferences, skills]) => { if (active) { setSkillOptions(skills); setLoaded({ preferences }); } }, () => { if (active) setLoadError(true); });
     return () => { active = false; };
   }, [service, attempt]);
 
@@ -63,15 +64,15 @@ export default function ProfileSetupPage({ service, onBack, onComplete, onReset,
         </div>
         {loadError ? <section role="alert" className="rounded-2xl border border-[#E8C2C2] bg-white p-6">
           <h1 className="text-xl font-bold">No pudimos cargar tus preferencias</h1>
-          <p className="my-4">Comprueba que tu navegador permita almacenamiento local. Si los datos están dañados, puedes reiniciarlos.</p>
+          <p className="my-4">Comprueba la conexión con el servicio y vuelve a intentarlo.</p>
           <Button onClick={() => { setLoadError(false); setLoaded(null); setAttempt(current => current + 1); }}>Reintentar</Button>
         </section> : !loaded ? <p role="status">Cargando preferencias…</p> :
-          <ProfileWizard key={attempt} initial={loaded.preferences} service={service} onComplete={onComplete} startEditing={startEditing} />}
+          <ProfileWizard skillOptions={skillOptions} key={attempt} initial={loaded.preferences} service={service} onComplete={onComplete} startEditing={startEditing} />}
       </div>
       {resetOpen && <Modal labelledBy="reset-profile-title" onClose={() => { if (!resetting) setResetOpen(false); }}>
         <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
           <h2 id="reset-profile-title" className="text-xl font-bold">¿Reiniciar tus preferencias?</h2>
-          <p className="mt-3 text-sm">Se borrarán las preferencias guardadas en este dispositivo y las selecciones actuales para que puedas empezar de nuevo.</p>
+          <p className="mt-3 text-sm">Se reiniciarán tus preferencias de aprendizaje para que puedas empezar de nuevo.</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button variant="outline" disabled={resetting} onClick={() => setResetOpen(false)}>Cancelar</Button>
             <Button disabled={resetting} onClick={() => void reset()}>{resetting ? 'Reiniciando…' : 'Confirmar reinicio'}</Button>
@@ -82,7 +83,7 @@ export default function ProfileSetupPage({ service, onBack, onComplete, onReset,
   );
 }
 
-function ProfileWizard({ initial, service, onComplete, startEditing }: { initial: OnboardingPreferences | null; service: ProfileService; onComplete?: (preferences: OnboardingPreferences) => void; startEditing: boolean }) {
+function ProfileWizard({ initial, service, onComplete, startEditing, skillOptions }: { initial: OnboardingPreferences | null; service: ProfileService; onComplete?: (preferences: OnboardingPreferences) => void; startEditing: boolean; skillOptions: string[] }) {
   const [preferences, setPreferences] = useState<OnboardingPreferences>(() => initial ?? emptyPreferences());
   const [step, setStep] = useState(1);
   const [saved, setSaved] = useState(Boolean(initial) && !startEditing);
@@ -99,7 +100,7 @@ function ProfileWizard({ initial, service, onComplete, startEditing }: { initial
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (inFlight.current) return;
-    const validation = validateProfileStep(preferences, step);
+    const validation = validateProfileStep(preferences, step, skillOptions);
     if (validation) {
       setError(validation);
       form.current?.querySelector<HTMLInputElement>('input')?.focus();
@@ -107,7 +108,7 @@ function ProfileWizard({ initial, service, onComplete, startEditing }: { initial
     }
     if (step < 4) { setError(null); setStep(current => current + 1); return; }
     for (let index = 1; index <= 4; index++) {
-      const issue = validateProfileStep(preferences, index);
+      const issue = validateProfileStep(preferences, index, skillOptions);
       if (issue) { setStep(index); setError(issue); return; }
     }
     inFlight.current = true;
@@ -150,7 +151,7 @@ function ProfileWizard({ initial, service, onComplete, startEditing }: { initial
       <fieldset disabled={saving} aria-labelledby="profile-step-title" aria-describedby={`profile-step-description${error ? ' profile-error' : ''}`} className="mt-8 min-w-0">
         <legend className="sr-only">{titles[step - 1]}</legend>
         {step === 1 && <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {profileSkills.map(skill => <label key={skill} className={`${choiceStyle(preferences.interests.includes(skill))} flex min-h-16 items-center justify-center text-center break-words`}>
+          {skillOptions.map(skill => <label key={skill} className={`${choiceStyle(preferences.interests.includes(skill))} flex min-h-16 items-center justify-center text-center break-words`}>
             <input className="sr-only" type="checkbox" name="interests" value={skill} checked={preferences.interests.includes(skill)} onChange={() => change({ interests: preferences.interests.includes(skill) ? preferences.interests.filter(item => item !== skill) : [...preferences.interests, skill] })} />
             <span>{skill}</span>{preferences.interests.includes(skill) && <span aria-hidden="true" className="absolute right-1 top-1"><Icons.Check s={12} /></span>}
           </label>)}

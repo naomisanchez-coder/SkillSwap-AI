@@ -2,7 +2,7 @@ import type { NotificationRecord, SkillRequest } from './student';
 import { ACTIVE_SKILLS } from './skillCatalog';
 import type { AdminAudit } from './admin';
 
-export type PersonalProfile = { name?: string; bio?: string; photoStorageId?: string };
+export type PersonalProfile = { name?: string; bio?: string; career?: string; cycle?: number; photoStorageId?: string };
 export type ApplicationReview = { id: string; status: SkillRequest['status']; at: string; comment?: string };
 export type MentorSkillRequest = SkillRequest & {
   userName: string; skill: string; level: 'Intermedio' | 'Avanzado' | ''; experience: string; topics: string;

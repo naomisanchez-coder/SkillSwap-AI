@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { IntegrationContext } from '../services/integrationContext';
+import type { MentorRecommendation } from '../data/recommendations';
+import { useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { Button, Input } from '../components/ui';
 import { EmptyState, MentorCard } from '../components/StudentUI';
 import { Icons } from '../components/icons';
@@ -33,6 +35,15 @@ export default function RecommendationsPage({
   filters: DiscoveryFilters;
   onFiltersChange: (filters: DiscoveryFilters) => void;
 }) {
+  const integration = useContext(IntegrationContext);
+  const [remoteRecommendations, setRemoteRecommendations] = useState<MentorRecommendation[]>([]);
+  const [recommendationError, setRecommendationError] = useState('');
+  useEffect(() => {
+    if (!integration) return;
+    let active = true;
+    integration.recommendations().then(items => { if (active) { setRemoteRecommendations(items); setRecommendationError(''); } }, error => { if (active) setRecommendationError(error instanceof Error ? error.message : 'No se pudieron cargar las recomendaciones.'); });
+    return () => { active = false; };
+  }, [integration, profile]);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus(); }, [recommended]);
   const { query, category, skill, level, day } = filters;
@@ -46,6 +57,8 @@ export default function RecommendationsPage({
     [mentors, profile.id],
   );
   const skills = useMemo(() => Array.from(new Set(eligible.map(mentor => mentor.skill))), [eligible]);
+  const categories = integration ? Array.from(new Set(eligible.map(mentor => mentor.category).filter(Boolean))).map(name => ({ name: name!, tone: publicSkillCategories[0].tone })) : publicSkillCategories;
+  const levels = integration ? Array.from(new Set(eligible.map(mentor => mentor.level))) : ['Principiante', 'Intermedio', 'Avanzado'];
   const days = useMemo(() => Array.from(new Set(eligible.flatMap(mentor => Object.keys(mentor.slots)))), [eligible]);
 
   const exploreResults = useMemo(() => filterMentors(eligible, filters, profile.id), [eligible, filters, profile.id]);
@@ -60,11 +73,12 @@ export default function RecommendationsPage({
     }),
     [eligible, profile, ratings, preferencesIncomplete],
   );
-  const results = recommended ? recommendations : exploreResults.map(mentor => ({ mentor, compatibility: undefined }));
+  const results = recommended ? (integration ? remoteRecommendations : recommendations) : exploreResults.map(mentor => ({ mentor, compatibility: undefined }));
   const clearFilters = () => onFiltersChange(emptyDiscoveryFilters());
 
   return (
     <main className="max-w-[1240px] mx-auto px-4 md:px-8 py-8 md:py-12 text-[#182B2A]">
+      {recommendationError && <p role="alert">{recommendationError}</p>}
       <section className={`rounded-[24px] border p-7 md:p-9 ${recommended ? 'bg-[#DCEBDD] border-[#C9D8CC]' : 'bg-[#F2E8D7] border-[#E8DAC2]'}`}>
         <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#24685F]">{recommended ? 'Recomendación personalizada' : 'Catálogo de la comunidad'}</p>
         <h1 ref={heading} tabIndex={-1} className="mt-3 text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">{recommended ? 'Mentores que encajan contigo' : 'Explora habilidades y encuentra a tu mentor'}</h1>
@@ -94,7 +108,7 @@ export default function RecommendationsPage({
             <h2 className="text-lg font-bold">Áreas para explorar</h2>
             <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
               <button type="button" aria-pressed={category === 'Todas'} onClick={() => setCategory('Todas')} className={`flex-shrink-0 min-h-11 rounded-full px-4 text-sm font-bold border ${category === 'Todas' ? 'bg-[#24685F] text-white border-[#24685F]' : 'bg-white text-[#52645F] border-[#CBD8CE]'}`}>Todas</button>
-              {publicSkillCategories.map(item => (
+              {categories.map(item => (
                 <button type="button" key={item.name} aria-pressed={category === item.name} onClick={() => setCategory(item.name)} className={`flex-shrink-0 min-h-11 rounded-full px-4 text-sm font-bold border ${category === item.name ? 'bg-[#24685F] text-white border-[#24685F]' : `${item.tone} text-[#334A46] border-[#CBD8CE]`}`}>{item.name}</button>
               ))}
             </div>
@@ -103,7 +117,7 @@ export default function RecommendationsPage({
             <div className="grid md:grid-cols-2 xl:grid-cols-[1.4fr_repeat(3,1fr)] gap-3">
               <Input label="Buscar mentores" value={query} onChange={setQuery} placeholder="Habilidad, mentor o tema" icon={<Icons.Search s={15} />} />
               <FilterSelect label="Habilidad" value={skill} onChange={setSkill} options={['Todas', ...skills]} />
-              <FilterSelect label="Nivel" value={level} onChange={setLevel} options={['Todos', 'Principiante', 'Intermedio', 'Avanzado']} />
+              <FilterSelect label="Nivel" value={level} onChange={setLevel} options={['Todos', ...levels]} />
               <FilterSelect label="Disponibilidad" value={day} onChange={setDay} options={['Todos', ...days]} />
             </div>
           </section>

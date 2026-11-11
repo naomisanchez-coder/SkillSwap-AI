@@ -22,7 +22,7 @@ export function filterMentors(mentors: Mentor[], filters: DiscoveryFilters, curr
   return mentors.filter(mentor => {
     if (!isEligibleMentor(mentor, currentUserId)) return false;
     const queryMatch = !query || [mentor.skill, mentor.name, mentor.bio].some(value => normalize(value).includes(query));
-    const categoryMatch = filters.category === 'Todas' || (categorySkills[filters.category] ?? []).map(canonicalSkill).includes(canonicalSkill(mentor.skill));
+    const categoryMatch = filters.category === 'Todas' || (mentor.serverManaged && mentor.category === filters.category) || (!mentor.serverManaged && (categorySkills[filters.category] ?? []).map(canonicalSkill).includes(canonicalSkill(mentor.skill)));
     const skillMatch = filters.skill === 'Todas' || canonicalSkill(mentor.skill) === canonicalSkill(filters.skill);
     const levelMatch = filters.level === 'Todos' || mentor.level === filters.level;
     const dayMatch = filters.day === 'Todos' || Boolean(mentor.slots[filters.day]?.length);

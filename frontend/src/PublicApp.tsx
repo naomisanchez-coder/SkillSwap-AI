@@ -1,10 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import StudentApp from './StudentApp';
+import { createStudentServices } from './services/apiStudent';
+import { anonymousCatalogService, apiCatalogService, readRecommendations } from './services/apiCatalog';
+import { IntegrationContext } from './services/integrationContext';
+import { createChatService } from './services/ai';
+import type { MentorService } from './services/mentor';
+const unavailable = async (): Promise<never> => { throw new Error('El panel mentor se habilitará en una siguiente etapa.'); };
+const disabledMentorService: MentorService = { getWorkspace: unavailable, saveAvailability: unavailable, saveOffer: unavailable, updateSession: unavailable };
+import { useEffect, useMemo, useRef, useState } from 'react'
 import LandingPage from './pages/LandingPage'
 import PublicExplorePage from './pages/PublicExplorePage'
 import HowItWorksPage from './pages/HowItWorksPage'
 import ShareSkillsPage from './pages/ShareSkillsPage'
 import type { PublicDestination } from './components/PublicChrome'
-import { referenceCatalogService, type CatalogService } from './services/catalog'
+import { type CatalogService } from './services/catalog'
 import { useCatalog } from './hooks/useCatalog'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
@@ -13,13 +21,15 @@ import EmailVerificationPage from './pages/EmailVerificationPage'
 import type { RegistrationService } from './services/registration'
 import type { EmailVerificationService } from './services/emailVerification'
 
-export default function PublicApp({ initialPage, catalogService = referenceCatalogService, apiSession = import.meta.env.VITE_ENABLE_API_SESSION === 'true', registrationService, verificationService, onLocalVerified }: { initialPage: PublicDestination | 'register' | 'login'; catalogService?: CatalogService; apiSession?: boolean; registrationService?: RegistrationService; verificationService?: EmailVerificationService; onLocalVerified?: () => void }) {
+export default function PublicApp({ initialPage, catalogService = anonymousCatalogService, apiSession = true, registrationService, verificationService, onLocalVerified }: { initialPage: PublicDestination | 'register' | 'login'; catalogService?: CatalogService; apiSession?: boolean; registrationService?: RegistrationService; verificationService?: EmailVerificationService; onLocalVerified?: () => void }) {
   const [page, setPage] = useState<PublicDestination | 'register' | 'login' | 'verify-email'>(initialPage)
   const [verificationEmail, setVerificationEmail] = useState('')
   const [pendingDestination, setPendingDestination] = useState<string | null>(null)
   const { state: auth, recoverSession, acceptSession, logout, loggingOut, logoutError } = useAuthSession(apiSession)
   const catalog = useCatalog(catalogService)
   const session = auth.status === 'authenticated' ? auth.session : null
+  const services = useMemo(() => session?.user.role === 'student' ? createStudentServices(session) : null, [session]);
+  const integration = useMemo(() => session ? ({ recommendations: readRecommendations, chat: createChatService(session.csrfToken) }) : null, [session]);
   const sessionHeadingRef = useRef<HTMLHeadingElement>(null)
   const logoutErrorRef = useRef<HTMLDivElement>(null)
   useEffect(() => { if (session) sessionHeadingRef.current?.focus() }, [session])
@@ -47,6 +57,12 @@ export default function PublicApp({ initialPage, catalogService = referenceCatal
     onDashboard: () => setPendingDestination('Panel de estudiante'),
     onLogout: () => { void closeSession() },
   }
+
+  if (session && services && integration) return <IntegrationContext.Provider value={integration}>
+    {logoutError && <p role="alert">{logoutError}</p>}
+    <StudentApp studentService={services.student} profileService={services.preferences} accountService={services.account} mentorService={disabledMentorService} catalogService={apiCatalogService}
+      onRealAccess={destination => setPage(destination)} onLogout={() => { void closeSession(); }} />
+  </IntegrationContext.Provider>;
 
   return (
     <>

@@ -11,14 +11,17 @@ export type MentorOffer = {
 };
 
 export type Mentor = {
+  serverManaged?: boolean;
+  category?: string;
+  availabilityWindows?: { weekday: number; start: string; end: string }[];
   id: string;
   ownerUserId?: string;
   requestId?: string;
   name: string;
   skill: string;
   level: string;
-  rating: number;
-  sessions: number;
+  rating: number | null;
+  sessions: number | null;
   availability: string;
   modalities: string[];
   skillValidated: boolean;

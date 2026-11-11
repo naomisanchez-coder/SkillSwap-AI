@@ -96,7 +96,7 @@ export function MentorCard({
         {rating?.count ? (
           <p className="mt-2 text-sm text-[#60716C] inline-flex items-center gap-2"><Icons.Star s={14} filled /> {rating.average.toFixed(1)} · {rating.count} valoraciones</p>
         ) : (
-          <p className="mt-2 text-xs text-[#788983]">Mentor nuevo, todavía sin valoraciones.</p>
+          <p className="mt-2 text-xs text-[#788983]">{mentor.serverManaged ? 'Sin valoraciones públicas disponibles.' : 'Mentor nuevo, todavía sin valoraciones.'}</p>
         )}
         {showReasons && compatibility && <div className="mt-4"><RecommendationReasons compatibility={compatibility} /></div>}
         <Button full className="mt-5" data-mentor-id={mentor.id} onClick={onView}>Ver perfil</Button>

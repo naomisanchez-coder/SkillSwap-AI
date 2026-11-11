@@ -43,7 +43,7 @@ export function RecommendationAssistant({
   onViewMentor: (id: string) => void;
 }) {
   const integration = useContext(IntegrationContext);
-  const [chatInput, setChatInput] = useState('');
+  const [chatInput, setChatInput] = useState(openRequest?.skill ? `Quiero aprender ${openRequest.skill}` : '');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState('');
@@ -54,14 +54,14 @@ export function RecommendationAssistant({
     const message = chatInput.trim();
     try {
       // Historial acotado por el contrato; sin reintentos generativos automáticos.
-      const history = chatHistory.slice(-4).map(item => ({ ...item, content: item.content.slice(0, 1000) }));
+      const history = chatHistory.slice(-4).map(item => ({ ...item, content: Array.from(item.content).slice(0, 1000).join('') }));
       const reply = await integration.chat(message, history);
       setChatHistory(current => [...current, { role: 'user', content: message }, { role: 'assistant', content: reply }]); setChatInput('');
     } catch (error) { setChatError(error instanceof Error ? error.message : 'El asistente no está disponible.'); }
     finally { chatInFlight.current = false; setChatBusy(false); }
   };
   const [open, setOpen] = useState(Boolean(openRequest?.key));
-  const [step, setStep] = useState<AssistantStep>(openRequest?.key ? openRequest.skill ? 'level' : 'skill' : 'welcome');
+  const [step, setStep] = useState<AssistantStep>(integration ? 'welcome' : openRequest?.key ? openRequest.skill ? 'level' : 'skill' : 'welcome');
   const [skill, setSkill] = useState(openRequest?.skill || profile.interests[0] || '');
   const [skillInput, setSkillInput] = useState('');
   const [inputError, setInputError] = useState('');
@@ -191,7 +191,7 @@ export function RecommendationAssistant({
             <div ref={contentRef} tabIndex={-1} aria-label="Paso del asistente" className="min-h-0 flex-1 overflow-y-auto p-4 outline-none">
               {step === 'welcome' && !integration && (
                 <AssistantMessage title="¡Hola! ¿Qué te gustaría aprender?" description="Puedo ayudarte a comparar mentores del catálogo usando tus preferencias.">
-                  <Button full size="lg" onClick={() => setStep('skill')}>Empezar mi búsqueda</Button>
+                  <Button full size="lg" onClick={() => setStep(integration ? 'welcome' : 'skill')}>Empezar mi búsqueda</Button>
                 </AssistantMessage>
               )}
 
@@ -263,11 +263,11 @@ export function RecommendationAssistant({
                       </article>
                     ))}
                   </div>
-                  <Button full variant="outline" className="mt-4" onClick={() => setStep('skill')}>Cambiar mi búsqueda</Button>
+                  <Button full variant="outline" className="mt-4" onClick={() => setStep(integration ? 'welcome' : 'skill')}>Cambiar mi búsqueda</Button>
                 </div>
               )}
 
-              {step === 'empty' && <AssistantMessage title="No encontramos mentores disponibles" description="Prueba otra habilidad u horario. No inventaremos resultados fuera del catálogo."><Button onClick={() => setStep('skill')}>Cambiar mi búsqueda</Button></AssistantMessage>}
+              {step === 'empty' && <AssistantMessage title="No encontramos mentores disponibles" description="Prueba otra habilidad u horario. No inventaremos resultados fuera del catálogo."><Button onClick={() => setStep(integration ? 'welcome' : 'skill')}>Cambiar mi búsqueda</Button></AssistantMessage>}
               {step === 'error' && <AssistantMessage title="No pudimos calcular las recomendaciones" description="Puedes revisar tus preferencias e intentarlo nuevamente."><Button onClick={() => setStep('review')}>Volver a intentar</Button></AssistantMessage>}
             </div>
 

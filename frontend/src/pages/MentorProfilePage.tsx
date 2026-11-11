@@ -23,12 +23,13 @@ interface Props {
 function MentorProfileContent({ profile, mentor, communityRating, reviews, onBack, onBooking }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus(); }, []);
-  const compatibility = estimateMentorCompatibility(
+  const estimatedCompatibility = estimateMentorCompatibility(
     mentor,
     profile,
     communityRating?.average,
     communityRating?.count,
   );
+  const compatibility = mentor.serverManaged ? { total: 0, label: 'Coincidencia parcial' as const, factors: [], reasons: ['Consulta Para ti para ver la puntuación del servidor y su cobertura de evidencia.'], matchingSlots: [] } : estimatedCompatibility;
   const nextSlots = Object.entries(mentor.slots)
     .flatMap(([day, slots]) => slots.map(slot => `${day} · ${slot}`))
     .slice(0, 4);
@@ -55,7 +56,7 @@ function MentorProfileContent({ profile, mentor, communityRating, reviews, onBac
             <div className="rounded-[18px] bg-white p-5 md:min-w-52 md:max-w-64">
               <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#60716C]">Coincidencia</p>
               <p className="mt-2 text-2xl font-extrabold text-[#24685F]">{compatibility.label}</p>
-              {communityRating?.count ? <p className="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-[#60716C]"><Icons.Star s={14} filled /> {communityRating.average.toFixed(1)} · {communityRating.count} valoraciones</p> : <p className="mt-3 text-sm text-[#60716C]">Aún sin valoraciones</p>}
+              {communityRating?.count ? <p className="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-[#60716C]"><Icons.Star s={14} filled /> {communityRating.average.toFixed(1)} · {communityRating.count} valoraciones</p> : <p className="mt-3 text-sm text-[#60716C]">{mentor.serverManaged ? 'Sin valoraciones públicas disponibles.' : 'Aún sin valoraciones'}</p>}
             </div>
           </div>
         </section>
@@ -89,7 +90,7 @@ function MentorProfileContent({ profile, mentor, communityRating, reviews, onBac
                     </article>
                   ))}
                 </div>
-              ) : <p className="mt-3 text-sm text-[#60716C]">Aún sin valoraciones</p>}
+              ) : <p className="mt-3 text-sm text-[#60716C]">{mentor.serverManaged ? 'Sin valoraciones públicas disponibles.' : 'Aún sin valoraciones'}</p>}
             </section>
 
             <section className="rounded-[20px] border border-[#E2E8E0] bg-white p-6">

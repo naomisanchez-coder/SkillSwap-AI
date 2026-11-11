@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { IntegrationContext } from '../services/integrationContext';
+import type { MentorRecommendation } from '../data/recommendations';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button } from '../components/ui';
 import { Icons } from '../components/icons';
 import { EmptyState, MentorCard, StatCard } from '../components/StudentUI';
@@ -41,6 +43,15 @@ export default function StudentDashboardPage({
   onMentor: (id: string) => void;
   onEditPreferences: () => void;
 }) {
+  const integration = useContext(IntegrationContext);
+  const [remoteRecommendations, setRemoteRecommendations] = useState<MentorRecommendation[]>([]);
+  const [recommendationError, setRecommendationError] = useState('');
+  useEffect(() => {
+    if (!integration) return;
+    let active = true;
+    integration.recommendations().then(items => { if (active) { setRemoteRecommendations(items); setRecommendationError(''); } }, error => { if (active) setRecommendationError(error instanceof Error ? error.message : 'No se pudieron cargar las recomendaciones.'); });
+    return () => { active = false; };
+  }, [integration, state.profile]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => { headingRef.current?.focus(); }, []);
   const [assistantRequest, setAssistantRequest] = useState<{ skill?: string; key: number }>({ key: 0 });
@@ -50,7 +61,7 @@ export default function StudentDashboardPage({
     .sort((a, b) => sessionTimestamp(a.date, a.time) - sessionTimestamp(b.date, b.time))[0];
   const approved = state.skillRequests.filter(request => request.ownerUserId === state.profile.id && request.status === 'approved');
   const completedSessions = studentSessions.filter(item => item.status === 'completed');
-  const learningHours = completedSessions.reduce((total, item) => total + item.duration, 0) / 60;
+  const learningHours = state.serverProgress ? state.serverProgress.completedMinutes / 60 : completedSessions.reduce((total, item) => total + item.duration, 0) / 60;
   const exploredSkills = Array.from(new Set([
     ...state.profile.interests,
     ...completedSessions.map(item => item.skill),
@@ -73,6 +84,7 @@ export default function StudentDashboardPage({
 
   return (
     <main className="max-w-[1240px] mx-auto px-4 md:px-8 py-8 md:py-12 text-[#182B2A]">
+      {recommendationError && <p role="alert">{recommendationError}</p>}
       <section className="rounded-[24px] bg-[#DCEBDD] border border-[#C9D8CC] overflow-hidden grid lg:grid-cols-[1.08fr_.92fr]">
         <div className="min-w-0 p-5 sm:p-7 md:p-10 lg:p-12">
           <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#24685F]">Tu espacio de aprendizaje</p>
@@ -107,7 +119,7 @@ export default function StudentDashboardPage({
           <Button variant="outline" onClick={onSessions}>Ver historial de mentorías</Button>
         </div>
         <div className="grid sm:grid-cols-3 gap-4 mt-6">
-          <div className="rounded-2xl bg-[#DDF6ED] p-5"><p className="text-3xl font-extrabold text-[#176B5B]">{completedSessions.length}</p><p className="mt-1 text-sm text-[#52645F]">Sesiones completadas</p></div>
+          <div className="rounded-2xl bg-[#DDF6ED] p-5"><p className="text-3xl font-extrabold text-[#176B5B]">{state.serverProgress?.completedSessions ?? completedSessions.length}</p><p className="mt-1 text-sm text-[#52645F]">Sesiones completadas</p></div>
           <div className="rounded-2xl bg-[#E8F4FF] p-5"><p className="text-3xl font-extrabold text-[#176B5B]">{learningHours.toLocaleString('es-PE', { maximumFractionDigits: 1 })}</p><p className="mt-1 text-sm text-[#52645F]">Horas de aprendizaje</p></div>
           <div className="rounded-2xl bg-[#FFF4D6] p-5"><p className="text-3xl font-extrabold text-[#176B5B]">{exploredSkills.length}</p><p className="mt-1 text-sm text-[#52645F]">Habilidades exploradas</p></div>
         </div>
@@ -141,9 +153,9 @@ export default function StudentDashboardPage({
             </div>
             <Button variant="ghost" onClick={onExplore}>Ver todos</Button>
           </div>
-          {recommendations.length ? (
+          {(integration ? remoteRecommendations : recommendations).length ? (
             <div className="grid md:grid-cols-2 min-[1680px]:grid-cols-3 gap-4 mt-5">
-              {recommendations.map(({ mentor, compatibility }) => (
+              {(integration ? remoteRecommendations.slice(0, 3) : recommendations).map(({ mentor, compatibility }) => (
                 <MentorCard key={mentor.id} mentor={mentor} compatibility={compatibility} rating={state.mentorRatings[mentor.id]} onView={() => onMentor(mentor.id)} />
               ))}
             </div>

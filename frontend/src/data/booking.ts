@@ -45,6 +45,12 @@ export class BookingError extends Error {
 }
 
 export function isBookingSlotAvailable(context: BookingContext, date: string, time: string, duration: number): boolean {
+  if (context.serverManaged) {
+    const weekday = new Date(`${date}T12:00:00Z`).getUTCDay() || 7;
+    const start = parseTime(time);
+    const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+    if (!context.mentor.availabilityWindows?.some(window => window.weekday === weekday && start >= minutes(window.start) && start + duration <= minutes(window.end))) return false;
+  }
   if (!isSlotAvailable({ mentorId: context.mentor.id, date, time, duration, availability: context.mentor.slots, sessions: context.sessions, reservedSlots: context.reservedSlots })) return false;
   const start = parseTime(time);
   return !context.sessions.some(session => (session.studentId === context.studentId || session.mentorOwnerId === context.studentId) && session.status !== 'cancelled' && session.date === date && intervalsOverlap(start, start + duration, parseTime(session.time), parseTime(session.time) + session.duration));

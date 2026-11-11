@@ -3,7 +3,8 @@ import { onboardingComplete } from './student.validation.js';
 
 const selectProfile = `SELECT u.id,u.first_name,u.last_name,u.email,u.role,u.status,u.email_verified_at,
   p.career_id,p.cycle,p.onboarding_complete,c.name career,c.code career_code,
-  d.bio,d.learning_level,d.learning_goals,d.preferred_schedule
+  d.bio,d.learning_level,d.learning_goals,d.preferred_schedule,
+  EXISTS(SELECT 1 FROM student_profile_photos ph WHERE ph.user_id=u.id) has_photo
   FROM users u JOIN student_profiles p ON p.user_id=u.id
   JOIN careers c ON c.id=p.career_id
   LEFT JOIN student_profile_details d ON d.user_id=u.id WHERE u.id=?`;
@@ -13,7 +14,7 @@ function publicProfile(row, interests) {
     id: row.id, firstName: row.first_name, lastName: row.last_name, email: row.email,
     institution: 'TECSUP', role: 'student', emailVerified: Boolean(row.email_verified_at),
     career: row.career, careerCode: row.career_code, cycle: Number(row.cycle),
-    bio: row.bio ?? null, interests, level: row.learning_level ?? null,
+    hasPhoto: Boolean(row.has_photo), bio: row.bio ?? null, interests, level: row.learning_level ?? null,
     goals: row.learning_goals ?? null, schedule: row.preferred_schedule ?? null,
     onboardingComplete: Boolean(row.onboarding_complete),
   };

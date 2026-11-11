@@ -23,8 +23,8 @@ export function emptyPreferences(): OnboardingPreferences {
   return { interests: [], level: '', availability: '', goals: '', modality: 'Virtual' };
 }
 
-export function validateProfileStep(value: OnboardingPreferences, step: number): string | null {
-  if (step === 1 && (!value.interests.length || value.interests.some(skill => !profileSkills.includes(skill)))) return 'Selecciona al menos una habilidad.';
+export function validateProfileStep(value: OnboardingPreferences, step: number, skills = profileSkills): string | null {
+  if (step === 1 && (!value.interests.length || value.interests.some(skill => !skills.includes(skill)))) return 'Selecciona al menos una habilidad.';
   if (step === 2 && !profileLevels.some(([level]) => level === value.level)) return 'Selecciona tu nivel.';
   if (step === 3 && !profileDays.some(day => profileTimes.some(time => `${day} · ${time}` === value.availability))) return 'Selecciona un horario disponible.';
   if (step === 4 && !profileGoals.includes(value.goals)) return 'Selecciona tu objetivo académico.';

@@ -4,7 +4,7 @@ import type { Mentor } from '../data/mentors';
 import type { MentorRecommendation } from '../data/recommendations';
 import { formatTime } from '../data/scheduling';
 
-type OfferedSkill = { id: string; name: string; offerId: string; costByDuration: Record<30 | 60 | 90, number>; level: { name: string } | null };
+type OfferedSkill = { category: string | null; id: string; name: string; offerId: string; costByDuration: Record<30 | 60 | 90, number>; level: { name: string } | null };
 export type ApiMentor = { id: string; firstName: string; lastName: string; bio: string | null; skills: OfferedSkill[] };
 export type Availability = { timezone: string; slots: { weekday: number; start: string; end: string }[]; busy: { startsAt: string; endsAt: string }[] };
 const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -20,8 +20,8 @@ export function mentorView(source: ApiMentor, availability: Availability): Mento
     for (let minute = start; minute < end; minute += 30) slots[day].push(formatTime(minute));
   }
   const label = Object.keys(slots).join(', ') || 'Sin disponibilidad publicada';
-  return { id: source.id, ownerUserId: source.id, requestId: skill.offerId, name: `${source.firstName} ${source.lastName}`, skill: skill.name,
-    level: skill.level?.name ?? 'Sin nivel publicado', rating: 0, sessions: 0, availability: label, modalities: ['Virtual'], skillValidated: true,
+  return { serverManaged: true, category: skill.category ?? '', availabilityWindows: availability.slots, id: source.id, ownerUserId: source.id, requestId: skill.offerId, name: `${source.firstName} ${source.lastName}`, skill: skill.name,
+    level: skill.level?.name ?? 'Sin nivel publicado', rating: null, sessions: null, availability: label, modalities: ['Virtual'], skillValidated: true,
     image: '', bio: source.bio ?? '', slots, topics: source.skills.map(s => s.name), active: true,
     offer: { skillId: skill.id, topic: skill.name, level: skill.level?.name ?? '', description: source.bio ?? '', durations: [30, 60, 90], availability: label, costByDuration: skill.costByDuration } };
 }

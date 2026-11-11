@@ -224,7 +224,7 @@ export function isEligibleMentor(mentor: Mentor, currentUserId?: string): boolea
   const catalogSkill = SKILL_CATALOG.find(skill => skill.id === mentor.offer.skillId);
   return Boolean(
     mentor.skillValidated
-    && catalogSkill?.active
+    && (mentor.serverManaged || catalogSkill?.active)
     && mentor.active !== false
     && mentor.name.trim()
     && mentor.skill.trim()

@@ -11,7 +11,7 @@ type ApiSession = { id: string; student: { id: string; firstName: string; lastNa
 type Credits = { total: number; available: number; held: number; used: number; earned: number; transactions: { id: string; amount: number; reason: string; reference: string; occurredAt: string; holdStatus: string | null }[]; pagination: { nextCursor: string | null } };
 export function sessionView(s: ApiSession): ConfirmedBooking {
   const local = new Date(new Date(s.startsAt).getTime() - 5 * 3600000).toISOString();
-  const status = ({ UPCOMING: 'upcoming', ACTIVE: 'active', AWAITING_VALIDATION: 'validation', COMPLETED: 'completed', CANCELLED: 'cancelled' } as const)[s.status as 'UPCOMING'];
+  const status = ({ UPCOMING: 'upcoming', ACTIVE: 'active', AWAITING_VALIDATION: 'validation', COMPLETED: 'completed', CANCELLED: 'cancelled' } as Record<string, ConfirmedBooking['status']>)[s.status];
   if (!status) throw new Error('Estado de sesión desconocido.');
   return { id: s.id, studentId: s.student.id, mentorId: s.mentor.id, mentorOwnerId: s.mentor.id, mentorName: `${s.mentor.firstName} ${s.mentor.lastName}`, learnerName: `${s.student.firstName} ${s.student.lastName}`,
     skill: s.skill.name, topic: s.skill.name, date: local.slice(0, 10), time: formatTime(Number(local.slice(11, 13)) * 60 + Number(local.slice(14, 16))), duration: s.durationMinutes,
@@ -68,7 +68,7 @@ export function createStudentServices(session: AuthSession) {
         return { session: sessionView(result.session), wallet: ledger.wallet, ledger, notifications: [] };
       } catch (error) { throw new BookingError('BOOKING_FAILED', error instanceof Error ? error.message : 'No se pudo reservar.'); }
     },
-    async getBooking(id) { const result = await request<{ session: ApiSession }>(`/sessions/${encodeURIComponent(id === draft?.id && confirmedDraft ? confirmedDraft : id)}`); return sessionView(result.session); },
+    async getBooking(id) { if (id === draft?.id && !confirmedDraft) return null; const result = await request<{ session: ApiSession }>(`/sessions/${encodeURIComponent(id === draft?.id && confirmedDraft ? confirmedDraft : id)}`); return sessionView(result.session); },
     async getBookingDraft() { return draft; },
     async saveBookingDraft(value) { draft = value; },
     async clearBookingDraft() { draft = null; confirmedDraft = null; },

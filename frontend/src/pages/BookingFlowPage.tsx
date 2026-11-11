@@ -181,7 +181,7 @@ function BookingWizard({ initialContext, draft, service, onConfirmed, onBack, on
               <div><p className="font-bold">{mentor.name}</p><p className="text-xs text-[#60716C]">{mentor.skill}</p></div>
             </div>
             <dl className="mt-5 divide-y divide-[#E0D1B7] text-sm">
-              {[['Fecha', formattedDate], ['Hora', formattedTime], ['Duración', `${duration} minutos`], ['Créditos', String(credits)], ['Saldo disponible', String(balance)], ['Saldo al confirmar', String(Math.max(0, balance - credits))]].map(([label, value]) => <div key={label} className="py-3 flex justify-between gap-4"><dt className="text-[#60716C]">{label}</dt><dd className="font-bold text-right">{value}</dd></div>)}
+              {[['Fecha', formattedDate], ['Hora', formattedTime], ['Duración', `${duration} minutos`], ['Créditos', String(credits)], ['Saldo disponible', String(balance)], ['Saldo al confirmar', context.serverManaged ? 'Lo confirma el servidor' : String(Math.max(0, balance - credits))]].map(([label, value]) => <div key={label} className="py-3 flex justify-between gap-4"><dt className="text-[#60716C]">{label}</dt><dd className="font-bold text-right">{value}</dd></div>)}
             </dl>
             <p className="mt-4 text-xs leading-5 text-[#6B6F68]">Los créditos se retendrán al confirmar la reserva. La sesión se realizará de forma virtual.</p>
           </aside>
