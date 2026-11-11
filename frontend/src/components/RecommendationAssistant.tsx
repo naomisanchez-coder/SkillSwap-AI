@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { IntegrationContext, type ChatMessage } from '../services/integrationContext';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Mentor } from '../data/mentors';
 import type { UserProfile } from '../data/student';
 import {
@@ -41,6 +42,24 @@ export function RecommendationAssistant({
   openRequest?: { skill?: string; key: number };
   onViewMentor: (id: string) => void;
 }) {
+  const integration = useContext(IntegrationContext);
+  const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const chatInFlight = useRef(false);
+  const sendChat = async () => {
+    if (!integration || chatInFlight.current || !chatInput.trim()) return;
+    chatInFlight.current = true; setChatBusy(true); setChatError('');
+    const message = chatInput.trim();
+    try {
+      // Historial acotado por el contrato; sin reintentos generativos automáticos.
+      const history = chatHistory.slice(-4).map(item => ({ ...item, content: item.content.slice(0, 1000) }));
+      const reply = await integration.chat(message, history);
+      setChatHistory(current => [...current, { role: 'user', content: message }, { role: 'assistant', content: reply }]); setChatInput('');
+    } catch (error) { setChatError(error instanceof Error ? error.message : 'El asistente no está disponible.'); }
+    finally { chatInFlight.current = false; setChatBusy(false); }
+  };
   const [open, setOpen] = useState(Boolean(openRequest?.key));
   const [step, setStep] = useState<AssistantStep>(openRequest?.key ? openRequest.skill ? 'level' : 'skill' : 'welcome');
   const [skill, setSkill] = useState(openRequest?.skill || profile.interests[0] || '');
@@ -103,7 +122,13 @@ export function RecommendationAssistant({
     setStep('level');
   };
 
-  const search = () => {
+  const search = async () => {
+    if (integration) {
+      setStep('searching');
+      try { const ranked = await integration.recommendations(); setResults(ranked.slice(0, 3)); setStep(ranked.length ? 'results' : 'empty'); }
+      catch { setStep('error'); }
+      return;
+    }
     setStep('searching');
     try {
       const preferences: RecommendationPreferences = {
@@ -164,11 +189,23 @@ export function RecommendationAssistant({
             )}
 
             <div ref={contentRef} tabIndex={-1} aria-label="Paso del asistente" className="min-h-0 flex-1 overflow-y-auto p-4 outline-none">
-              {step === 'welcome' && (
+              {step === 'welcome' && !integration && (
                 <AssistantMessage title="¡Hola! ¿Qué te gustaría aprender?" description="Puedo ayudarte a comparar mentores del catálogo usando tus preferencias.">
                   <Button full size="lg" onClick={() => setStep('skill')}>Empezar mi búsqueda</Button>
                 </AssistantMessage>
               )}
+
+              {integration && step === 'welcome' && <div className="space-y-4">
+                <p className="text-sm text-[#60716C]">Consulta sobre aprendizaje y mentorías. El asistente orienta; las reservas y los créditos se gestionan desde sus pantallas.</p>
+                <div role="log" aria-live="polite" className="space-y-3">{chatHistory.map((item, index) => <p key={index} className="text-sm leading-6 whitespace-pre-wrap"><strong>{item.role === 'user' ? 'Tú' : 'SkillSwap'}: </strong>{item.content}</p>)}</div>
+                <form onSubmit={event => { event.preventDefault(); void sendChat(); }} className="space-y-3">
+                  <label htmlFor="ai-message" className="text-sm font-semibold text-[#334A46]">Tu consulta</label>
+                  <input id="ai-message" value={chatInput} maxLength={1000} disabled={chatBusy} onChange={event => setChatInput(event.target.value)} className="w-full h-11 rounded-xl border border-[#CBD8CE] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#DCEBDD] focus:border-[#34877A]" />
+                  <Button full type="submit" disabled={chatBusy || !chatInput.trim()}>{chatBusy ? 'Consultando…' : 'Enviar consulta'}</Button>
+                </form>
+                {chatError && <p role="alert" className="text-sm text-[#B54747]">{chatError}</p>}
+                <Button full variant="outline" onClick={() => void search()}>Ver mis recomendaciones</Button>
+              </div>}
 
               {step === 'skill' && (
                 <Question title="Elige una habilidad" description="Puedes elegir una sugerencia o escribir el nombre de una habilidad del catálogo.">
