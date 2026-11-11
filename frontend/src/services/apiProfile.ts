@@ -39,6 +39,7 @@ export function createProfileServices(session: AuthSession) {
       return account.getAccount();
     },
     async savePhoto(file) { const data = new FormData(); data.set('photo', file); await request('/profile/photo', 'PUT', data); photoRevision++; return account.getAccount(); },
+    async deletePhoto() { await request('/profile/photo', 'DELETE'); photoRevision++; return account.getAccount(); },
     async getPhoto() { try { return await api<Blob>('/student/profile/photo', { binary: true }); } catch (error) { if (error instanceof ApiError && ['FILE_NOT_FOUND', 'NOT_FOUND'].includes(error.code)) return null; throw error; } },
     async getEvidence(id) { return api<Blob>(`/student/mentor-applications/${encodeURIComponent(id)}/documents/certificate`, { binary: true }); },
     async submitApplication(command) {

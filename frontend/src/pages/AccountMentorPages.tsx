@@ -28,6 +28,7 @@ export function ProfilePage({ profile, photo, service, onChanged, onEditPreferen
   const [bio, setBio] = useState(profile.bio);
   const [saved, setSaved] = useState(''); const [error, setError] = useState('');
   const [busy, setBusy] = useState(false); const inFlight = useRef(false);
+  const [photoDeleteOpen, setPhotoDeleteOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false); const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState(''); const [photoError, setPhotoError] = useState(''); const [checking, setChecking] = useState(false);
   const photoRevision = useRef(0); const photoInput = useRef<HTMLInputElement>(null); const heading = useRef<HTMLHeadingElement>(null);
@@ -62,6 +63,13 @@ export function ProfilePage({ profile, photo, service, onChanged, onEditPreferen
     catch (caught) { setPhotoError(errorMessage(caught)); }
     finally { inFlight.current = false; setBusy(false); }
   };
+  const deletePhoto = async () => {
+    if (inFlight.current || !service.deletePhoto) return;
+    inFlight.current = true; setBusy(true); setError(''); setSaved('');
+    try { const account = await service.deletePhoto(); onChanged(account); setPhotoDeleteOpen(false); setSaved('Fotografía eliminada'); }
+    catch (caught) { setError(errorMessage(caught)); }
+    finally { inFlight.current = false; setBusy(false); }
+  };
   return <main className="max-w-[980px] mx-auto px-4 md:px-8 py-8 md:py-12 text-[#182B2A]">
     <section className="rounded-[24px] bg-[#DCEBDD] border border-[#C9D8CC] p-5 sm:p-7 md:p-9"><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#24685F]">Tu cuenta</p><h1 ref={heading} tabIndex={-1} className="mt-2 text-3xl md:text-4xl font-extrabold">Mi perfil</h1><p className="mt-2 text-[#52645F]">Tus cambios actualizan el panel y el sistema de recomendaciones.</p></section>
     <form className="space-y-5 mt-8" onSubmit={event => { event.preventDefault(); void save(); }}>
@@ -76,6 +84,7 @@ export function ProfilePage({ profile, photo, service, onChanged, onEditPreferen
       </Card>}
       <Card className="p-5 sm:p-6"><h2 className="text-xl font-bold">Información personal</h2>
         <div className="mt-5 flex items-center gap-4"><div className="relative shrink-0"><Avatar name={name} src={photo.url || profile.photo} size="xl" /><button type="button" disabled={busy} onClick={event => { event.currentTarget.focus(); photoInput.current?.click(); }} aria-label="Cambiar fotografía de perfil" className="absolute -right-2 -bottom-2 w-11 h-11 rounded-full bg-[#24685F] text-white border-2 border-white flex items-center justify-center shadow-md hover:bg-[#1D5149]"><Icons.Camera s={16} /></button><input ref={photoInput} type="file" accept={ACCEPTED_PROFILE_PHOTO_TYPES.join(',')} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; void selectPhoto(file); }} hidden /></div><div className="min-w-0 flex-1"><p className="font-bold">Fotografía de perfil</p><p className="mt-1 text-sm text-[#60716C]">JPG, PNG o WebP. Máximo 2 MB. Se guarda de forma privada en el servidor.</p></div></div>
+        {integration && service.deletePhoto && (profile.photoStorageId || photo.url) && <Button type="button" variant="ghost" disabled={busy} className="mt-3" onClick={() => { setError(''); setPhotoDeleteOpen(true); }}>Eliminar foto</Button>}
         {photo.loading && <p className="mt-3 text-sm" role="status">Recuperando fotografía…</p>}
         {photo.error && <div className="mt-3 text-sm text-[#B54747]"><p role="alert">No pudimos recuperar tu fotografía. {photo.error}</p><Button variant="outline" className="mt-2" onClick={photo.retry}>Reintentar fotografía</Button></div>}
         <fieldset disabled={busy} className="grid md:grid-cols-2 gap-4 mt-5"><AuthField id="personal-name" label="Nombre completo" value={name} onChange={value => { setName(value); setSaved(''); }} maxLength={120} autoComplete="name" /><AuthField id="personal-email" label="Correo institucional" type="email" value={profile.email} onChange={() => {}} disabled helper="Cambiar el correo requiere un proceso de verificación." /><AuthField id="personal-institution" label="Institución" value={profile.institution} onChange={() => {}} disabled /><AuthField id="personal-career" label="Carrera" value={career} onChange={setCareer} disabled={!integration} helper="Usa una carrera vigente del catálogo académico." /><AuthField id="personal-cycle" label="Ciclo académico" value={String(cycle)} type="number" onChange={value => setCycle(Number(value))} disabled={!integration} /></fieldset>
@@ -86,6 +95,7 @@ export function ProfilePage({ profile, photo, service, onChanged, onEditPreferen
       <div className="flex flex-col sm:flex-row sm:items-center gap-3"><Button type="submit" disabled={busy} size="lg">{busy ? 'Guardando…' : 'Guardar cambios'}</Button><p role="status" className="text-sm font-semibold text-[#28745A]">{saved}</p></div>{error && <p className="text-sm font-semibold text-[#B54747]" role="alert">{error}</p>}
       <Card className="p-5 sm:p-6"><h2 className="text-xl font-bold">Seguridad</h2><p className="mt-2 text-sm text-[#60716C]">Cambiar la contraseña todavía no está disponible desde el perfil.</p><Button className="mt-5" variant="outline" disabled={busy} onClick={onLogout}>Cerrar sesión</Button></Card>
     </form>
+    {photoDeleteOpen && <SessionModal title="¿Eliminar tu fotografía?" description="Tu avatar volverá a mostrar tus iniciales. Los demás datos del perfil se conservarán." busy={busy} onClose={() => { if (!inFlight.current) setPhotoDeleteOpen(false); }}>{error && <p role="alert" className="text-sm text-[#B54747]">{error}</p>}<div className="mt-6 flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setPhotoDeleteOpen(false)}>Conservar foto</Button><Button disabled={busy} onClick={() => void deletePhoto()}>{busy ? 'Eliminando…' : 'Confirmar eliminación'}</Button></div></SessionModal>}
     {photoOpen && <SessionModal title="Actualizar fotografía" description="La imagen se guarda de forma privada en el servidor." busy={busy} onClose={closePhoto}>{checking && <p role="status">Comprobando imagen…</p>}{photoPreview && <img src={photoPreview} alt="Vista previa de la nueva fotografía" className="mx-auto w-48 h-48 rounded-full object-cover border-4 border-[#DCEBDD]" />}{photoError && <p role="alert" className="rounded-xl bg-[#FDECEC] p-4 text-sm text-[#B54747]">{photoError}</p>}<div className="mt-6 flex flex-col-reverse sm:flex-row justify-end gap-2"><Button variant="outline" disabled={busy} onClick={closePhoto}>Cancelar</Button><Button disabled={busy || checking || !photoFile} onClick={() => void savePhoto()}>{busy ? 'Guardando…' : 'Confirmar fotografía'}</Button></div></SessionModal>}
   </main>;
 }

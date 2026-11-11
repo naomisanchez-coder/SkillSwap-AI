@@ -2,6 +2,7 @@ import type { AccountData, ApplicationCommand, PersonalProfile } from '../data/a
 
 /** Contrato sustituible por la API; los componentes no acceden a IndexedDB ni localStorage. */
 export interface AccountService {
+  deletePhoto?(): Promise<AccountData>;
   getSkillOptions?(): Promise<string[]>;
   getAccount(): Promise<AccountData>;
   saveProfile(profile: Pick<PersonalProfile, 'name' | 'bio'> & { career?: string; cycle?: number }): Promise<AccountData>;
