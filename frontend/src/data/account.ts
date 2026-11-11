@@ -5,7 +5,7 @@ import type { AdminAudit } from './admin';
 export type PersonalProfile = { name?: string; bio?: string; photoStorageId?: string };
 export type ApplicationReview = { id: string; status: SkillRequest['status']; at: string; comment?: string };
 export type MentorSkillRequest = SkillRequest & {
-  userName: string; skill: string; level: 'Intermedio' | 'Avanzado'; experience: string; topics: string;
+  userName: string; skill: string; level: 'Intermedio' | 'Avanzado' | ''; experience: string; topics: string;
   portfolio: string; evidenceName: string; evidenceStorageId?: string; requestedAt: string;
   adminComment?: string; reviewedAt?: string; history: ApplicationReview[];
   submissionId: string; submissionSignature: string;
