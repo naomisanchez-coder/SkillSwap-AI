@@ -1,3 +1,4 @@
+import { createAiDiagnostics } from './modules/student/ai.diagnostics.js';
 import { createConfiguredAiService } from './modules/student/ai.factory.js';
 import { createServer } from 'node:http';
 import { loadEnv } from './config/env.js';
@@ -137,9 +138,10 @@ try {
   if (bookingMigration.length === 1) bookingService = createBookingService(createBookingRepository(database));
   if (privateStorage && levelMigration.length === 1) adminService = createAdminService(
     createAdminRepository(database), createPrivateFileReader(privateStorage));
+  const aiDiagnostics = createAiDiagnostics(process.env);
   aiService = createConfiguredAiService(process.env, {
     repository: createAiRepository(database),
-    onDiagnostic(event) { console.info(JSON.stringify({ event: 'ai_provider', ...event })); },
+    onDiagnostic: aiDiagnostics.record,
   });
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
     loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService,
@@ -149,6 +151,7 @@ try {
     void shutdown(1);
   });
   server.listen(config.port, config.host, () => {
+    if (aiService) aiDiagnostics.start();
     console.info(`skillswap-api listening on port ${config.port}`);
     if (!config.db.password) console.warn('Configure DB_PASSWORD locally to enable database checks');
   });
