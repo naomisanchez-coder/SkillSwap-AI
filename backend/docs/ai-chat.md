@@ -44,7 +44,7 @@ La lógica del chatbot es independiente del transporte. Se puede seleccionar uno
 - OpenAI Responses: `POST https://api.openai.com/v1/responses`.
 - Google Gemini Developer API: `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`.
 
-Ningún adaptador habilita herramientas, búsqueda, ejecución de código o acciones sobre SkillSwap AI. Ambos limitan la salida y solicitan `store:false`. El modelo no tiene valor implícito: debe aparecer entre los modelos disponibles para el proyecto y configurarse expresamente en `AI_MODEL`.
+Ningún adaptador habilita herramientas, búsqueda, ejecución de código o acciones sobre SkillSwap AI. Ambos limitan la salida. OpenAI solicita `store:false`; Gemini utiliza exclusivamente los campos admitidos por `GenerateContentRequest` y el backend no persiste la conversación. El modelo no tiene valor implícito: debe aparecer entre los modelos disponibles para el proyecto y configurarse expresamente en `AI_MODEL`.
 
 Variables:
 
@@ -84,7 +84,9 @@ Las instrucciones distinguen datos reales de orientación general y prohíben in
 
 El límite local es por estudiante y proceso, con ventana fija y memoria acotada. Es suficiente para el desarrollo en una sola instancia, pero no constituye un límite distribuido ni sobrevive reinicios. Antes de desplegar varias instancias se requiere un mecanismo compartido aprobado; no se añadió persistencia ni DDL en 1.11.
 
-`store:false` evita solicitar almacenamiento del objeto de respuesta, pero no debe interpretarse por sí solo como ausencia absoluta de retención del proveedor. En el nivel gratuito de Gemini, Google indica que el contenido puede utilizarse para mejorar sus productos. Por ello el contexto enviado se limita a la pregunta, historial breve y datos públicos mínimos; no se envían correos, contraseñas, certificados, créditos, reservas ni otros datos privados. Antes de habilitar el servicio públicamente deben revisarse las condiciones vigentes del proveedor, privacidad, ubicación/tratamiento de datos y el aviso al estudiante.
+`store:false` evita solicitar almacenamiento del objeto de respuesta en OpenAI, pero no debe interpretarse por sí solo como ausencia absoluta de retención del proveedor. Gemini no admite ese campo en `GenerateContentRequest`. En el nivel gratuito de Gemini, Google indica que el contenido puede utilizarse para mejorar sus productos. Por ello el contexto enviado se limita a la pregunta, historial breve y datos públicos mínimos; no se envían correos, contraseñas, certificados, créditos, reservas ni otros datos privados. Antes de habilitar el servicio públicamente deben revisarse las condiciones vigentes del proveedor, privacidad, ubicación/tratamiento de datos y el aviso al estudiante.
+
+Los diagnósticos internos de Gemini registran únicamente proveedor, modelo, operación, resultado, categoría, estado HTTP y duración. Las categorías diferencian solicitud inválida (`400`), autorización (`401/403`), cuota (`429`), proveedor (`5xx`), timeout, transporte y respuesta inválida. No registran clave, URL autenticada, cookie, token CSRF, prompt ni cuerpo remoto. El contrato HTTP público permanece estable y sanitizado.
 
 ## Integración React
 
@@ -105,4 +107,6 @@ await fetch('/api/student/ai/chat', {
 });
 ```
 
-Las pruebas automatizadas sustituyen ambos transportes y no llaman a OpenAI ni Gemini. Google AI Studio confirmó para el proyecto local el nivel gratuito y ausencia de cuenta de facturación; el catálogo oficial autenticado confirmó `gemini-3.8-flash` con `generateContent`. Tras rotar la clave local se realizó una única solicitud real, acotada, sin herramientas ni datos privados, mediante sesión y CSRF reales sobre el esquema demo. El proveedor terminó en el contrato sanitizado `503 AI_UNAVAILABLE` y no se reintentó; no se obtuvo contenido generativo. Antes de integrar el chatbot como operativo debe diagnosticarse el estado HTTP remoto de forma segura y autorizar una nueva llamada controlada. Las pruebas simuladas continúan cubriendo cuota, timeout, respuesta inválida y errores de transporte sin exponer trazas del proveedor al cliente.
+Las pruebas automatizadas sustituyen ambos transportes y no llaman a OpenAI ni Gemini. Google AI Studio confirmó para el proyecto local el nivel gratuito y ausencia de cuenta de facturación; el catálogo oficial autenticado confirmó `gemini-3.8-flash` con `generateContent`, y la tabla oficial vigente indica entrada y salida gratuitas para su modalidad estándar. El fallo previo se atribuyó a un campo `store` no admitido por el contrato de Gemini; se eliminó sin cambiar el endpoint público.
+
+Después de rotar la clave local se realizó una única solicitud real adicional, acotada a 128 tokens, sin herramientas ni datos privados, mediante el endpoint autenticado, sesión y CSRF reales sobre `skillswap_ai_test_auth`. El endpoint devolvió `200`, el proveedor registró `SUCCESS/200` en 3.589 segundos y hubo una sola llamada, sin reintentos. Se obtuvo contenido generativo real, aunque quedó truncado por el límite reducido de salida; para la integración local se recomienda conservar el límite configurado de 300 tokens y no reintentar automáticamente respuestas incompletas. La fixture aislada se eliminó al finalizar.
