@@ -382,3 +382,7 @@ Finalización 1.4A del 2026-11-10: 002 aplicada en la principal con autorizació
 `003_login_rate_limits.sql` implementa persistencia pseudonimizada para cinco intentos por correo y veinte por IP durante una ventana fija de 15 minutos. Cuenta todos los intentos admitidos antes de consultar credenciales, bloquea EMAIL → IP en orden determinista y no prolonga una ventana bloqueada. Las filas vencidas dejan de afectar y pueden limpiarse después de 24 horas en lotes de 100.
 
 El migrador reconoce 001→002→003 y 003 fue validada primero en `skillswap_ai_test_auth` y después aplicada de forma controlada en `skillswap_ai`, con segunda ejecución idempotente. Login, logout y `/api/auth/me` usan sesiones persistentes, expiración inactiva/absoluta, cookies HttpOnly y CSRF derivado con HMAC. Configuración y contratos: [session-auth.md](docs/session-auth.md).
+
+## Recuperación de contraseña 1.5B (preparación sin DDL)
+
+`004_password_recovery.sql` propone dos tablas independientes para límites pseudónimos EMAIL/IP y desafíos de recuperación. Conserva 001–003, no contiene `ALTER`, `DROP` ni datos demo y todavía no fue aplicada en ninguna base. Los contratos y decisiones pendientes están en [password-recovery.md](docs/password-recovery.md). No habilitar endpoints ni generar claves privadas antes de validar 004 en el esquema aislado.

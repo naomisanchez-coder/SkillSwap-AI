@@ -1,6 +1,6 @@
 # Contratos de autenticación — SkillSwap AI
 
-**Registro, envío/verificación de correo y los endpoints `login`, `logout` y `me` están implementados.** El perfil ampliado y la recuperación de contraseña siguen fuera de alcance. Registro y verificación no crean sesiones automáticamente.
+**Registro, envío/verificación de correo y los endpoints `login`, `logout` y `me` están implementados.** La recuperación de contraseña tiene diseño y migración 004 preparados, pero sus endpoints no están activos. El perfil ampliado sigue fuera de alcance.
 
 ## Fuentes y precedencia
 
@@ -304,7 +304,15 @@ El marcador CSRF se reemplazará en ejecución por 64 caracteres hexadecimales. 
 
 **React:** inicialización mediante recuperación de sesión y protección de navegación. Los guardas de React no sustituyen autorización en Express.
 
-## 7. Consulta del perfil propio
+## 7. Recuperación de contraseña
+
+**Estado: DISEÑO Y MIGRACIÓN PREPARADOS; NO IMPLEMENTADO NI APLICADO.**
+
+Contratos propuestos: `POST /api/auth/password-recovery/request` para solicitud/reenvío uniforme y `POST /api/auth/password-recovery/reset` para consumir código y establecer contraseña en una sola operación. No se añade un endpoint de validación independiente. Estados, límites, DTO, transacción, SMTP y pendiente visual están documentados en [password-recovery.md](password-recovery.md).
+
+La política propuesta usa seis dígitos, diez minutos, cinco intentos, 60 segundos de espera, cinco solicitudes por correo y veinte por IP en una hora. Requiere aprobación antes de ejecutar 004. No crea sesión, no concede créditos y revoca sesiones anteriores tras éxito.
+
+## 8. Consulta del perfil propio
 
 **Estado: PROPUESTO, NO IMPLEMENTADO.**
 
