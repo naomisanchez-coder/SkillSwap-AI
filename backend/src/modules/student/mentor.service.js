@@ -1,3 +1,4 @@
+import { validateMentorDetails } from './mentor-details.validation.js';
 import { randomUUID } from 'node:crypto';
 import { PublicError } from '../../errors/PublicError.js';
 import { validatePdf, validatePhoto, validatePortfolioUrl } from './student-files.js';
@@ -35,7 +36,7 @@ export function createMentorService(repository, storage, { onCleanupFailure = ()
   };
   return Object.freeze({
     requirements() {
-      return { certificate: { required: true, mediaType: 'application/pdf', maximumBytes: 5 * 1024 * 1024 },
+      return { applicationDetails: { available: Boolean(repository.detailsAvailable), levels: ['Intermedio', 'Avanzado'] }, certificate: { required: true, mediaType: 'application/pdf', maximumBytes: 5 * 1024 * 1024 },
         portfolio: { required: false, accepted: ['https-url', 'application/pdf'], maximumFileBytes: 5 * 1024 * 1024 },
         photo: { required: false, mediaTypes: ['image/jpeg', 'image/png', 'image/webp'],
           maximumBytes: 2 * 1024 * 1024 },
@@ -52,8 +53,11 @@ export function createMentorService(repository, storage, { onCleanupFailure = ()
     },
     applications(userId) { return repository.applications(userId); },
     async createApplication(userId, multipart) {
-      const fields = exactObject(multipart?.fields, ['skillId', 'portfolioUrl'], 'form');
+      const fields = exactObject(multipart?.fields, ['skillId', 'portfolioUrl', 'declaredLevel', 'experience', 'topics'], 'form');
       const files = exactObject(multipart?.files, ['certificate', 'portfolio'], 'file');
+      const hasDetails = ['declaredLevel', 'experience', 'topics'].some(key => Object.hasOwn(fields, key));
+      if (hasDetails && !repository.detailsAvailable) throw new PublicError('APPLICATION_DETAILS_UNAVAILABLE');
+      const details = hasDetails ? validateMentorDetails(fields) : null;
       const skillId = identifier(fields.skillId, 'skillId');
       if (!files.certificate) throw new PublicError('VALIDATION_ERROR', { certificate: 'Adjunta el certificado PDF.' });
       if (files.portfolio && fields.portfolioUrl) {
@@ -72,11 +76,17 @@ export function createMentorService(repository, storage, { onCleanupFailure = ()
           committed.push(portfolioFile.storageKey);
         }
         return await repository.createApplication(userId, { id: randomUUID(), eventId: randomUUID(), skillId,
-          certificate: certificateFile, portfolio: portfolioFile, portfolioUrl });
+          certificate: certificateFile, portfolio: portfolioFile, portfolioUrl, details });
       } catch (error) {
         await Promise.all(committed.map(cleanup));
         throw error;
       }
+    },
+    updateApplication(userId, applicationId, body) {
+      if (!repository.detailsAvailable) throw new PublicError('APPLICATION_DETAILS_UNAVAILABLE');
+      exactObject(body, ['declaredLevel', 'experience', 'topics', 'portfolioUrl']);
+      const value = { ...validateMentorDetails(body), portfolioUrl: validatePortfolioUrl(body.portfolioUrl ?? undefined) };
+      return repository.updateApplication(userId, identifier(applicationId, 'applicationId'), value);
     },
     async replaceCertificate(userId, applicationId, multipart) {
       const normalizedId = identifier(applicationId, 'applicationId');

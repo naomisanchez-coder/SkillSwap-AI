@@ -56,8 +56,9 @@ export function createStudentRouter({ origins, sessionService, studentService,
   router.get('/mentor-application/requirements', mentorAvailable, mentor?.requirements ?? (() => {}));
   router.get('/mentor-applications', mentorAvailable, mentor?.applications ?? (() => {}));
   router.post('/mentor-applications', mentorAvailable, mutation,
-    parseMultipart({ fileFields: ['certificate', 'portfolio'], fieldNames: ['skillId', 'portfolioUrl'] }),
+    parseMultipart({ fileFields: ['certificate', 'portfolio'], fieldNames: ['skillId', 'portfolioUrl', 'declaredLevel', 'experience', 'topics'], maximumFieldBytes: 8192 }),
     mentor?.createApplication ?? (() => {}));
+  router.patch('/mentor-applications/:applicationId', mentorAvailable, mutation, json, mentor?.updateApplication ?? (() => {}));
   router.put('/mentor-applications/:applicationId/certificate', mentorAvailable, mutation,
     parseMultipart({ fileFields: ['certificate'] }), mentor?.replaceCertificate ?? (() => {}));
   router.post('/mentor-applications/:applicationId/resubmit', mentorAvailable, mutation, json,

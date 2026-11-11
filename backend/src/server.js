@@ -126,7 +126,9 @@ try {
   studentService = createStudentService(createStudentRepository(database));
   const storageConfig = readPrivateStorageConfig(process.env);
   const privateStorage = storageConfig ? (storageConfig.readOnlyRoot ? createLayeredPrivateStorage(storageConfig) : createLocalPrivateStorage(storageConfig)) : null;
-  if (privateStorage) mentorService = createMentorService(createMentorRepository(database),
+  const [detailsMigration] = await database.execute(
+    "SELECT 1 present FROM schema_migrations WHERE version='009_mentor_application_details' LIMIT 1", []);
+  if (privateStorage) mentorService = createMentorService(createMentorRepository(database, { detailsAvailable: detailsMigration.length === 1 }),
     privateStorage, {
       onCleanupFailure(event) { console.warn(`private_storage: ${event}`); },
     });

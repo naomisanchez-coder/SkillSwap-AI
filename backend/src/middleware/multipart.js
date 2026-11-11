@@ -1,7 +1,7 @@
 import Busboy from 'busboy';
 import { PublicError } from '../errors/PublicError.js';
 
-export function parseMultipart({ fileFields, fieldNames = [], maximumBytes = 5 * 1024 * 1024 }) {
+export function parseMultipart({ fileFields, fieldNames = [], maximumBytes = 5 * 1024 * 1024, maximumFieldBytes = 4096 }) {
   const allowedFiles = new Set(fileFields);
   const allowedFields = new Set(fieldNames);
   return (request, response, next) => {
@@ -11,7 +11,7 @@ export function parseMultipart({ fileFields, fieldNames = [], maximumBytes = 5 *
       // Busboy announces a limit when the configured count is reached. Allow
       // one sentinel part so exact valid forms complete; the explicit allowlists
       // reject that extra part without retaining it.
-      parser = Busboy({ headers: request.headers, limits: { fileSize: maximumBytes, fieldSize: 4096,
+      parser = Busboy({ headers: request.headers, limits: { fileSize: maximumBytes, fieldSize: maximumFieldBytes,
         files: fileFields.length + 1, fields: fieldNames.length + 1,
         parts: fileFields.length + fieldNames.length + 1 } });
     } catch { return next(new PublicError('VALIDATION_ERROR', { file: 'El formulario de archivo no es válido.' })); }

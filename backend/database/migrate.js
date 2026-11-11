@@ -11,9 +11,10 @@ const recoveryMigration = '004_password_recovery';
 const profileMigration = '005_student_profile';
 const mentorMigration = '006_mentor_skills_files';
 const sessionsMigration = '007_sessions_booking_credits';
-export const latestMigration = '008_mentor_skill_levels';
+const levelMigration = '008_mentor_skill_levels';
+export const latestMigration = '009_mentor_application_details';
 const versions = [version, otpMigration, loginMigration, recoveryMigration, profileMigration, mentorMigration,
-  sessionsMigration, latestMigration];
+  sessionsMigration, levelMigration, latestMigration];
 const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth', 'skillswap_ai_demo']);
 const expectedTables = ['schema_migrations', 'careers', 'career_cycles', 'users',
   'student_profiles', 'email_verifications', 'auth_sessions', 'credit_transactions'].sort();
@@ -55,12 +56,12 @@ export async function readMigration(selected = version) {
             'mentor_applications', 'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'] :
             selected === sessionsMigration ? ['mentor_availability', 'mentor_offers', 'mentoring_session_events',
               'mentoring_sessions', 'session_credit_holds', 'session_reviews'] :
-              ['mentor_skill_levels', 'skill_level_catalog'];
+              selected === levelMigration ? ['mentor_skill_levels', 'skill_level_catalog'] : ['mentor_application_details'];
   ensure(JSON.stringify(created.map(s => s.match(/^CREATE TABLE ([a-z_]+) /)?.[1]).sort()) === JSON.stringify(tables), 'MIGRATION_TABLES_INVALID');
   const alter = "ALTER TABLE email_verifications\n  DROP CHECK chk_verifications_status,\n  ADD CONSTRAINT chk_verifications_status CHECK (status IN ('SENDING', 'PENDING', 'CONSUMED', 'REVOKED', 'EXPIRED', 'EXHAUSTED')),\n  ALTER COLUMN status SET DEFAULT 'SENDING'";
   const lengths = { [version]: expectedTables.length + 3, [otpMigration]: 5,
     [loginMigration]: 4, [recoveryMigration]: 5, [profileMigration]: 5,
-    [mentorMigration]: 10, [sessionsMigration]: 9, [latestMigration]: 5 };
+    [mentorMigration]: 10, [sessionsMigration]: 9, [levelMigration]: 5, [latestMigration]: 4 };
   ensure(statements.length === lengths[selected], 'MIGRATION_FORMAT_INVALID');
   ensure(statements.every(s => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s) || (selected === otpMigration && s === alter)), 'MIGRATION_FORMAT_INVALID');
   const checksum = createHash('sha256').update(bytes).digest('hex');
@@ -72,7 +73,8 @@ export async function readMigration(selected = version) {
     [profileMigration]: 'adf668d8ef24c9b9cc21808f7c46491fd608182c36170325dc2cd682faadf4dd',
     [mentorMigration]: '8494f88eec39e615ec44b14e2970f6c017479ab00d2e6769d4a2e39fda8aede3',
     [sessionsMigration]: 'aafc96679930a69496175c1904e2a240e412c28e75181a1a4f558cd14bd1c6c6',
-    [latestMigration]: '9f1cdc5fa257d9c2695bb4bc72a86566b26b7198ba5187f47f78a96083579cae',
+    [levelMigration]: '9f1cdc5fa257d9c2695bb4bc72a86566b26b7198ba5187f47f78a96083579cae',
+    [latestMigration]: '493aa47a3927b100c1833c3354e5ebd36edba89e9e879278061137b5d8b04f26',
   };
   ensure(checksum === immutable[selected], 'MIGRATION_IMMUTABLE_CHECKSUM');
   return { version: selected, checksum, statements };
@@ -174,7 +176,7 @@ async function inspect(connection, config, migrations) {
     requireAlter: pending.some(item => item.version === otpMigration),
     allowAlter: migrations.some(item => item.version === otpMigration),
     requireReferences: pending.some(item => [version, recoveryMigration, profileMigration, sessionsMigration,
-      latestMigration].includes(item.version)),
+      levelMigration, latestMigration].includes(item.version)),
   });
   if (!objects.length) return 0;
   const applied = migrations.slice(0, history.length);
@@ -186,7 +188,8 @@ async function inspect(connection, config, migrations) {
       'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'] : []),
     ...(history.length > 6 ? ['mentor_availability', 'mentor_offers', 'mentoring_session_events',
       'mentoring_sessions', 'session_credit_holds', 'session_reviews'] : []),
-    ...(history.length > 7 ? ['mentor_skill_levels', 'skill_level_catalog'] : [])].sort();
+    ...(history.length > 7 ? ['mentor_skill_levels', 'skill_level_catalog'] : []),
+    ...(history.length > 8 ? ['mentor_application_details'] : [])].sort();
   ensure(JSON.stringify(objects.map((o) => o.name).sort()) === JSON.stringify(tables) &&
     objects.every((o) => o.type === 'BASE TABLE' && o.engine === 'InnoDB'), 'MIGRATION_PARTIAL_OR_FOREIGN_SCHEMA');
   await checkStructure(connection, config.database, { statements: applied.flatMap(m => m.statements) });

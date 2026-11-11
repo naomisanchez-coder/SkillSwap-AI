@@ -16,6 +16,7 @@ const definitions = Object.freeze({
   RATE_LIMITED: [429, 'Demasiadas solicitudes. Inténtalo más tarde.'],
   AI_PROVIDER_LIMITED: [503, 'El servicio de IA alcanzó temporalmente su límite.'],
   AI_UNAVAILABLE: [503, 'El asistente de IA no está disponible temporalmente.'],
+  APPLICATION_DETAILS_UNAVAILABLE: [503, 'El guardado ampliado de solicitudes todavía no está habilitado. Inténtalo después de la actualización.'],
   SERVICE_UNAVAILABLE: [503, 'El servicio no está disponible temporalmente.'],
 });
 

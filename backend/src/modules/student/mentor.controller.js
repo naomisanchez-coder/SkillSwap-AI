@@ -20,6 +20,9 @@ export function createMentorController(service) {
       response.set('Cache-Control', 'no-store').status(201).json({ application: await service.createApplication(
         request.auth.user.id, request.multipart) });
     },
+    async updateApplication(request, response) {
+      response.set('Cache-Control', 'no-store').status(200).json({ application: await service.updateApplication(request.auth.user.id, request.params.applicationId, request.body) });
+    },
     async replaceCertificate(request, response) {
       response.set('Cache-Control', 'no-store').status(200).json({ application: await service.replaceCertificate(
         request.auth.user.id, request.params.applicationId, request.multipart) });

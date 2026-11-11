@@ -17,14 +17,16 @@ async function applicationRow(tx, userId, applicationId, lock = false) {
 
 function publicApplication(row) {
   return { id: row.id, skillId: row.skill_id, skill: row.skill, skillCode: row.skill_code,
-    status: row.status, portfolioUrl: row.portfolio_url ?? null,
+    status: row.status, portfolioUrl: row.portfolio_url ?? null, declaredLevel: row.declared_level ?? null,
+    experience: row.experience ?? null, topics: row.topics ?? null,
     submittedAt: row.submitted_at, updatedAt: row.updated_at,
     decidedAt: row.decided_at ?? null, decisionNotes: row.decision_notes ?? null,
     certificateAttached: Boolean(row.certificate_attached), portfolioAttached: Boolean(row.portfolio_attached) };
 }
 
-export function createMentorRepository(database) {
+export function createMentorRepository(database, { detailsAvailable = false } = {}) {
   return Object.freeze({
+    detailsAvailable,
     async catalog() {
       const [rows] = await database.execute(`SELECT id,code,name,category FROM skill_catalog
         WHERE is_active=TRUE ORDER BY name,id`, []);
@@ -62,12 +64,13 @@ export function createMentorRepository(database) {
       });
     },
     async applications(userId) {
-      const [rows] = await database.execute(`SELECT ma.*,s.name skill,s.code skill_code,
+      const [rows] = await database.execute(`SELECT ma.*,s.name skill,s.code skill_code,${detailsAvailable ? 'md.declared_level,md.experience,md.topics,' : ''}
           EXISTS(SELECT 1 FROM mentor_application_documents d WHERE d.application_id=ma.id
             AND d.document_type='CERTIFICATE') certificate_attached,
           EXISTS(SELECT 1 FROM mentor_application_documents d WHERE d.application_id=ma.id
             AND d.document_type='PORTFOLIO') portfolio_attached
         FROM mentor_applications ma JOIN skill_catalog s ON s.id=ma.skill_id
+        ${detailsAvailable ? 'LEFT JOIN mentor_application_details md ON md.application_id=ma.id' : ''}
         WHERE ma.user_id=? ORDER BY ma.submitted_at DESC,ma.id DESC`, [userId]);
       return rows.map(publicApplication);
     },
@@ -83,6 +86,10 @@ export function createMentorRepository(database) {
         await tx.execute(`INSERT INTO mentor_applications
           (id,user_id,skill_id,status,portfolio_url) VALUES (?,?,?,'PENDING',?)`,
         [value.id, userId, value.skillId, value.portfolioUrl]);
+        if (value.details) {
+          if (!detailsAvailable) throw new PublicError('APPLICATION_DETAILS_UNAVAILABLE');
+          await tx.execute(`INSERT INTO mentor_application_details (application_id,declared_level,experience,topics) VALUES (?,?,?,?)`, [value.id, value.details.declaredLevel, value.details.experience, value.details.topics]);
+        }
         await tx.execute(`INSERT INTO mentor_application_documents
           (application_id,document_type,file_id) VALUES (?,'CERTIFICATE',?)`, [value.id, value.certificate.id]);
         if (value.portfolio) await tx.execute(`INSERT INTO mentor_application_documents
@@ -94,6 +101,18 @@ export function createMentorRepository(database) {
         [value.eventId, value.id, userId]);
         return { id: value.id, skillId: value.skillId, status: 'PENDING', portfolioUrl: value.portfolioUrl,
           certificateAttached: true, portfolioAttached: Boolean(value.portfolio) };
+      });
+    },
+    async updateApplication(userId, applicationId, value) {
+      if (!detailsAvailable) throw new PublicError('APPLICATION_DETAILS_UNAVAILABLE');
+      return database.transaction(async tx => {
+        const application = await applicationRow(tx, userId, applicationId, true);
+        if (!['PENDING', 'REJECTED'].includes(application.status)) throw new PublicError('CONFLICT');
+        await tx.execute(`INSERT INTO mentor_application_details (application_id,declared_level,experience,topics) VALUES (?,?,?,?)
+          ON DUPLICATE KEY UPDATE declared_level=?,experience=?,topics=?`,
+        [applicationId, value.declaredLevel, value.experience, value.topics, value.declaredLevel, value.experience, value.topics]);
+        await tx.execute('UPDATE mentor_applications SET portfolio_url=?,updated_at=UTC_TIMESTAMP(6) WHERE id=? AND user_id=?', [value.portfolioUrl, applicationId, userId]);
+        return { id: applicationId, status: application.status, declaredLevel: value.declaredLevel, experience: value.experience, topics: value.topics, portfolioUrl: value.portfolioUrl };
       });
     },
     async replaceCertificate(userId, applicationId, value) {
