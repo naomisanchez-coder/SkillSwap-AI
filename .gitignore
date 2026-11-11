@@ -1,5 +1,6 @@
 # Dependencias
 node_modules/
+.private-storage/
 
 # Variables de entorno y secretos
 .env
