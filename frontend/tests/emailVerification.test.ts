@@ -28,11 +28,21 @@ test('fixtures: expiración y error permiten recuperar el recorrido al reenviar'
   }
 });
 
-test('API pendiente: nunca llama a fetch, envía código ni devuelve verificado', async () => {
-  const old = globalThis.fetch; globalThis.fetch = () => { throw new Error('No debe llamar a la API'); };
+test('OTP HTTP: conserva verificationId, reenvía y verifica sin códigos de prueba ni reintentos', async () => {
+  const old = globalThis.fetch; const requests: { url: string; body: unknown; options: RequestInit }[] = [];
+  let issued = 0;
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), body: JSON.parse(options.body as string), options });
+    return Response.json(String(url).endsWith('send-code') ? { status: 'accepted', verificationId: `verification-${++issued}` } : { status: 'verified' });
+  };
   try {
-    assert.deepEqual(await pendingEmailVerification.issue(email, signal()), { status: 'integration_pending' });
-    assert.deepEqual(await pendingEmailVerification.verify(email, '246810', signal()), { status: 'integration_pending' });
+    assert.deepEqual(await pendingEmailVerification.issue(email, signal()), { status: 'code_sent' });
+    await pendingEmailVerification.issue(email, signal());
+    assert.deepEqual(await pendingEmailVerification.verify(email, '246810', signal()), { status: 'verified' });
+    assert.deepEqual(requests[2].body, { email, code: '246810', verificationId: 'verification-2' });
+    assert.equal(requests[2].options.credentials, 'include');
+    assert.equal(requests.length, 3);
+    assert.deepEqual(await pendingEmailVerification.verify(email, '246810', signal()), { status: 'expired' });
   } finally { globalThis.fetch = old; }
 });
 

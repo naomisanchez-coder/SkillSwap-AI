@@ -6,9 +6,9 @@ import { AuthError, login, type AuthSession } from '../services/auth';
 import PasswordRecoveryForm from './PasswordRecoveryForm';
 
 // Formulario y presentación de AuthPage.tsx del prototipo; acceso por la API real.
-export default function LoginPage({ onBack, onRegister, onAuthenticated }: {
+export default function LoginPage({ onBack, onRegister, onAuthenticated, onVerificationRequired }: {
   onBack: () => void; onRegister: () => void;
-  onAuthenticated: (session: AuthSession) => void;
+  onAuthenticated: (session: AuthSession) => void; onVerificationRequired?: (email: string) => void;
 }) {
   const [email, setEmail] = useState('');
   const [recovering, setRecovering] = useState(false);
@@ -42,6 +42,7 @@ export default function LoginPage({ onBack, onRegister, onAuthenticated }: {
       const session = await login({ email: email.trim().toLowerCase(), password, remember }, controller.signal);
       if (!controller.signal.aborted) { setPassword(''); onAuthenticated(session); }
     } catch (error) {
+      if (!controller.signal.aborted && error instanceof AuthError && error.code === 'EMAIL_NOT_VERIFIED' && onVerificationRequired) { setPassword(''); onVerificationRequired(email.trim().toLowerCase()); return; }
       if (!controller.signal.aborted) setErrors({ general: error instanceof AuthError ? error.message : 'No fue posible iniciar sesión. Inténtalo más tarde.' });
     } finally {
       inFlight.current = false;

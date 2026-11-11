@@ -32,3 +32,25 @@ test('storage removes staging files when a write or promotion fails', async () =
     assert.deepEqual(await storage.read('0'.repeat(64)), Buffer.from('first'));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('almacenamiento integrado: lee archivos previos, pero cargas y limpieza nunca modifican el origen', async () => {
+  const { createLayeredPrivateStorage } = await import('../src/adapters/private-storage.js');
+  const source = await mkdtemp(join(tmpdir(), 'skillswap-origin-'));
+  const target = await mkdtemp(join(tmpdir(), 'skillswap-worktree-'));
+  const original = createLocalPrivateStorage({ root: source });
+  try {
+    const key = await original.store(Buffer.from('existing certificate'));
+    const layered = createLayeredPrivateStorage({ root: target, readOnlyRoot: source });
+    assert.deepEqual(await layered.read(key), Buffer.from('existing certificate'));
+    assert.equal(await layered.remove(key), false);
+    assert.deepEqual(await original.read(key), Buffer.from('existing certificate'));
+    const added = await layered.store(Buffer.from('new photo'));
+    await assert.rejects(original.read(added), error => error.code === 'ENOENT');
+    assert.deepEqual(await layered.read(added), Buffer.from('new photo'));
+    assert.equal(await layered.remove(added), true);
+    assert.deepEqual(await original.read(key), Buffer.from('existing certificate'));
+  } finally {
+    await rm(source, { recursive: true, force: true });
+    await rm(target, { recursive: true, force: true });
+  }
+});

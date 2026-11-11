@@ -7,7 +7,7 @@ import type { BookingDraft, BookingLedger, ConfirmedBooking, CreditMovement } fr
 import { BookingError } from '../data/booking';
 import { formatTime, parseTime } from '../data/scheduling';
 
-type ApiSession = { id: string; student: { id: string; firstName: string; lastName: string }; mentor: { id: string; firstName: string; lastName: string }; skill: { name: string }; status: string; startsAt: string; durationMinutes: 30 | 60 | 90; creditCost: number; meetingUrl: string | null; review: { rating: number; comment: string | null } | null };
+type ApiSession = { createdAt?: string | null; startedAt?: string | null; performedAt?: string | null; validatedAt?: string | null; cancelledAt?: string | null; id: string; student: { id: string; firstName: string; lastName: string }; mentor: { id: string; firstName: string; lastName: string }; skill: { name: string }; status: string; startsAt: string; durationMinutes: 30 | 60 | 90; creditCost: number; meetingUrl: string | null; review: { rating: number; comment: string | null } | null };
 type Credits = { total: number; available: number; held: number; used: number; earned: number; transactions: { id: string; amount: number; reason: string; reference: string; occurredAt: string; holdStatus: string | null }[]; pagination: { nextCursor: string | null } };
 export function sessionView(s: ApiSession): ConfirmedBooking {
   const local = new Date(new Date(s.startsAt).getTime() - 5 * 3600000).toISOString();
@@ -15,8 +15,9 @@ export function sessionView(s: ApiSession): ConfirmedBooking {
   if (!status) throw new Error('Estado de sesión desconocido.');
   return { id: s.id, studentId: s.student.id, mentorId: s.mentor.id, mentorOwnerId: s.mentor.id, mentorName: `${s.mentor.firstName} ${s.mentor.lastName}`, learnerName: `${s.student.firstName} ${s.student.lastName}`,
     skill: s.skill.name, topic: s.skill.name, date: local.slice(0, 10), time: formatTime(Number(local.slice(11, 13)) * 60 + Number(local.slice(14, 16))), duration: s.durationMinutes,
-    status, credits: s.creditCost, createdAt: '', reservedSlotKeys: [], meetingPlatform: s.meetingUrl ? s.meetingUrl.includes('meet.google.com') ? 'google_meet' : s.meetingUrl.includes('zoom.us') ? 'zoom' : 'webex' : null,
-    meetingUrl: s.meetingUrl, rated: Boolean(s.review), rating: s.review?.rating, refundStatus: status === 'cancelled' ? 'refunded' : undefined, serverManaged: true };
+    status, credits: s.creditCost, createdAt: s.createdAt ?? '', performedAt: s.performedAt ?? undefined, validatedAt: s.validatedAt ?? undefined, cancelledAt: s.cancelledAt ?? undefined,
+    history: s.createdAt ? [{ id: `${s.id}:booked`, at: s.createdAt, label: 'Reserva confirmada', actor: 'system' }] : [], reservedSlotKeys: [], meetingPlatform: s.meetingUrl ? s.meetingUrl.includes('meet.google.com') ? 'google_meet' : s.meetingUrl.includes('zoom.us') ? 'zoom' : 'webex' : null,
+    meetingUrl: s.meetingUrl, rated: Boolean(s.review), rating: s.review?.rating, refundStatus: status === 'cancelled' ? 'Créditos devueltos' : undefined, serverManaged: true };
 }
 export function createStudentServices(session: AuthSession) {
   const { account, preferences, readProfile } = createProfileServices(session);

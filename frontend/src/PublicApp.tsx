@@ -92,7 +92,7 @@ export default function PublicApp({ initialPage, catalogService = anonymousCatal
           </div>
         </aside>
       )}
-      {page === 'login' && <LoginPage onBack={() => navigate('landing')} onRegister={() => navigate('register')}
+      {page === 'login' && <LoginPage onVerificationRequired={email => { setVerificationEmail(email); setPage('verify-email'); }} onBack={() => navigate('landing')} onRegister={() => navigate('register')}
         onAuthenticated={next => { acceptSession(next); navigate('landing') }} />}
       {page === 'register' && <RegisterPage onBack={() => navigate('landing')} onLogin={() => navigate('login')} service={registrationService} localPreview={!apiSession && Boolean(registrationService)} onVerifyEmail={email => { setVerificationEmail(email); setPage('verify-email'); window.scrollTo({ top: 0, behavior: 'instant' }) }} />}
       {page === 'verify-email' && <EmailVerificationPage email={verificationEmail} service={verificationService} onHome={() => navigate('landing')} onBackToLogin={() => navigate('login')} onVerified={onLocalVerified} />}

@@ -68,7 +68,7 @@ export function validateLedger(value: BookingLedger, studentId: string, initial:
   if (movementCount !== value.movements.length || Object.keys(value.wallets).some(id => !Object.hasOwn(participantInitials, id))) invalid();
   for (const [id, expected] of Object.entries(expectedWallets)) {
     const actual = id === studentId ? value.wallet : value.wallets[id];
-    if (!actual || Object.keys(expected).some(key => actual[key as keyof WalletBalance] !== expected[key as keyof WalletBalance] || !Number.isSafeInteger(expected[key as keyof WalletBalance]) || expected[key as keyof WalletBalance] < 0)) invalid();
+    if (!actual || Object.keys(expected).some(key => actual[key as Exclude<keyof WalletBalance, 'total'>] !== expected[key as Exclude<keyof WalletBalance, 'total'>] || !Number.isSafeInteger(expected[key as Exclude<keyof WalletBalance, 'total'>]) || expected[key as Exclude<keyof WalletBalance, 'total'>] < 0)) invalid();
   }
   if (Object.keys({ ...mentorBalances, ...value.mentorBalances }).some(id => mentorBalances[id] !== value.mentorBalances[id])) invalid();
   if (value.incidents.some(item => !value.sessions.some(session => session.id === item.sessionId) || !['open', 'in_review', 'closed', 'resolved'].includes(item.status) || !item.reason.trim() || item.reason.length > 1000)) invalid();

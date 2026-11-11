@@ -12,7 +12,9 @@ function publicSession(row) {
     lastName: row.mentor_last_name }, offerId: row.offer_id,
   skill: { id: row.skill_id, code: row.skill_code, name: row.skill_name }, status: row.status,
   startsAt: iso(row.starts_at), endsAt: iso(row.ends_at), durationMinutes: Number(row.duration_minutes),
-  creditCost: Number(row.credit_cost), meetingUrl: row.meeting_url ?? null,
+  creditCost: Number(row.credit_cost), createdAt: row.created_at ? iso(row.created_at) : null,
+  startedAt: row.started_at ? iso(row.started_at) : null, performedAt: row.performed_at ? iso(row.performed_at) : null,
+  validatedAt: row.validated_at ? iso(row.validated_at) : null, cancelledAt: row.cancelled_at ? iso(row.cancelled_at) : null, meetingUrl: row.meeting_url ?? null,
   review: row.review_rating === null || row.review_rating === undefined ? null : {
     rating: Number(row.review_rating), comment: row.review_comment ?? null,
   } };

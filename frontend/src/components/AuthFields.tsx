@@ -59,6 +59,7 @@ export function SelectField({
   onChange,
   error,
   children,
+  disabled,
 }: {
   id: string;
   label: string;
@@ -66,12 +67,14 @@ export function SelectField({
   onChange: (value: string) => void;
   error?: string;
   children: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-bold text-[#263D39]">{label}</label>
       <select
         id={id}
+        disabled={disabled}
         value={value}
         onChange={event => onChange(event.target.value)}
         aria-invalid={Boolean(error)}

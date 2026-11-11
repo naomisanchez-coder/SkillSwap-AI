@@ -83,7 +83,7 @@ export default function SessionsHubPage({ ledger, service, onChanged, onExplore,
               <p className="mt-2 text-xs font-semibold text-[#52645F]">Mentoría virtual · {hasAssignedMeeting(session) ? meetingPlatformLabel(session.meetingPlatform) : 'Enlace pendiente'}</p>
               {confirmations(session)}
               {!mentorAction && session.status === 'upcoming' && <p className="mt-2 text-xs text-[#60716C]">{session.serverManaged ? 'Cancelación con devolución disponible antes del inicio; el servidor valida la operación.' : canCancelSession(session, new Date(clock)) ? 'Cancelación disponible con devolución: mínimo 12 horas de anticipación.' : 'Cancelación no disponible: se requiere un mínimo de 12 horas de anticipación.'}</p>}
-              {session.status === 'cancelled' && <p className="mt-2 text-sm text-[#B54747]">{session.cancellationReason} · {session.refundStatus}</p>}
+              {session.status === 'cancelled' && <p className="mt-2 text-sm text-[#B54747]">{session.cancellationReason || 'Cancelación registrada'} · {session.refundStatus}</p>}
               {incident && <p className="mt-2 text-sm text-[#92400E]">Pendiente de revisión administrativa: {incident.reason}. Créditos retenidos.</p>}
               {session.rated && <p className="mt-2 text-sm text-[#24685F]">Reseña enviada · {session.rating}/5 estrellas</p>}
             </div>
