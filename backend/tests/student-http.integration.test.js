@@ -35,6 +35,8 @@ test('real isolated HTTP profile enforces ownership, CSRF, permissions, atomicit
     database: process.env.DATABASE_TEST_DB, user: process.env.DATABASE_TEST_USER,
     password: process.env.DATABASE_TEST_PASSWORD });
   const studentId = randomUUID(), adminId = randomUUID(), careerId = randomUUID();
+  const verificationId = randomUUID();
+  const creditIds = [randomUUID(), randomUUID(), randomUUID()];
   const suffix = randomBytes(8).toString('hex');
   const protection = createSessionProtection(randomBytes(32).toString('hex'));
   const sessionRepository = createSessionRepository(database, sessionPolicy);
@@ -81,6 +83,49 @@ test('real isolated HTTP profile enforces ownership, CSRF, permissions, atomicit
     assert.equal(initial.body.profile.id, studentId);
     assert.equal(initial.body.profile.email, `perfil.http.${suffix}@tecsup.edu.pe`);
     assert.equal(initial.body.profile.onboardingComplete, false);
+
+    const emptyCredits = await json(await fetch(`${started.base}/api/student/credits`, { headers: studentHeaders }));
+    assert.equal(emptyCredits.status, 200);
+    assert.equal(emptyCredits.body.credits.balance, 0);
+    assert.equal(emptyCredits.body.credits.totalTransactions, 0);
+    assert.deepEqual(emptyCredits.body.credits.transactions, []);
+    assert.equal((await fetch(`${started.base}/api/student/credits?userId=${adminId}`,
+      { headers: studentHeaders })).status, 422);
+    assert.equal((await fetch(`${started.base}/api/student/dashboard`, { headers: {
+      Cookie: `${sessionPolicy.cookieName}=${adminSession.token}` } })).status, 403);
+
+    await database.transaction(async tx => {
+      await tx.execute(`INSERT INTO email_verifications
+        (id,user_id,code_hmac,hmac_key_version,status,attempts,max_attempts,expires_at,consumed_at)
+        VALUES (?,?,?,'integration-v1','CONSUMED',0,5,DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 10 MINUTE),UTC_TIMESTAMP(6))`,
+      [verificationId, studentId, Buffer.alloc(32, 1)]);
+      await tx.execute(`INSERT INTO credit_transactions
+        (id,user_id,amount,reason,operation_reference,verification_id,created_at)
+        VALUES (?,?,20,'INITIAL_EMAIL_VERIFICATION',?,?,DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 2 MINUTE))`,
+      [creditIds[0], studentId, `profile-http-initial:${suffix}`, verificationId]);
+      await tx.execute(`INSERT INTO credit_transactions (id,user_id,amount,reason,operation_reference,created_at)
+        VALUES (?,?,-5,'TEST_RESERVATION_HOLD',?,DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 1 MINUTE))`,
+      [creditIds[1], studentId, `profile-http-hold:${suffix}`]);
+      await tx.execute(`INSERT INTO credit_transactions (id,user_id,amount,reason,operation_reference,created_at)
+        VALUES (?,?,5,'TEST_REFUND',?,UTC_TIMESTAMP(6))`,
+      [creditIds[2], studentId, `profile-http-refund:${suffix}`]);
+    });
+    const firstPage = (await json(await fetch(`${started.base}/api/student/credits?limit=2`,
+      { headers: studentHeaders }))).body.credits;
+    assert.equal(firstPage.balance, 20);
+    assert.equal(firstPage.totalTransactions, 3);
+    assert.deepEqual(firstPage.transactions.map(item => item.amount), [5, -5]);
+    assert.ok(firstPage.pagination.nextCursor);
+    const secondPage = (await json(await fetch(`${started.base}/api/student/credits?limit=2&cursor=${firstPage.pagination.nextCursor}`,
+      { headers: studentHeaders }))).body.credits;
+    assert.equal(secondPage.balance, 20);
+    assert.deepEqual(secondPage.transactions.map(item => item.amount), [20]);
+    assert.equal(secondPage.pagination.nextCursor, null);
+    const dashboard = (await json(await fetch(`${started.base}/api/student/dashboard`,
+      { headers: studentHeaders }))).body.dashboard;
+    assert.equal(dashboard.credits.balance, 20);
+    assert.equal(dashboard.activity.creditTransactions, 3);
+    assert.equal(dashboard.student.onboardingComplete, false);
 
     const catalogResponse = await json(await fetch(`${started.base}/api/student/catalog`, { headers: studentHeaders }));
     assert.equal(catalogResponse.status, 200);
@@ -143,6 +188,8 @@ test('real isolated HTTP profile enforces ownership, CSRF, permissions, atomicit
     try {
       await database.transaction(async tx => {
         await tx.execute('DELETE FROM auth_sessions WHERE user_id IN (?,?)', [studentId, adminId]);
+        await tx.execute('DELETE FROM credit_transactions WHERE user_id=?', [studentId]);
+        await tx.execute('DELETE FROM email_verifications WHERE user_id=?', [studentId]);
         await tx.execute('DELETE FROM student_interests WHERE user_id=?', [studentId]);
         await tx.execute('DELETE FROM student_profile_details WHERE user_id=?', [studentId]);
         await tx.execute('DELETE FROM student_profiles WHERE user_id=?', [studentId]);
