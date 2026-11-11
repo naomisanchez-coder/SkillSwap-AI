@@ -1,5 +1,5 @@
 import { PublicError } from '../../errors/PublicError.js';
-import { AiProviderError } from '../../adapters/openai-responses.js';
+import { AiProviderError } from '../../adapters/ai-provider-error.js';
 import { validateAiChat } from './ai.validation.js';
 
 function instructions(context) {

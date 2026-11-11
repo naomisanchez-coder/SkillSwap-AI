@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readAiConfig } from '../src/config/ai.js';
 import { AiProviderError, createOpenAiResponsesClient } from '../src/adapters/openai-responses.js';
+import { createGeminiGenerateContentClient } from '../src/adapters/gemini-generate-content.js';
 import { createAiLimiter } from '../src/modules/student/ai.limiter.js';
 import { createAiRepository } from '../src/modules/student/ai.repository.js';
 import { createAiService } from '../src/modules/student/ai.service.js';
@@ -17,12 +18,18 @@ test('AI configuration is explicit, bounded and disabled by default', () => {
     AI_MODEL: config.model, AI_MAX_OUTPUT_TOKENS: '240', AI_TIMEOUT_MS: '5000',
     AI_RATE_LIMIT_MAX_REQUESTS: '2', AI_RATE_LIMIT_WINDOW_SECONDS: '60' });
   assert.deepEqual(result, { ...config, timeoutMs: 5000 });
+  const gemini = readAiConfig({ AI_ENABLED: 'true', AI_PROVIDER: 'gemini',
+    GEMINI_API_KEY: config.apiKey, AI_MODEL: 'gemini-available-model' });
+  assert.equal(gemini.provider, 'gemini');
+  assert.equal(gemini.apiKey, config.apiKey);
+  assert.equal(gemini.model, 'gemini-available-model');
   for (const source of [
     { AI_ENABLED: 'true', AI_PROVIDER: 'other', AI_API_KEY: config.apiKey, AI_MODEL: config.model },
     { AI_ENABLED: 'true', AI_PROVIDER: 'openai', AI_API_KEY: 'short', AI_MODEL: config.model },
     { AI_ENABLED: 'true', AI_PROVIDER: 'openai', AI_API_KEY: config.apiKey, AI_MODEL: '' },
     { AI_ENABLED: 'true', AI_PROVIDER: 'openai', AI_API_KEY: config.apiKey, AI_MODEL: config.model,
       AI_MAX_OUTPUT_TOKENS: '1001' },
+    { AI_ENABLED: 'true', AI_PROVIDER: 'gemini', AI_API_KEY: config.apiKey, AI_MODEL: config.model },
   ]) assert.throws(() => readAiConfig(source), /Invalid AI configuration/);
 });
 
@@ -51,6 +58,56 @@ test('provider quota, invalid responses and timeouts are sanitized', async () =>
   const timeout = createOpenAiResponsesClient({ ...config, timeoutMs: 5 }, { fetchImpl: async (_url, options) =>
     new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(
       Object.assign(new Error('private transport detail'), { name: 'AbortError' })) )) });
+  await assert.rejects(timeout.respond({ instructions: '', input: [] }),
+    error => error instanceof AiProviderError && error.kind === 'TIMEOUT' && !error.message.includes('private'));
+});
+
+test('Gemini adapter uses official endpoints, header authentication and no tools', async () => {
+  const requests = [];
+  const geminiConfig = { ...config, provider: 'gemini', model: 'gemini-project-model' };
+  const client = createGeminiGenerateContentClient(geminiConfig, { async fetchImpl(url, options) {
+    requests.push({ url, options });
+    if (url.endsWith('/models')) return { ok: true, status: 200, async json() { return { models: [
+      { name: 'models/gemini-project-model', displayName: 'Project model', inputTokenLimit: 1000,
+        outputTokenLimit: 500, supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/embedding-only', supportedGenerationMethods: ['embedContent'] },
+    ] }; } };
+    return { ok: true, status: 200, async json() { return { candidates: [{ content: { parts: [
+      { text: 'Respuesta Gemini segura' },
+    ] } }] }; } };
+  } });
+  assert.deepEqual(await client.listModels(), [{ name: 'models/gemini-project-model',
+    displayName: 'Project model', inputTokenLimit: 1000, outputTokenLimit: 500 }]);
+  assert.equal(await client.respond({ instructions: 'Internal', input: [
+    { role: 'user', content: 'Hola' }, { role: 'assistant', content: 'Hola también' },
+  ] }), 'Respuesta Gemini segura');
+  assert.equal(requests[0].url, 'https://generativelanguage.googleapis.com/v1beta/models');
+  assert.equal(requests[0].options.headers['x-goog-api-key'], geminiConfig.apiKey);
+  assert.equal(requests[1].url,
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-project-model:generateContent');
+  const body = JSON.parse(requests[1].options.body);
+  assert.deepEqual(body, { systemInstruction: { parts: [{ text: 'Internal' }] }, contents: [
+    { role: 'user', parts: [{ text: 'Hola' }] },
+    { role: 'model', parts: [{ text: 'Hola también' }] },
+  ], generationConfig: { maxOutputTokens: 240 }, store: false });
+  assert.equal(body.tools, undefined);
+});
+
+test('Gemini quota, invalid responses and timeouts use provider-neutral errors', async () => {
+  const geminiConfig = { ...config, provider: 'gemini', model: 'gemini-project-model' };
+  const limited = createGeminiGenerateContentClient(geminiConfig,
+    { fetchImpl: async () => ({ ok: false, status: 429 }) });
+  await assert.rejects(limited.respond({ instructions: '', input: [] }),
+    error => error instanceof AiProviderError && error.kind === 'LIMITED');
+  const invalid = createGeminiGenerateContentClient(geminiConfig, { fetchImpl: async () => ({
+    ok: true, status: 200, async json() { return { candidates: [] }; },
+  }) });
+  await assert.rejects(invalid.respond({ instructions: '', input: [] }),
+    error => error instanceof AiProviderError && error.kind === 'INVALID_RESPONSE');
+  const timeout = createGeminiGenerateContentClient({ ...geminiConfig, timeoutMs: 5 },
+    { fetchImpl: async (_url, options) => new Promise((resolve, reject) =>
+      options.signal.addEventListener('abort', () => reject(Object.assign(
+        new Error('private transport detail'), { name: 'AbortError' })))) });
   await assert.rejects(timeout.respond({ instructions: '', input: [] }),
     error => error instanceof AiProviderError && error.kind === 'TIMEOUT' && !error.message.includes('private'));
 });

@@ -37,17 +37,23 @@ Respuesta `200`:
 
 Los errores mantienen `{ "error": { "code", "message", "fields" } }`. La ausencia de configuración o un error/timeout del proveedor devuelve `503 AI_UNAVAILABLE`; una limitación de cuota del proveedor devuelve `503 AI_PROVIDER_LIMITED`. La limitación local usa el error público `429 RATE_LIMITED`.
 
-## Proveedor y configuración
+## Proveedores y configuración
 
-El adaptador usa por HTTPS la API oficial Responses de OpenAI: `POST https://api.openai.com/v1/responses`. El modelo no tiene un valor implícito: debe seleccionarse expresamente en la cuenta del proyecto y configurarse en `AI_MODEL`. La petición limita la salida y envía `store:false`.
+La lógica del chatbot es independiente del transporte. Se puede seleccionar uno de estos adaptadores HTTPS sin cambiar el endpoint ni las reglas de autorización:
+
+- OpenAI Responses: `POST https://api.openai.com/v1/responses`.
+- Google Gemini Developer API: `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`.
+
+Ningún adaptador habilita herramientas, búsqueda, ejecución de código o acciones sobre SkillSwap AI. Ambos limitan la salida y solicitan `store:false`. El modelo no tiene valor implícito: debe aparecer entre los modelos disponibles para el proyecto y configurarse expresamente en `AI_MODEL`.
 
 Variables:
 
 | Variable | Regla |
 | --- | --- |
 | `AI_ENABLED` | `false` por defecto; debe ser exactamente `true` para habilitar |
-| `AI_PROVIDER` | `openai` |
-| `AI_API_KEY` | clave privada del proyecto; nunca usar una variable `VITE_*` |
+| `AI_PROVIDER` | `openai` o `gemini` |
+| `AI_API_KEY` | clave privada de OpenAI; nunca usar una variable `VITE_*` |
+| `GEMINI_API_KEY` | clave privada de Google AI Studio cuando el proveedor es `gemini` |
 | `AI_MODEL` | identificador vigente y disponible en la cuenta |
 | `AI_MAX_OUTPUT_TOKENS` | 32–1000; predeterminado 300 |
 | `AI_TIMEOUT_MS` | 1000–30000; predeterminado 10000 |
@@ -62,6 +68,14 @@ node --env-file=.env.ai.local src/server.js
 
 El archivo queda cubierto por `.env.*`; se debe comprobar con `git check-ignore -v .env.ai.local` antes de usarlo. No copiar la clave a `.env.example`, React, comandos, logs ni documentación.
 
+Para Gemini, introducir localmente solo `GEMINI_API_KEY` en `.env.ai.local`. Antes de elegir el modelo, listar los modelos realmente accesibles por el proyecto, sin generar contenido:
+
+```sh
+node --env-file=.env.ai.local scripts/gemini-models.js
+```
+
+El listado se filtra por soporte de `generateContent`, pero no demuestra por sí solo que el modelo sea gratuito. La disponibilidad y el nivel dependen del proyecto y deben contrastarse en la página oficial de precios y cuotas antes de escribir `AI_MODEL`. No se debe activar facturación para esta prueba.
+
 ## Datos y seguridad
 
 El contexto real se consulta en cada petición y contiene como máximo 20 habilidades activas y 20 filas de ofertas activas de mentores con solicitud `APPROVED`, usuario activo y correo verificado. Solo se incluyen nombre público, habilidades aprobadas y si existe disponibilidad configurada. No se consultan correos, créditos, certificados, notas administrativas, sesiones ni archivos privados.
@@ -70,7 +84,7 @@ Las instrucciones distinguen datos reales de orientación general y prohíben in
 
 El límite local es por estudiante y proceso, con ventana fija y memoria acotada. Es suficiente para el desarrollo en una sola instancia, pero no constituye un límite distribuido ni sobrevive reinicios. Antes de desplegar varias instancias se requiere un mecanismo compartido aprobado; no se añadió persistencia ni DDL en 1.11.
 
-`store:false` evita solicitar almacenamiento del objeto de respuesta, pero no debe interpretarse por sí solo como ausencia absoluta de retención del proveedor. Antes de habilitar el servicio públicamente deben revisarse las condiciones vigentes del proveedor, privacidad, ubicación/tratamiento de datos y el aviso al estudiante. No enviar datos sensibles en el chat.
+`store:false` evita solicitar almacenamiento del objeto de respuesta, pero no debe interpretarse por sí solo como ausencia absoluta de retención del proveedor. En el nivel gratuito de Gemini, Google indica que el contenido puede utilizarse para mejorar sus productos. Por ello el contexto enviado se limita a la pregunta, historial breve y datos públicos mínimos; no se envían correos, contraseñas, certificados, créditos, reservas ni otros datos privados. Antes de habilitar el servicio públicamente deben revisarse las condiciones vigentes del proveedor, privacidad, ubicación/tratamiento de datos y el aviso al estudiante.
 
 ## Integración React
 
@@ -91,4 +105,4 @@ await fetch('/api/student/ai/chat', {
 });
 ```
 
-Las pruebas automatizadas sustituyen el transporte y no llaman a OpenAI. Una prueba real requiere autorización separada, clave/configuración válida y un presupuesto acotado.
+Las pruebas automatizadas sustituyen ambos transportes y no llaman a OpenAI ni Gemini. Una prueba real requiere comprobar primero el modelo disponible y su nivel, autorización separada, clave/configuración válida y una única solicitud acotada.

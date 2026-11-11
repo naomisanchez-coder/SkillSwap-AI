@@ -35,6 +35,7 @@ import { createBookingRepository } from './modules/student/booking.repository.js
 import { createBookingService } from './modules/student/booking.service.js';
 import { readAiConfig } from './config/ai.js';
 import { createOpenAiResponsesClient } from './adapters/openai-responses.js';
+import { createGeminiGenerateContentClient } from './adapters/gemini-generate-content.js';
 import { createAiRepository } from './modules/student/ai.repository.js';
 import { createAiLimiter } from './modules/student/ai.limiter.js';
 import { createAiService } from './modules/student/ai.service.js';
@@ -140,7 +141,8 @@ try {
     createAdminRepository(database), createPrivateFileReader(privateStorage));
   const ai = readAiConfig(process.env);
   if (ai) aiService = createAiService({ repository: createAiRepository(database),
-    client: createOpenAiResponsesClient(ai), limiter: createAiLimiter(ai.rateLimit) });
+    client: ai.provider === 'gemini' ? createGeminiGenerateContentClient(ai) : createOpenAiResponsesClient(ai),
+    limiter: createAiLimiter(ai.rateLimit) });
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
     loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService,
     bookingService, aiService, adminService, trustProxyHops }));

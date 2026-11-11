@@ -1,6 +1,6 @@
-export class AiProviderError extends Error {
-  constructor(kind) { super('AI provider unavailable'); this.name = 'AiProviderError'; this.kind = kind; }
-}
+import { AiProviderError } from './ai-provider-error.js';
+
+export { AiProviderError } from './ai-provider-error.js';
 
 function outputText(body) {
   if (!body || !Array.isArray(body.output)) return null;
