@@ -12,7 +12,7 @@ export function sessionStartsAt(session: Pick<ConfirmedBooking, 'date' | 'time'>
   return new Date(`${session.date}T00:00:00-05:00`).getTime() + parseTime(session.time) * 60_000;
 }
 export function canCancelSession(session: ConfirmedBooking, now = new Date()): boolean {
-  return session.status === 'upcoming' && sessionStartsAt(session) - now.getTime() >= CANCELLATION_NOTICE_HOURS * 3_600_000;
+  return session.status === 'upcoming' && (session.serverManaged ? sessionStartsAt(session) > now.getTime() : sessionStartsAt(session) - now.getTime() >= CANCELLATION_NOTICE_HOURS * 3_600_000);
 }
 export type SessionAction =
   | { type: 'cancel'; sessionId: string }

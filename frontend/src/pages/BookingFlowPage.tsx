@@ -65,7 +65,7 @@ function BookingWizard({ initialContext, draft, service, onConfirmed, onBack, on
   const inFlight = useRef(false);
   const mounted = useRef(true);
   const heading = useRef<HTMLHeadingElement>(null);
-  const credits = sessionCost(duration);
+  const credits = context.serverManaged ? mentor.offer.costByDuration[duration] : sessionCost(duration);
   const day = dayNameFromISO(date);
   const dateSlots = mentor.slots[day] ?? [];
   const slotIsAvailable = (candidate: string, candidateDuration = duration) => isBookingSlotAvailable(context, date, candidate, candidateDuration);
@@ -152,7 +152,7 @@ function BookingWizard({ initialContext, draft, service, onConfirmed, onBack, on
                 <div className="grid sm:grid-cols-3 gap-3 mt-6">
                   {mentor.offer.durations.map(item => {
                     const available = slotIsAvailable(time, item);
-                    return <button type="button" key={item} aria-pressed={duration === item} disabled={!available} onClick={() => setDuration(item)} className={`min-h-28 rounded-2xl border p-4 text-left transition-colors ${duration === item ? 'bg-[#DCEBDD] border-[#34877A]' : 'bg-white border-[#CBD8CE]'} disabled:opacity-40 disabled:cursor-not-allowed`}><span className="text-xl font-bold">{item} min</span><span className="block mt-2 text-sm text-[#60716C]">{sessionCost(item)} créditos</span></button>;
+                    return <button type="button" key={item} aria-pressed={duration === item} disabled={!available} onClick={() => setDuration(item)} className={`min-h-28 rounded-2xl border p-4 text-left transition-colors ${duration === item ? 'bg-[#DCEBDD] border-[#34877A]' : 'bg-white border-[#CBD8CE]'} disabled:opacity-40 disabled:cursor-not-allowed`}><span className="text-xl font-bold">{item} min</span><span className="block mt-2 text-sm text-[#60716C]">{context.serverManaged ? mentor.offer.costByDuration[item] : sessionCost(item)} créditos</span></button>;
                   })}
                 </div>
                 <Button size="lg" className="mt-8" disabled={!slotIsAvailable(time)} onClick={() => setStep('confirm')}>Revisar reserva</Button>

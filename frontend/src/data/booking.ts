@@ -9,6 +9,7 @@ import type { MeetingPlatform } from './meeting';
 export type BookingCommand = { id: string; mentorId: string; date: string; time: string; duration: SessionDuration };
 export type BookingDraft = BookingCommand & { step: 'schedule' | 'duration' | 'confirm' | 'success' };
 export type ConfirmedBooking = SessionRecord & {
+  serverManaged?: boolean;
   learnerName: string; topic: string; credits: number; createdAt: string;
   reservedSlotKeys: string[]; meetingPlatform: MeetingPlatform; meetingUrl: string | null; meetingAssignedAt?: string;
   performedAt?: string; validatedAt?: string; completedAt?: string; cancelledAt?: string;
@@ -21,12 +22,14 @@ export type SessionEvent = { id: string; at: string; label: string; actor: 'stud
 export type IncidentCategory = 'mentor_absent' | 'student_absent' | 'connection' | 'not_held' | 'completion_dispute' | 'other';
 export type IncidentRecord = { id: string; sessionId: string; reporterId: string; category: IncidentCategory; reason: string; createdAt: string; status: 'open' | 'in_review' | 'closed' | 'resolved'; resolvedAt?: string; resolution?: IncidentResolution; resolutionComment?: string; resolvedBy?: string };
 export type BookingContext = {
+  serverManaged?: boolean;
   mentor: Mentor; studentId: string; userName: string; wallet: WalletBalance;
   sessions: SessionRecord[]; reservedSlots: string[];
 };
 export type BookingResult = { session: ConfirmedBooking; wallet: WalletBalance; notifications: NotificationRecord[]; ledger: BookingLedger };
-export type CreditMovement = { id: string; reference: string; sessionId: string; amount: number; status: 'pending' | 'completed' | 'rejected'; type: 'hold' | 'refund' | 'spent' | 'earning'; createdAt: string; userId?: string };
+export type CreditMovement = { id: string; reference: string; sessionId: string; amount: number; status: 'pending' | 'completed' | 'rejected'; type: 'initial_grant' | 'hold' | 'refund' | 'spent' | 'earning'; createdAt: string; userId?: string };
 export type BookingLedger = {
+  serverManaged?: boolean;
   version: 1; studentId: string; wallet: WalletBalance; sessions: ConfirmedBooking[];
   movements: CreditMovement[]; notifications: NotificationRecord[];
   incidents: IncidentRecord[]; reviews: ReviewRecord[]; mentorBalances: Record<string, number>;

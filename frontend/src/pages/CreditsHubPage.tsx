@@ -17,13 +17,13 @@ const movementLabels = {
 export default function CreditsHubPage({ state }: { state: BookingLedger }) {
   const movements = state.movements
     .filter(item => (!item.userId || item.userId === state.studentId))
-    .map(item => ({ ...item, date: new Date(item.createdAt).toLocaleString('es-PE', { timeZone: 'America/Lima' }), concept: `${movementLabels[item.type]} de ${state.sessions.find(session => session.id === item.sessionId)?.skill ?? 'sesión'}` }));
+    .map(item => ({ ...item, date: new Date(item.createdAt).toLocaleString('es-PE', { timeZone: 'America/Lima' }), concept: item.type === 'initial_grant' ? 'Créditos iniciales por verificación' : `${movementLabels[item.type]} de ${state.sessions.find(session => session.id === item.sessionId)?.skill ?? 'sesión'}` }));
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus(); }, []);
   const stats: Array<[string, number, typeof Icons.Coin]> = [
     ['Disponibles', state.wallet.available, Icons.Coin],
     ['Reservados', state.wallet.held, Icons.Clock],
-    ['Utilizados al aprender', state.wallet.used, Icons.TrendingUp],
+    [state.serverManaged ? 'Total' : 'Utilizados al aprender', state.serverManaged ? state.wallet.total ?? 0 : state.wallet.used, Icons.TrendingUp],
     ['Obtenidos enseñando', state.wallet.earned, Icons.Award],
   ];
 

@@ -5,10 +5,11 @@ import type { AccountData } from './account';
 
 // Subconjunto del modelo original necesario para el panel, sin migradores ni economía global.
 export type UserProfile = OnboardingPreferences & {
+  serverOnboardingComplete?: boolean;
   id: string; name: string; email: string; institution: string;
   career: string; cycle: number; bio: string; photo?: string; photoStorageId?: string;
 };
-export type WalletBalance = { available: number; held: number; used: number; earned: number };
+export type WalletBalance = { available: number; held: number; used: number; earned: number; total?: number };
 export type SessionRecord = {
   id: string; studentId: string; mentorId: string; mentorName: string;
   skill: string; date: string; time: string; duration: 30 | 60 | 90;
@@ -18,6 +19,7 @@ export type SessionRecord = {
 export type SkillRequest = { id: string; ownerUserId: string; status: 'pending' | 'observation' | 'approved' | 'rejected' };
 export type NotificationRecord = { id: string; userId: string; title: string; description: string; date: string; read: boolean; target: string; sessionId?: string; requestId?: string };
 export type StudentDashboardData = {
+  serverProgress?: { completedSessions: number; completedMinutes: number; reviewedSessions: number };
   profile: UserProfile; wallet: WalletBalance; sessions: SessionRecord[];
   skillRequests: SkillRequest[]; notifications: NotificationRecord[];
   mentorRatings: Record<string, { average: number; count: number }>;
@@ -38,5 +40,6 @@ export function summarizeMentorReviews(reviews: ReviewRecord[], mentorId: string
 }
 
 export function hasCompletePreferences(profile: OnboardingPreferences): boolean {
+  if ('serverOnboardingComplete' in profile) return profile.serverOnboardingComplete === true;
   return [1, 2, 3, 4].every(step => validateProfileStep(profile, step) === null);
 }

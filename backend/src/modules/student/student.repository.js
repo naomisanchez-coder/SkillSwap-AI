@@ -50,27 +50,30 @@ function encodeCursor(row) {
 async function readCredits(tx, userId, { limit, cursor }) {
   const [[summary]] = await tx.execute(`SELECT COALESCE(SUM(ct.amount),0) available,
     COALESCE(SUM(CASE WHEN h.status='HELD' THEN -ct.amount ELSE 0 END),0) held,
+    COALESCE(SUM(CASE WHEN h.status='SETTLED' THEN -ct.amount ELSE 0 END),0) used,
+    COALESCE(SUM(CASE WHEN ct.reason='SESSION_EARNING' THEN ct.amount ELSE 0 END),0) earned,
     COUNT(*) transaction_count FROM credit_transactions ct
     LEFT JOIN session_credit_holds h ON h.hold_transaction_id=ct.id WHERE ct.user_id=?`, [userId]);
   const values = [userId];
   let boundary = '';
   if (cursor) {
-    boundary = ' AND (created_at < ? OR (created_at = ? AND id < ?))';
+    boundary = ' AND (ct.created_at < ? OR (ct.created_at = ? AND ct.id < ?))';
     values.push(cursor.createdAt, cursor.createdAt, cursor.id);
   }
   values.push(limit + 1);
-  const [rows] = await tx.execute(`SELECT id,amount,reason,operation_reference,
-      DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') cursor_time
-    FROM credit_transactions WHERE user_id=?${boundary}
-    ORDER BY created_at DESC,id DESC LIMIT ?`, values);
+  const [rows] = await tx.execute(`SELECT ct.id,ct.amount,ct.reason,ct.operation_reference,h.status hold_status,
+      DATE_FORMAT(ct.created_at,'%Y-%m-%d %H:%i:%s.%f') cursor_time
+    FROM credit_transactions ct LEFT JOIN session_credit_holds h ON h.hold_transaction_id=ct.id WHERE ct.user_id=?${boundary}
+    ORDER BY ct.created_at DESC,ct.id DESC LIMIT ?`, values);
   const hasMore = rows.length > limit;
   const selected = rows.slice(0, limit);
   const available = safeInteger(summary.available), held = safeInteger(summary.held);
   return {
+    used: safeInteger(summary.used ?? 0), earned: safeInteger(summary.earned ?? 0),
     balance: available, total: safeInteger(available + held), held, available,
     totalTransactions: safeInteger(summary.transaction_count),
     transactions: selected.map(row => ({ id: row.id, amount: Number(row.amount), reason: row.reason,
-      reference: row.operation_reference, occurredAt: `${row.cursor_time.replace(' ', 'T')}Z` })),
+      reference: row.operation_reference, holdStatus: row.hold_status ?? null, occurredAt: `${row.cursor_time.replace(' ', 'T')}Z` })),
     pagination: { limit, nextCursor: hasMore ? encodeCursor(selected.at(-1)) : null },
   };
 }
