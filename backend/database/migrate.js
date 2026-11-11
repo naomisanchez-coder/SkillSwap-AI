@@ -10,8 +10,10 @@ const loginMigration = '003_login_rate_limits';
 const recoveryMigration = '004_password_recovery';
 const profileMigration = '005_student_profile';
 const mentorMigration = '006_mentor_skills_files';
-export const latestMigration = '007_sessions_booking_credits';
-const versions = [version, otpMigration, loginMigration, recoveryMigration, profileMigration, mentorMigration, latestMigration];
+const sessionsMigration = '007_sessions_booking_credits';
+export const latestMigration = '008_mentor_skill_levels';
+const versions = [version, otpMigration, loginMigration, recoveryMigration, profileMigration, mentorMigration,
+  sessionsMigration, latestMigration];
 const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth']);
 const expectedTables = ['schema_migrations', 'careers', 'career_cycles', 'users',
   'student_profiles', 'email_verifications', 'auth_sessions', 'credit_transactions'].sort();
@@ -50,13 +52,14 @@ export async function readMigration(selected = version) {
         selected === profileMigration ? ['student_interests', 'student_profile_details'] :
           selected === mentorMigration ? ['mentor_application_documents', 'mentor_application_events',
             'mentor_applications', 'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'] :
-            ['mentor_availability', 'mentor_offers', 'mentoring_session_events', 'mentoring_sessions',
-              'session_credit_holds', 'session_reviews'];
+            selected === sessionsMigration ? ['mentor_availability', 'mentor_offers', 'mentoring_session_events',
+              'mentoring_sessions', 'session_credit_holds', 'session_reviews'] :
+              ['mentor_skill_levels', 'skill_level_catalog'];
   ensure(JSON.stringify(created.map(s => s.match(/^CREATE TABLE ([a-z_]+) /)?.[1]).sort()) === JSON.stringify(tables), 'MIGRATION_TABLES_INVALID');
   const alter = "ALTER TABLE email_verifications\n  DROP CHECK chk_verifications_status,\n  ADD CONSTRAINT chk_verifications_status CHECK (status IN ('SENDING', 'PENDING', 'CONSUMED', 'REVOKED', 'EXPIRED', 'EXHAUSTED')),\n  ALTER COLUMN status SET DEFAULT 'SENDING'";
   const lengths = { [version]: expectedTables.length + 3, [otpMigration]: 5,
     [loginMigration]: 4, [recoveryMigration]: 5, [profileMigration]: 5,
-    [mentorMigration]: 10, [latestMigration]: 9 };
+    [mentorMigration]: 10, [sessionsMigration]: 9, [latestMigration]: 5 };
   ensure(statements.length === lengths[selected], 'MIGRATION_FORMAT_INVALID');
   ensure(statements.every(s => /^(SET SESSION |CREATE TABLE |INSERT INTO schema_migrations )/.test(s) || (selected === otpMigration && s === alter)), 'MIGRATION_FORMAT_INVALID');
   const checksum = createHash('sha256').update(bytes).digest('hex');
@@ -67,7 +70,8 @@ export async function readMigration(selected = version) {
     [recoveryMigration]: '7de62a5ab27fc01dc59155908be5eb3fbe1fd73bb6c3f3a7327caddd67c8abba',
     [profileMigration]: 'adf668d8ef24c9b9cc21808f7c46491fd608182c36170325dc2cd682faadf4dd',
     [mentorMigration]: '8494f88eec39e615ec44b14e2970f6c017479ab00d2e6769d4a2e39fda8aede3',
-    [latestMigration]: 'aafc96679930a69496175c1904e2a240e412c28e75181a1a4f558cd14bd1c6c6',
+    [sessionsMigration]: 'aafc96679930a69496175c1904e2a240e412c28e75181a1a4f558cd14bd1c6c6',
+    [latestMigration]: '9f1cdc5fa257d9c2695bb4bc72a86566b26b7198ba5187f47f78a96083579cae',
   };
   ensure(checksum === immutable[selected], 'MIGRATION_IMMUTABLE_CHECKSUM');
   return { version: selected, checksum, statements };
@@ -168,7 +172,8 @@ async function inspect(connection, config, migrations) {
   checkMigrationPrivileges(grants, config.database, instance.partialRevokes, {
     requireAlter: pending.some(item => item.version === otpMigration),
     allowAlter: migrations.some(item => item.version === otpMigration),
-    requireReferences: pending.some(item => [version, recoveryMigration, profileMigration, latestMigration].includes(item.version)),
+    requireReferences: pending.some(item => [version, recoveryMigration, profileMigration, sessionsMigration,
+      latestMigration].includes(item.version)),
   });
   if (!objects.length) return 0;
   const applied = migrations.slice(0, history.length);
@@ -179,7 +184,8 @@ async function inspect(connection, config, migrations) {
     ...(history.length > 5 ? ['mentor_application_documents', 'mentor_application_events', 'mentor_applications',
       'private_files', 'skill_catalog', 'student_profile_photos', 'student_skills'] : []),
     ...(history.length > 6 ? ['mentor_availability', 'mentor_offers', 'mentoring_session_events',
-      'mentoring_sessions', 'session_credit_holds', 'session_reviews'] : [])].sort();
+      'mentoring_sessions', 'session_credit_holds', 'session_reviews'] : []),
+    ...(history.length > 7 ? ['mentor_skill_levels', 'skill_level_catalog'] : [])].sort();
   ensure(JSON.stringify(objects.map((o) => o.name).sort()) === JSON.stringify(tables) &&
     objects.every((o) => o.type === 'BASE TABLE' && o.engine === 'InnoDB'), 'MIGRATION_PARTIAL_OR_FOREIGN_SCHEMA');
   await checkStructure(connection, config.database, { statements: applied.flatMap(m => m.statements) });
