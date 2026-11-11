@@ -4,12 +4,14 @@ import { readSessionCookie } from '../auth/session-security.js';
 import { createStudentController } from './student.controller.js';
 import { createMentorController } from './mentor.controller.js';
 import { parseMultipart } from '../../middleware/multipart.js';
+import { createExploreController } from './explore.controller.js';
 
 export function createStudentRouter({ origins, sessionService, studentService,
-  mentorService, cookie = { name: 'skillswap_session' } }) {
+  mentorService, exploreService, cookie = { name: 'skillswap_session' } }) {
   const router = Router();
   const controller = studentService ? createStudentController(studentService) : null;
   const mentor = mentorService ? createMentorController(mentorService) : null;
+  const explore = exploreService ? createExploreController(exploreService) : null;
   const authenticate = async (request, response, next) => {
     try {
       if (!sessionService || !controller) throw new PublicError('SERVICE_UNAVAILABLE');
@@ -33,6 +35,7 @@ export function createStudentRouter({ origins, sessionService, studentService,
   const json = (request, response, next) => request.is('application/json')
     ? next() : next(new PublicError('UNSUPPORTED_MEDIA_TYPE'));
   const mentorAvailable = (request, response, next) => mentor ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
+  const exploreAvailable = (request, response, next) => explore ? next() : next(new PublicError('SERVICE_UNAVAILABLE'));
   router.use(authenticate);
   router.get('/profile', controller?.profile ?? (() => {}));
   router.patch('/profile', mutation, json, controller?.updateProfile ?? (() => {}));
@@ -59,5 +62,9 @@ export function createStudentRouter({ origins, sessionService, studentService,
   router.put('/profile/photo', mentorAvailable, mutation,
     parseMultipart({ fileFields: ['photo'], maximumBytes: 2 * 1024 * 1024 }), mentor?.savePhoto ?? (() => {}));
   router.delete('/profile/photo', mentorAvailable, mutation, mentor?.deletePhoto ?? (() => {}));
+  router.get('/explore/skills', exploreAvailable, explore?.catalog ?? (() => {}));
+  router.get('/explore/mentors', exploreAvailable, explore?.mentors ?? (() => {}));
+  router.get('/explore/mentors/:mentorId', exploreAvailable, explore?.mentor ?? (() => {}));
+  router.get('/recommendations', exploreAvailable, explore?.recommendations ?? (() => {}));
   return router;
 }

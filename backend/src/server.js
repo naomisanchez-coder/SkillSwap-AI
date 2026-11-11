@@ -29,6 +29,8 @@ import { readPrivateStorageConfig } from './config/storage.js';
 import { createLocalPrivateStorage } from './adapters/private-storage.js';
 import { createMentorRepository } from './modules/student/mentor.repository.js';
 import { createMentorService } from './modules/student/mentor.service.js';
+import { createExploreRepository } from './modules/student/explore.repository.js';
+import { createExploreService } from './modules/student/explore.service.js';
 
 let database;
 let emailService;
@@ -38,6 +40,7 @@ let sessionService;
 let recoveryService;
 let studentService;
 let mentorService;
+let exploreService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -112,8 +115,9 @@ try {
     createLocalPrivateStorage(storageConfig), {
       onCleanupFailure(event) { console.warn(`private_storage: ${event}`); },
     });
+  exploreService = createExploreService(createExploreRepository(database));
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
-    loginService, sessionService, cookie, recoveryService, studentService, mentorService, trustProxyHops }));
+    loginService, sessionService, cookie, recoveryService, studentService, mentorService, exploreService, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);
