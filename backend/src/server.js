@@ -23,6 +23,8 @@ import { createPasswordRecoveryProtection, createPasswordRecoveryRateIdentifiers
 import { createPasswordRecoveryRateRepository } from './modules/auth/password-recovery-rate.repository.js';
 import { createPasswordRecoveryRepository } from './modules/auth/password-recovery.repository.js';
 import { createPasswordRecoveryService } from './modules/auth/password-recovery.service.js';
+import { createStudentRepository } from './modules/student/student.repository.js';
+import { createStudentService } from './modules/student/student.service.js';
 
 let database;
 let emailService;
@@ -30,6 +32,7 @@ let verificationService;
 let loginService;
 let sessionService;
 let recoveryService;
+let studentService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -98,8 +101,9 @@ try {
     cookie = { name: sessionSecurity.policy.cookieName, secure: sessionSecurity.secureCookie,
       rememberMaxAge: sessionSecurity.policy.remembered.absoluteSeconds * 1000 };
   }
+  studentService = createStudentService(createStudentRepository(database));
   server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
-    loginService, sessionService, cookie, recoveryService, trustProxyHops }));
+    loginService, sessionService, cookie, recoveryService, studentService, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);

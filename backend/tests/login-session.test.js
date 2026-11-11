@@ -86,3 +86,16 @@ test('session recovery revokes accounts that become ineligible while logout rema
   await assert.rejects(service.me(issued.token), error => error.code === 'ACCOUNT_SUSPENDED'); assert.equal(revoked, 1);
   assert.equal(await service.logout(issued.token, issued.csrfToken), true); assert.equal(revoked, 2);
 });
+
+test('authenticated student mutations validate CSRF against the same opaque session', async () => {
+  const protection = createSessionProtection(key()); const issued = protection.issue();
+  const repository = { async resolve() { return { csrfHmac: issued.csrfHmac,
+    user: { id: 'student', first_name: 'Ada', last_name: 'Lovelace', email: 'ada.test@tecsup.edu.pe',
+      role: 'STUDENT', status: 'ACTIVE', email_verified_at: new Date(), career: 'Software',
+      cycle: 3, onboarding_complete: 0 } }; }, async revoke() {} };
+  const service = createSessionService(repository, protection);
+  const authenticated = await service.authenticate(issued.token);
+  assert.equal(await service.validateCsrf(authenticated, issued.token, issued.csrfToken), true);
+  await assert.rejects(service.validateCsrf(authenticated, issued.token, '0'.repeat(64)),
+    error => error.code === 'CSRF_INVALID');
+});

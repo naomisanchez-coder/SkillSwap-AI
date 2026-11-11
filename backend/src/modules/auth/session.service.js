@@ -36,6 +36,12 @@ export function createSessionService(repository, protection) {
       const result = await this.authenticate(token);
       return { user: result.user, csrfToken: result.inspected.csrfToken };
     },
+    async validateCsrf(authenticated, token, supplied) {
+      if (!authenticated?.inspected || !authenticated?.session ||
+          !protection.verifyCsrf(token, supplied,
+            authenticated.session.csrfHmac)) throw new PublicError('CSRF_INVALID');
+      return true;
+    },
     async logout(token, csrfToken) {
       const inspected = protection.inspect(token);
       if (!inspected) return false;
