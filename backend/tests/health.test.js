@@ -93,11 +93,15 @@ test('CORS permits only configured origins', async () => {
 
 test('configuration validates required fields and rejects unsafe values', () => {
   assert.equal(validateEnv(valid).port, 4000);
+  assert.deepEqual(validateEnv({ ...valid, DB_NAME: 'skillswap_ai_demo',
+    DB_USER: 'skillswap_demo_app' }).db, { host: '127.0.0.1', port: 3306,
+    user: 'skillswap_demo_app', password: '', database: 'skillswap_ai_demo' });
   for (const key of Object.keys(valid)) {
     assert.throws(() => validateEnv({ ...valid, [key]: '' }), /Invalid configuration/);
   }
   for (const patch of [ { PORT: '0' }, { PORT: '65536' }, { PORT: '4e3' },
-    { DB_PORT: 'no' }, { DB_USER: 'root' }, { NODE_ENV: 'invalid' },
+    { DB_PORT: 'no' }, { DB_USER: 'root' }, { DB_NAME: 'skillswap_ai_demo' },
+    { DB_NAME: 'skillswap_ai', DB_USER: 'skillswap_demo_app' }, { NODE_ENV: 'invalid' },
     { CORS_ORIGIN: '*' }, { CORS_ORIGIN: 'https://example.com/path' }, { DB_PASSWORD: 42 } ]) {
     assert.throws(() => validateEnv({ ...valid, ...patch }), /Invalid configuration/);
   }

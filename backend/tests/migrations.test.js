@@ -107,11 +107,11 @@ test('runner defaults to read-only inspection without DDL or history writes', as
   assert.ok(connection.commands.every((s) => /^(SELECT|SHOW) /.test(s)));
 });
 
-test('application migration requires isolated-validation checksum before any connection operation', async () => {
+test('application and demo migrations require isolated-validation checksums before any connection operation', async () => {
   const connection = fakeConnection();
-  await assert.rejects(runMigration(connection, { ...fakeConfig, database: 'skillswap_ai' }, {
-    apply: true, allowDdl: true,
-  }), (error) => error.code === 'MIGRATION_ISOLATED_VALIDATION_REQUIRED');
+  for (const database of ['skillswap_ai', 'skillswap_ai_demo']) await assert.rejects(
+    runMigration(connection, { ...fakeConfig, database }, { apply: true, allowDdl: true }),
+    (error) => error.code === 'MIGRATION_ISOLATED_VALIDATION_REQUIRED');
   await assert.rejects(runMigration(connection, fakeConfig, { apply: true }),
     (error) => error.code === 'MIGRATION_DDL_NOT_AUTHORIZED');
   assert.equal(connection.commands.length, 0);
@@ -147,12 +147,17 @@ test('unsafe identity, missing grants and unavailable lock prevent DDL', async (
   }
 });
 
-test('only the application schema and exact authorized test schema are accepted', async () => {
+test('only application, exact isolated test and exact local demo schemas are accepted', async () => {
   const base = { MIGRATION_USER: 'isolated_migrator', MIGRATION_PASSWORD: randomBytes(32).toString('hex') };
-  for (const database of ['skillswap_ai', 'skillswap_ai_test_auth']) {
+  for (const database of ['skillswap_ai', 'skillswap_ai_test_auth', 'skillswap_ai_demo']) {
     assert.equal(migrationConfiguration({ ...base, MIGRATION_DB: database }).database, database);
   }
+  for (const user of ['skillswap_app', 'skillswap_test_app', 'skillswap_demo_app']) {
+    assert.throws(() => migrationConfiguration({ ...base, MIGRATION_DB: 'skillswap_ai_demo', MIGRATION_USER: user }),
+      (error) => error.code === 'MIGRATION_ACCOUNT_REQUIRED');
+  }
   for (const database of ['skillswap_ai_test', 'skillswap_ai_test_other', 'skillswap_ai_test_auth_extra',
+    'skillswap_ai_demo_extra', 'skillswap_ai_demo ', 'SKILLSWAP_AI_DEMO',
     'skillswap_ai_test_auth ', 'SKILLSWAP_AI_TEST_AUTH', 'mysql', '', 'skillswap_ai_test_%']) {
     assert.throws(() => migrationConfiguration({ ...base, MIGRATION_DB: database }),
       (error) => error.code === 'MIGRATION_TARGET_INVALID');
@@ -167,6 +172,7 @@ const grantee = '`isolated_migrator`@`localhost`';
 const minimum = 'SELECT, INSERT, CREATE, REFERENCES';
 const escapedTestScope = '`skillswap\\_ai\\_test\\_auth`.*';
 const escapedAppScope = '`skillswap\\_ai`.*';
+const escapedDemoScope = '`skillswap\\_ai\\_demo`.*';
 const grant = (privileges = minimum, scope = escapedTestScope) => ({
   grant: `GRANT ${privileges} ON ${scope} TO ${grantee}`,
 });
@@ -175,10 +181,12 @@ test('escaped literal schema grants with partial_revokes OFF and literal grants 
   for (const mode of [0, '0']) {
     checkMigrationPrivileges([grant(), grant('USAGE', '*.*')], fakeConfig.database, mode);
     checkMigrationPrivileges([grant(minimum, escapedAppScope)], 'skillswap_ai', mode);
+    checkMigrationPrivileges([grant(minimum, escapedDemoScope)], 'skillswap_ai_demo', mode);
   }
   for (const mode of [1, '1']) {
     checkMigrationPrivileges([grant(minimum, '`skillswap_ai_test_auth`.*')], fakeConfig.database, mode);
     checkMigrationPrivileges([grant(minimum, '`skillswap_ai`.*')], 'skillswap_ai', mode);
+    checkMigrationPrivileges([grant(minimum, '`skillswap_ai_demo`.*')], 'skillswap_ai_demo', mode);
   }
   checkMigrationPrivileges([grant('SELECT, CREATE'), grant('INSERT, REFERENCES, UPDATE')],
     fakeConfig.database, 0, { requireUpdate: true });

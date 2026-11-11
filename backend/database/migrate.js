@@ -14,7 +14,7 @@ const sessionsMigration = '007_sessions_booking_credits';
 export const latestMigration = '008_mentor_skill_levels';
 const versions = [version, otpMigration, loginMigration, recoveryMigration, profileMigration, mentorMigration,
   sessionsMigration, latestMigration];
-const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth']);
+const allowedSchemas = new Set(['skillswap_ai', 'skillswap_ai_test_auth', 'skillswap_ai_demo']);
 const expectedTables = ['schema_migrations', 'careers', 'career_cycles', 'users',
   'student_profiles', 'email_verifications', 'auth_sessions', 'credit_transactions'].sort();
 
@@ -29,7 +29,8 @@ export function migrationConfiguration(env, apply = false) {
   ensure(!env.MIGRATION_HOST || env.MIGRATION_HOST === '127.0.0.1', 'MIGRATION_HOST_INVALID');
   ensure(!env.MIGRATION_PORT || env.MIGRATION_PORT === '3306', 'MIGRATION_PORT_INVALID');
   ensure(typeof env.MIGRATION_USER === 'string' && env.MIGRATION_USER.trim() &&
-    env.MIGRATION_USER !== 'skillswap_app', 'MIGRATION_ACCOUNT_REQUIRED');
+    !['skillswap_app', 'skillswap_test_app', 'skillswap_demo_app'].includes(env.MIGRATION_USER),
+  'MIGRATION_ACCOUNT_REQUIRED');
   ensure(typeof env.MIGRATION_PASSWORD === 'string' && env.MIGRATION_PASSWORD.length > 0,
     'MIGRATION_SECRET_REQUIRED');
   if (apply) ensure(env.MIGRATION_ALLOW_DDL === 'yes', 'MIGRATION_DDL_NOT_AUTHORIZED');
@@ -109,7 +110,7 @@ export function checkMigrationPrivileges(rows, database, partialRevokes, {
     const values = Object.values(row);
     ensure(values.length === 1 && typeof values[0] === 'string', 'MIGRATION_GRANT_AMBIGUOUS');
     // Table-level grants use literal schema names, not database-level patterns.
-    const alterGrant = values[0].match(/^GRANT ALTER ON `(skillswap_ai|skillswap_ai_test_auth)`\.`email_verifications` TO `(?:``|[^`])+`@`(?:``|[^`])+`$/);
+    const alterGrant = values[0].match(/^GRANT ALTER ON `(skillswap_ai|skillswap_ai_test_auth|skillswap_ai_demo)`\.`email_verifications` TO `(?:``|[^`])+`@`(?:``|[^`])+`$/);
     if (alterGrant) {
       ensure(allowAlter, 'MIGRATION_EXCESS_PRIVILEGES_REJECTED');
       if (alterGrant[1] === database) tableAlter = true;
@@ -248,7 +249,7 @@ export async function runMigration(connection, config, {
   if (apply) {
     ensure(allowDdl === true, 'MIGRATION_DDL_NOT_AUTHORIZED');
     ensure(validatedChecksums && typeof validatedChecksums === 'object' && !Array.isArray(validatedChecksums), 'MIGRATION_VALIDATION_MAP_INVALID');
-    if (config.database === 'skillswap_ai') for (const item of migrations) {
+    if (config.database !== 'skillswap_ai_test_auth') for (const item of migrations) {
       const checksum = through === version ? validatedChecksum : validatedChecksums[item.version];
       ensure(checksum === item.checksum, 'MIGRATION_ISOLATED_VALIDATION_REQUIRED');
     }

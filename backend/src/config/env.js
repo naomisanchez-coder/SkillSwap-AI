@@ -21,7 +21,10 @@ export function validateEnv(source) {
     throw new Error('Invalid configuration: NODE_ENV');
   }
   const dbUser = required('DB_USER');
-  if (dbUser !== 'skillswap_app') throw new Error('Invalid configuration: DB_USER');
+  const database = required('DB_NAME');
+  const identities = Object.freeze({ skillswap_ai: 'skillswap_app',
+    skillswap_ai_test_auth: 'skillswap_test_app', skillswap_ai_demo: 'skillswap_demo_app' });
+  if (identities[database] !== dbUser) throw new Error('Invalid configuration: DB_USER');
   const origins = required('CORS_ORIGIN').split(',').map((origin) => origin.trim());
   for (const origin of origins) {
     try {
@@ -37,7 +40,7 @@ export function validateEnv(source) {
   return {
     nodeEnv, host: required('HOST'), port: port('PORT'), origins,
     db: { host: required('DB_HOST'), port: port('DB_PORT'), user: dbUser,
-      password, database: required('DB_NAME') },
+      password, database },
   };
 }
 
