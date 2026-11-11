@@ -113,7 +113,7 @@ test('chatbot: ninguna llamada al crear el servicio, contrato con CSRF y cuota s
     assert.equal((calls[0].options.headers as Record<string, string>)['X-CSRF-Token'], identity.csrfToken);
     await assert.rejects(chat('limited', []), error => error instanceof ApiError && error.code === 'AI_PROVIDER_LIMITED');
     assert.equal(calls.length, 2);
-  }, (_url, options) => JSON.parse(options.body as string).message === 'limited' ? Response.json({ error: { code: 'AI_PROVIDER_LIMITED', message: 'Cuota temporal' } }, { status: 503 }) : { reply: 'Orientación académica' });
+  }, (_url, options) => JSON.parse(options.body as string).message === 'limited' ? Response.json({ error: { code: 'AI_PROVIDER_LIMITED', message: 'Cuota temporal' } }, { status: 503 }) : { message: { role: 'assistant', content: 'Orientación académica' } });
 });
 
 test('recuperación: conserva recoveryId y envía código y contraseña solamente al reset público protegido', async () => {
@@ -212,4 +212,39 @@ test('certificado: sustitución independiente usa solo PUT y funciona sin habili
     assert.equal((writes[0].options.headers as Record<string, string>)['X-CSRF-Token'], identity.csrfToken);
     assert.ok(!calls.some(c => c.url.includes('/requirements') || c.url.includes('/resubmit')));
   }, url => url.endsWith('/profile') ? { profile } : { applications: [] });
+});
+
+
+test('chatbot: rechaza el formato incorrecto reply y respuestas vacías sin informar éxito', async () => {
+  for (const response of [{ reply: 'Formato ajeno al contrato HTTP' }, { message: { role: 'assistant', content: '' } }, { message: { role: 'user', content: 'No es una respuesta del asistente' } }]) {
+    await mockFetch(async calls => {
+      await assert.rejects(createChatService(identity.csrfToken)('Consulta', []), error => error instanceof ApiError && error.code === 'INVALID_RESPONSE');
+      assert.equal(calls.length, 1);
+    }, () => response);
+  }
+});
+
+test('regresión real del contrato: cliente React → controlador Express → inicialización Gemini con transporte mock', async () => {
+  const { createConfiguredAiService } = await import('../../backend/src/modules/student/ai.factory.js');
+  const { createAiController } = await import('../../backend/src/modules/student/ai.controller.js');
+  let providerCalls = 0;
+  const service = createConfiguredAiService({ AI_ENABLED: 'true', AI_PROVIDER: 'gemini', AI_MODEL: 'gemini-offline-fixture', GEMINI_API_KEY: 'mock-key-used-only-for-offline-contract', AI_MAX_OUTPUT_TOKENS: '300' }, {
+    repository: { async publicContext() { return { skills: [], mentors: [] }; } },
+    transport: { async fetchImpl() { providerCalls++; return Response.json({ candidates: [{ content: { parts: [{ text: 'Respuesta del contrato real' }] } }] }); } },
+  });
+  const controller = createAiController(service);
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    assert.equal(String(url), 'http://localhost:4000/api/student/ai/chat');
+    assert.equal(options.credentials, 'include'); assert.equal((options.headers as Record<string, string>)['X-CSRF-Token'], identity.csrfToken);
+    let response: Response | undefined;
+    const output = { set() { return this; }, status() { return this; }, json(body: unknown) { response = Response.json(body); return this; } };
+    await controller.chat({ auth: { user: { id: identity.user.id } }, body: JSON.parse(options.body as string) }, output);
+    return response!;
+  };
+  try {
+    assert.equal(providerCalls, 0);
+    assert.equal(await createChatService(identity.csrfToken)('Consulta académica', []), 'Respuesta del contrato real');
+    assert.equal(providerCalls, 1);
+  } finally { globalThis.fetch = original; }
 });
