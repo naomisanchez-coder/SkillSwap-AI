@@ -1,4 +1,4 @@
-import { randomBytes, scrypt } from 'node:crypto';
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { PublicError } from '../../errors/PublicError.js';
 
@@ -19,5 +19,24 @@ export async function hashPassword(password) {
     try {
       return `$scrypt$N=131072,r=8,p=1$${salt.toString('hex')}$${key.toString('hex')}`;
     } finally { key.fill(0); }
+  } finally { running--; }
+}
+
+const encodedPattern = /^\$scrypt\$N=131072,r=8,p=1\$([0-9a-f]{32})\$([0-9a-f]{64})$/;
+// Valid encoded value used only to equalize work for unknown accounts.
+export const dummyPasswordHash = '$scrypt$N=131072,r=8,p=1$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000';
+
+export async function verifyPassword(password, encoded) {
+  if (typeof password !== 'string' || !password.isWellFormed() || !password.length ||
+      Buffer.byteLength(password, 'utf8') > 512) return false;
+  const encodedMatch = typeof encoded === 'string' ? encoded.match(encodedPattern) : null;
+  const match = encodedMatch ?? dummyPasswordHash.match(encodedPattern);
+  if (running >= 2) throw new PublicError('SERVICE_UNAVAILABLE');
+  running++;
+  try {
+    const expected = Buffer.from(match[2], 'hex');
+    const actual = await derive(password, Buffer.from(match[1], 'hex'), expected.length, cost);
+    try { return Boolean(encodedMatch) && timingSafeEqual(actual, expected); }
+    finally { actual.fill(0); expected.fill(0); }
   } finally { running--; }
 }

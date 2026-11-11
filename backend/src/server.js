@@ -10,10 +10,20 @@ import { createEmailRateRepository } from './modules/auth/email-rate.repository.
 import { createRateIdentifier, createCodeProtection } from './modules/auth/email-code.js';
 import { createEmailVerificationRepository } from './modules/auth/email-verification.repository.js';
 import { createEmailVerificationService } from './modules/auth/email-verification.service.js';
+import { readLoginSecurityConfig } from './config/login-security.js';
+import { readSessionSecurityConfig } from './config/session-security.js';
+import { createLoginRateIdentifiers } from './modules/auth/login-rate.js';
+import { createLoginRateRepository } from './modules/auth/login-rate.repository.js';
+import { createSessionProtection } from './modules/auth/session-security.js';
+import { createSessionRepository } from './modules/auth/session.repository.js';
+import { createSessionService } from './modules/auth/session.service.js';
+import { createLoginService } from './modules/auth/login.service.js';
 
 let database;
 let emailService;
 let verificationService;
+let loginService;
+let sessionService;
 let server;
 let closing = false;
 async function shutdown(code = 0) {
@@ -50,7 +60,24 @@ try {
   }
   if (otp) verificationService = createEmailVerificationService(
     createEmailVerificationRepository(database), createCodeProtection(otp.protection));
-  server = createServer(createApp({ database, origins: config.origins, emailService, verificationService }));
+  const loginConfigured = Boolean(process.env.LOGIN_RATE_HMAC_KEY_HEX || process.env.SESSION_CSRF_KEY_HEX);
+  let trustProxyHops = 0;
+  let cookie;
+  if (loginConfigured) {
+    const loginSecurity = readLoginSecurityConfig(process.env);
+    const sessionSecurity = readSessionSecurityConfig(process.env, config.nodeEnv);
+    trustProxyHops = loginSecurity.trustProxyHops;
+    const protection = createSessionProtection(sessionSecurity.csrfKeyHex);
+    const sessionRepository = createSessionRepository(database, sessionSecurity.policy);
+    sessionService = createSessionService(sessionRepository, protection);
+    loginService = createLoginService({ sessionRepository,
+      rateRepository: createLoginRateRepository(database, loginSecurity.policy),
+      identifiers: createLoginRateIdentifiers(loginSecurity.rateKeyHex), protection });
+    cookie = { name: sessionSecurity.policy.cookieName, secure: sessionSecurity.secureCookie,
+      rememberMaxAge: sessionSecurity.policy.remembered.absoluteSeconds * 1000 };
+  }
+  server = createServer(createApp({ database, origins: config.origins, emailService, verificationService,
+    loginService, sessionService, cookie, trustProxyHops }));
   server.on('error', () => {
     console.error('HTTP server failed');
     void shutdown(1);

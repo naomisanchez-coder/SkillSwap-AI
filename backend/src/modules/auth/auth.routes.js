@@ -7,9 +7,15 @@ import { validateEmailRequest } from './email.service.js';
 import { validateVerificationRequest } from './email-verification.service.js';
 import { createRegistrationLimiter } from './registration.limiter.js';
 
-export function createAuthRouter(database, origins, emailService, verificationService) {
+export function createAuthRouter(database, origins, emailService, verificationService, loginService, sessionService, cookie) {
   const router = Router();
-  const controller = createAuthController(createAuthService(createAuthRepository(database)), emailService, verificationService);
+  const controller = createAuthController(createAuthService(createAuthRepository(database)), emailService,
+    verificationService, loginService, sessionService, cookie);
+  const browserOrigin = (request, response, next) => {
+    response.set('Cache-Control', 'no-store');
+    if (request.get('origin') && !origins.includes(request.get('origin'))) return next(new PublicError('FORBIDDEN'));
+    next();
+  };
   router.post('/register', (request, response, next) => {
     response.set('Cache-Control', 'no-store');
     if (request.get('origin') && !origins.includes(request.get('origin'))) return next(new PublicError('FORBIDDEN'));
@@ -35,5 +41,17 @@ export function createAuthRouter(database, origins, emailService, verificationSe
     validateVerificationRequest(request.body);
     next();
   }, verificationLimiter, controller.verifyEmail);
+  router.post('/login', browserOrigin, (request, response, next) => {
+    if (!request.is('application/json')) return next(new PublicError('UNSUPPORTED_MEDIA_TYPE'));
+    if (request.get('x-csrf-protection') !== '1') return next(new PublicError('CSRF_INVALID'));
+    next();
+  }, controller.login);
+  router.post('/logout', browserOrigin, (request, response, next) => {
+    if (request.body !== undefined && (request.body === null || typeof request.body !== 'object' ||
+      Array.isArray(request.body) || Object.keys(request.body).length)) return next(new PublicError('VALIDATION_ERROR',
+      { general: 'No envíes campos para cerrar sesión.' }));
+    next();
+  }, controller.logout);
+  router.get('/me', browserOrigin, controller.me);
   return router;
 }
